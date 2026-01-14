@@ -9,18 +9,29 @@ export interface Size {
 }
 
 export interface TextStyle {
+  fontFamily?: string
   fontSize?: number
   fontWeight?: string
+  fontStyle?: string
+  textDecoration?: string
   color?: string
   textAlign?: string
+  lineHeight?: string | number
   fill?: string
   stroke?: string
   strokeWidth?: number
   opacity?: number
   borderColor?: string
   borderWidth?: number
+  borderRadius?: number
+  objectFit?: string
+  filter?: string
   chartType?: string
   title?: string
+  showLegend?: boolean
+  showValues?: boolean
+  headerBackground?: string
+  cellPadding?: number
   size?: number
   rotation?: number
   // 动画相关属性
@@ -34,7 +45,7 @@ export interface TextStyle {
 
 export interface Element {
   id: string
-  type: "text" | "image" | "shape" | "table" | "chart"
+  type: "text" | "image" | "shape" | "table" | "chart" | "icon"
   content: string
   position: Position
   size: Size
@@ -190,4 +201,3 @@ export const defaultSlides: Slide[] = [
     ],
   },
 ]
-

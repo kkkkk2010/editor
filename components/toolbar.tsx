@@ -19,6 +19,8 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import TitleEditor from "./title-editor"
+import ImportDialog from "@/components/import-dialog"
+import type { ImportResult } from "@/src/lib/import/importerDoc"
 
 interface ToolbarProps {
   selectedElement: Element | null
@@ -30,6 +32,7 @@ interface ToolbarProps {
   onAddText: () => void
   title: string
   onTitleChange: (title: string) => void
+  onImport: (result: ImportResult) => void
 }
 
 export default function Toolbar({
@@ -42,6 +45,7 @@ export default function Toolbar({
   onAddText,
   title,
   onTitleChange,
+  onImport,
 }: ToolbarProps) {
   const [activeTab, setActiveTab] = useState("text")
 
@@ -135,6 +139,7 @@ export default function Toolbar({
             Сохранить
           </Button>
         </div>
+        <ImportDialog onImport={onImport} />
       </div>
 
       <div className="flex items-center space-x-2">

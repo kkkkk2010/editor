@@ -14,6 +14,8 @@ import BackgroundSettingsDialog from "@/components/background-settings-dialog"
 import { type Slide, type Element, defaultSlides, defaultSlideSize, type SlideSize, type Background } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Play, PanelRight } from "lucide-react"
+import { Toaster } from "@/components/ui/toaster"
+import type { ImportMetadata, ImportResult } from "@/src/lib/import/importerDoc"
 
 export default function Home() {
   const [slides, setSlides] = useState<Slide[]>(defaultSlides)
@@ -25,6 +27,7 @@ export default function Home() {
   const [presentationTitle, setPresentationTitle] = useState("Презентация") // Перевел: "flowmix多模态产品系列"
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [editorScale, setEditorScale] = useState(1)
+  const [importMetadata, setImportMetadata] = useState<ImportMetadata | null>(null)
 
   const currentSlide = slides[currentSlideIndex]
 
@@ -418,6 +421,15 @@ export default function Home() {
     })
   }
 
+  const handleImport = (result: ImportResult) => {
+    setSlides(result.slides)
+    setSlideSize(result.slideSize)
+    setCurrentSlideIndex(0)
+    setSelectedElement(null)
+    setShowPropertyPanel(false)
+    setImportMetadata(result.metadata)
+  }
+
   return (
     <main className="flex flex-col h-screen bg-background">
       {isPreviewMode ? (
@@ -439,6 +451,7 @@ export default function Home() {
             onAddText={handleAddText}
             title={presentationTitle}
             onTitleChange={setPresentationTitle}
+            onImport={handleImport}
           />
 
           <div className="flex-1 overflow-hidden">
@@ -529,6 +542,7 @@ export default function Home() {
           </div>
         </>
       )}
+      <Toaster />
     </main>
   )
 }

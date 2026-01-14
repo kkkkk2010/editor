@@ -1,0 +1,84 @@
+import { z } from "zod"
+
+const textStyleSchema = z
+  .object({
+    fontFamily: z.string().optional(),
+    fontSize: z.number().optional(),
+    color: z.string().optional(),
+    bold: z.boolean().optional(),
+    italic: z.boolean().optional(),
+    underline: z.boolean().optional(),
+    align: z.enum(["left", "center", "right"]).optional(),
+  })
+  .passthrough()
+
+const baseElementSchema = z.object({
+  id: z.string(),
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number(),
+  rotation: z.number().optional(),
+})
+
+const textElementSchema = baseElementSchema.extend({
+  type: z.literal("text"),
+  text: z.string(),
+  style: textStyleSchema.optional(),
+})
+
+const imageElementSchema = baseElementSchema.extend({
+  type: z.literal("image"),
+  src: z.string(),
+  objectFit: z.string().optional(),
+})
+
+const backgroundSchema = z
+  .object({
+    type: z.literal("image"),
+    src: z.string(),
+  })
+  .passthrough()
+
+const slideSchema = z.object({
+  id: z.string(),
+  background: backgroundSchema.optional(),
+  elements: z.array(z.union([textElementSchema, imageElementSchema])),
+})
+
+const importerDocSchema = z.object({
+  schemaVersion: z.literal(1),
+  slideSize: z
+    .object({
+      width: z.number(),
+      height: z.number(),
+      unit: z.string(),
+    })
+    .optional(),
+  slides: z.array(slideSchema),
+})
+
+export type ImporterDoc = z.infer<typeof importerDocSchema>
+
+export type ImporterValidationResult =
+  | { ok: true; data: ImporterDoc }
+  | { ok: false; error: string }
+
+export function validateImporterDoc(payload: unknown): ImporterValidationResult {
+  const result = importerDocSchema.safeParse(payload)
+  if (result.success) {
+    return { ok: true, data: result.data }
+  }
+
+  const errorMessage = result.error.errors
+    .map((issue) => {
+      const path = issue.path.length ? issue.path.join(".") : "document"
+      return `${path}: ${issue.message}`
+    })
+    .join("; ")
+
+  return {
+    ok: false,
+    error: errorMessage || "Неверный формат JSON для импорта",
+  }
+}

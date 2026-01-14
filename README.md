@@ -23,6 +23,15 @@ A PPT online editor based on the web terminal ｜ 一款基于web端的ppt在线
 - 组件可视化拖拽
 - PPT导出功能
 
+## Импорт JSON (PPTX→JSON)
+
+1. Скопируйте выходные данные импортёра в `public/imports/test1`:
+   - `public/imports/test1/doc.json`
+   - папки `public/imports/test1/backgrounds` и `public/imports/test1/assets` (если нужны).
+2. Запустите проект (`pnpm dev`).
+3. В редакторе нажмите кнопку **Импорт** в верхней панели.
+4. Во вкладке **URL** введите `/imports/test1/doc.json` и подтвердите импорт.
+
 
 关注【趣谈前端】公众号，获取更多技术干货，项目最新进展，和开源实践。
 

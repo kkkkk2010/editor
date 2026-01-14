@@ -12,17 +12,18 @@ import { exportToPPT } from "@/lib/export-ppt"
 interface ExportDialogProps {
   slides: Slide[]
   slideSize: SlideSize
+  title?: string
 }
 
-export default function ExportDialog({ slides, slideSize }: ExportDialogProps) {
+export default function ExportDialog({ slides, slideSize, title }: ExportDialogProps) {
   const [open, setOpen] = useState(false)
-  const [title, setTitle] = useState("Презентация технологических продуктов") // Перевел: "科技产品展示之道"
+  const [exportTitle, setExportTitle] = useState(title || "Презентация технологических продуктов") // Перевел: "科技产品展示之道"
   const [isExporting, setIsExporting] = useState(false)
 
   const handleExport = async () => {
     setIsExporting(true)
     try {
-      await exportToPPT(slides, slideSize, title)
+      await exportToPPT(slides, slideSize, exportTitle)
       setOpen(false)
     } catch (error) {
       console.error("导出失败:", error)
@@ -48,7 +49,12 @@ export default function ExportDialog({ slides, slideSize }: ExportDialogProps) {
         <div className="py-4 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="title">Название презентации</Label> {/* Перевел: "演示文稿标题" */}
-            <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Введите название" /> {/* Перевел: "输入标题" */}
+            <Input
+              id="title"
+              value={exportTitle}
+              onChange={(e) => setExportTitle(e.target.value)}
+              placeholder="Введите название"
+            /> {/* Перевел: "输入标题" */}
           </div>
 
           <div className="text-sm text-muted-foreground">
