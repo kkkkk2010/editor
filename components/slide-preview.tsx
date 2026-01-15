@@ -133,7 +133,7 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
                   top: element.position.y,
                   width: element.size.width,
                   height: element.size.height,
-                  fontSize: element.style.fontSize || 16,
+                  fontSize: `${element.style.fontSize || 16}pt`,
                   fontWeight: element.style.fontWeight,
                   fontStyle: element.style.fontStyle,
                   textDecoration: element.style.textDecoration,

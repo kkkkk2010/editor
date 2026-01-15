@@ -371,7 +371,7 @@ export default function SlideEditor({
                 isLocked && "select-none pointer-events-none opacity-70",
               )}
               style={{
-                fontSize: element.style.fontSize || 16,
+                fontSize: `${element.style.fontSize || 16}pt`,
                 fontWeight: element.style.fontWeight,
                 fontStyle: element.style.fontStyle,
                 textDecoration: element.style.textDecoration,
