@@ -138,10 +138,14 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
                   textDecoration: element.style.textDecoration,
                   color: element.style.color,
                   textAlign: element.style.textAlign as any,
-                  lineHeight: element.style.lineHeight,
+                  lineHeight: element.style.lineHeight ?? 1,
                   whiteSpace: "pre-wrap", // 保留换行和空格
                   transform: element.style.rotation ? `rotate(${element.style.rotation}deg)` : undefined,
                   ...animationStyle,
+                  padding: 0,
+                  margin: 0,
+                  verticalAlign: "top",
+                  display: "block",
                 }}
                 dangerouslySetInnerHTML={{ __html: formattedContent }}
               />

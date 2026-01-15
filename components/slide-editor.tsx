@@ -375,9 +375,13 @@ export default function SlideEditor({
                 textDecoration: element.style.textDecoration,
                 color: element.style.color,
                 textAlign: element.style.textAlign as any,
-                lineHeight: element.style.lineHeight,
+                lineHeight: element.style.lineHeight ?? 1,
                 userSelect: "none",
                 whiteSpace: "pre-wrap", // 保留换行和空格
+                padding: 0,
+                margin: 0,
+                verticalAlign: "top",
+                display: "block",
               }}
               onClick={(e) => handleElementClick(element, e)}
               onMouseDown={(e) => handleElementMouseDown(element, e)}
