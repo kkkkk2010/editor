@@ -13,6 +13,7 @@ interface SlidePreviewProps {
 }
 
 export default function SlidePreview({ slides, initialSlide, onExit, slideSize }: SlidePreviewProps) {
+  const DEBUG_TEXT_BOX = true
   const [currentSlideIndex, setCurrentSlideIndex] = useState(initialSlide)
   const previewRef = useRef<HTMLDivElement>(null)
 
@@ -146,6 +147,8 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
                   margin: 0,
                   verticalAlign: "top",
                   display: "block",
+                  border: DEBUG_TEXT_BOX ? "1px solid red" : undefined,
+                  boxSizing: "border-box",
                 }}
                 dangerouslySetInnerHTML={{ __html: formattedContent }}
               />

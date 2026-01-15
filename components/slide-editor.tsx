@@ -33,6 +33,7 @@ export default function SlideEditor({
   onMoveElementBackward,
   onLockToggle,
 }: SlideEditorProps) {
+  const DEBUG_TEXT_BOX = true
   const [draggingElement, setDraggingElement] = useState<Element | null>(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [resizing, setResizing] = useState(false)
@@ -356,8 +357,9 @@ export default function SlideEditor({
               width: element.size.width,
               height: element.size.height,
               transform: element.style.rotation ? `rotate(${element.style.rotation}deg)` : undefined,
-              position: "relative", // 确保子元素相对于此元素定位
               ...animationStyle,
+              border: DEBUG_TEXT_BOX ? "1px solid red" : undefined,
+              boxSizing: "border-box",
             }}
           >
             <div
