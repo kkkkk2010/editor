@@ -58,6 +58,15 @@ function getFallbackCanvasSize(doc: ImporterDoc): { width: number; height: numbe
   }
 }
 
+export function computeSourceSlideSize(doc: ImporterDoc): { width: number; height: number } {
+  const canvasSize = getCanvasSize(doc.slides)
+  if (canvasSize.width > 0 && canvasSize.height > 0) {
+    return canvasSize
+  }
+
+  return getFallbackCanvasSize(doc)
+}
+
 function calculateScale(canvas: { width: number; height: number }, target: SlideSize): number {
   if (canvas.width <= 0 || canvas.height <= 0) return 1
 
@@ -133,13 +142,17 @@ function mapSlide(slide: ImporterSlide, scale: number, baseUrl?: string): Slide 
 
 export function mapImporterToEditor(
   doc: ImporterDoc,
-  options?: { baseUrl?: string; slideSize?: SlideSize },
+  options?: {
+    baseUrl?: string
+    slideSize?: SlideSize
+    sourceSlideSize?: { width: number; height: number }
+    allowResize?: boolean
+  },
 ): ImportResult {
-  const targetSlideSize = options?.slideSize || defaultSlideSize
-  const baseCanvasSize = getCanvasSize(doc.slides)
-  const canvasSize =
-    baseCanvasSize.width > 0 && baseCanvasSize.height > 0 ? baseCanvasSize : getFallbackCanvasSize(doc)
-  const scale = calculateScale(canvasSize, targetSlideSize)
+  const sourceSize = options?.sourceSlideSize ?? computeSourceSlideSize(doc)
+  const canvasSize = sourceSize.width > 0 && sourceSize.height > 0 ? sourceSize : defaultSlideSize
+  const targetSlideSize = options?.allowResize ? canvasSize : options?.slideSize || defaultSlideSize
+  const scale = options?.allowResize ? 1 : calculateScale(canvasSize, targetSlideSize)
 
   const slides = doc.slides.map((slide) => mapSlide(slide, scale, options?.baseUrl))
 
@@ -147,13 +160,11 @@ export function mapImporterToEditor(
     baseUrl: options?.baseUrl,
     canvasSize,
     scale,
-    sourceSlideSize: doc.slideSize
-      ? {
-          width: doc.slideSize.width,
-          height: doc.slideSize.height,
-          unit: doc.slideSize.unit,
-        }
-      : undefined,
+    sourceSlideSize: {
+      width: canvasSize.width,
+      height: canvasSize.height,
+      unit: doc.slideSize?.unit,
+    },
   }
 
   return {

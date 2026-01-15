@@ -1670,7 +1670,18 @@ export default function SlideEditor({
       style={{
         width: slideSize.width,
         height: slideSize.height,
-        background: slide.background.value,
+        ...(slide.background.type === "image"
+          ? {
+              backgroundImage: slide.background.value.startsWith("url(")
+                ? slide.background.value
+                : `url(${slide.background.value})`,
+              backgroundSize: "100% 100%",
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "center",
+            }
+          : {
+              background: slide.background.value,
+            }),
       }}
       onClick={handleEditorClick}
     >

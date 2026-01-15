@@ -58,7 +58,18 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
         style={{
           width: slideSize.width,
           height: slideSize.height,
-          background: currentSlide.background.value,
+          ...(currentSlide.background.type === "image"
+            ? {
+                backgroundImage: currentSlide.background.value.startsWith("url(")
+                  ? currentSlide.background.value
+                  : `url(${currentSlide.background.value})`,
+                backgroundSize: "100% 100%",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "center",
+              }
+            : {
+                background: currentSlide.background.value,
+              }),
         }}
       >
         {currentSlide.elements.map((element) => {

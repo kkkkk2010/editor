@@ -1,6 +1,7 @@
 import { unzipSync } from "fflate"
 import type { ImporterDoc } from "@/src/lib/import/importerDoc"
 import { validateImporterDoc } from "@/src/lib/import/validateImporterDoc"
+import { computeSourceSlideSize } from "@/src/lib/import/mapImporterToEditor"
 
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -12,6 +13,7 @@ const MIME_TYPES: Record<string, string> = {
 export interface ZipImportResult {
   doc: ImporterDoc
   createdUrls: string[]
+  sourceSlideSize: { width: number; height: number }
 }
 
 export function revokeImportObjectUrls(urls: string[]) {
@@ -27,6 +29,57 @@ function getExtension(path: string): string {
 function buildDocJson(bytes: Uint8Array): unknown {
   const text = new TextDecoder("utf-8").decode(bytes)
   return JSON.parse(text) as unknown
+}
+
+function isCloseTo(a: number, b: number, tolerance = 2): boolean {
+  return Math.abs(a - b) <= tolerance
+}
+
+function parseSvgSize(svgText: string): { width: number; height: number } | null {
+  const widthMatch = svgText.match(/width=[\"']?([0-9.]+)(px)?[\"']?/i)
+  const heightMatch = svgText.match(/height=[\"']?([0-9.]+)(px)?[\"']?/i)
+  if (widthMatch && heightMatch) {
+    const width = Number.parseFloat(widthMatch[1])
+    const height = Number.parseFloat(heightMatch[1])
+    if (!Number.isNaN(width) && !Number.isNaN(height)) {
+      return { width, height }
+    }
+  }
+
+  const viewBoxMatch = svgText.match(/viewBox=[\"']?([0-9.\\s]+)[\"']?/i)
+  if (viewBoxMatch) {
+    const parts = viewBoxMatch[1].trim().split(/\s+/)
+    if (parts.length === 4) {
+      const width = Number.parseFloat(parts[2])
+      const height = Number.parseFloat(parts[3])
+      if (!Number.isNaN(width) && !Number.isNaN(height)) {
+        return { width, height }
+      }
+    }
+  }
+
+  return null
+}
+
+async function getImageDimensions(bytes: Uint8Array, mimeType: string): Promise<{ width: number; height: number } | null> {
+  try {
+    if (mimeType === "image/svg+xml") {
+      const text = new TextDecoder("utf-8").decode(bytes)
+      return parseSvgSize(text)
+    }
+
+    if (typeof createImageBitmap === "function") {
+      const blob = new Blob([bytes], { type: mimeType })
+      const bitmap = await createImageBitmap(blob)
+      const size = { width: bitmap.width, height: bitmap.height }
+      bitmap.close()
+      return size
+    }
+  } catch (error) {
+    console.warn("Failed to read image dimensions:", error)
+  }
+
+  return null
 }
 
 export async function importZipFile(file: File): Promise<ZipImportResult> {
@@ -57,6 +110,8 @@ export async function importZipFile(file: File): Promise<ZipImportResult> {
 
   const createdUrls: string[] = []
   const doc: ImporterDoc = JSON.parse(JSON.stringify(validation.data))
+  const elementBounds = computeSourceSlideSize(doc)
+  let sourceSlideSize = elementBounds
 
   const resolveAsset = (path: string): string => {
     const assetBytes = entries.get(path)
@@ -71,6 +126,25 @@ export async function importZipFile(file: File): Promise<ZipImportResult> {
   }
 
   try {
+    for (const slide of doc.slides) {
+      if (slide.background?.type === "image") {
+        const backgroundBytes = entries.get(slide.background.src)
+        if (backgroundBytes) {
+          const extension = getExtension(slide.background.src)
+          const mimeType = MIME_TYPES[extension] || "application/octet-stream"
+          const dimensions = await getImageDimensions(backgroundBytes, mimeType)
+          if (
+            dimensions &&
+            isCloseTo(dimensions.width, elementBounds.width) &&
+            isCloseTo(dimensions.height, elementBounds.height)
+          ) {
+            sourceSlideSize = dimensions
+            break
+          }
+        }
+      }
+    }
+
     doc.slides.forEach((slide) => {
       if (slide.background?.type === "image") {
         slide.background.src = resolveAsset(slide.background.src)
@@ -87,5 +161,5 @@ export async function importZipFile(file: File): Promise<ZipImportResult> {
     throw error
   }
 
-  return { doc, createdUrls }
+  return { doc, createdUrls, sourceSlideSize }
 }

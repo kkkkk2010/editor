@@ -33,8 +33,8 @@ export default function ImportZipDialog({ onImport }: ImportZipDialogProps) {
 
     setIsImporting(true)
     try {
-      const { doc, createdUrls } = await importZipFile(selectedFile)
-      const mapped = mapImporterToEditor(doc)
+      const { doc, createdUrls, sourceSlideSize } = await importZipFile(selectedFile)
+      const mapped = mapImporterToEditor(doc, { sourceSlideSize, allowResize: true })
       onImport(mapped, createdUrls)
       setOpen(false)
       setSelectedFile(null)
