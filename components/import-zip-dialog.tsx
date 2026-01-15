@@ -59,12 +59,12 @@ export default function ImportZipDialog({ onImport }: ImportZipDialogProps) {
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Upload className="h-4 w-4 mr-2" />
-          Импорт (ZIP)
+          Импорт
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Импорт ZIP</DialogTitle>
+          <DialogTitle>Импорт презентации</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-2 py-2">

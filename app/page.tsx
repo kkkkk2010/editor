@@ -15,7 +15,7 @@ import { type Slide, type Element, defaultSlides, defaultSlideSize, type SlideSi
 import { Button } from "@/components/ui/button"
 import { Play, PanelRight } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
-import type { ImportMetadata, ImportResult } from "@/src/lib/import/importerDoc"
+import type { ImportResult } from "@/src/lib/import/importerDoc"
 import { revokeImportObjectUrls } from "@/src/lib/import/zipImport"
 
 export default function Home() {
@@ -28,7 +28,6 @@ export default function Home() {
   const [presentationTitle, setPresentationTitle] = useState("Презентация") // Перевел: "flowmix多模态产品系列"
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [editorScale, setEditorScale] = useState(1)
-  const [importMetadata, setImportMetadata] = useState<ImportMetadata | null>(null)
   const importedAssetUrlsRef = useRef<string[]>([])
 
   const currentSlide = slides[currentSlideIndex]
@@ -435,7 +434,6 @@ export default function Home() {
     setCurrentSlideIndex(0)
     setSelectedElement(null)
     setShowPropertyPanel(false)
-    setImportMetadata(result.metadata)
   }
 
   const handleImportZip = (result: ImportResult, createdUrls: string[]) => {
@@ -465,7 +463,6 @@ export default function Home() {
             onAddText={handleAddText}
             title={presentationTitle}
             onTitleChange={setPresentationTitle}
-            onImport={handleImport}
             onImportZip={handleImportZip}
           />
 
