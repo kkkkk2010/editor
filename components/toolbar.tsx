@@ -20,6 +20,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from "@/lib/utils"
 import TitleEditor from "./title-editor"
 import ImportDialog from "@/components/import-dialog"
+import ImportZipDialog from "@/components/import-zip-dialog"
 import type { ImportResult } from "@/src/lib/import/importerDoc"
 
 interface ToolbarProps {
@@ -33,6 +34,7 @@ interface ToolbarProps {
   title: string
   onTitleChange: (title: string) => void
   onImport: (result: ImportResult) => void
+  onImportZip: (result: ImportResult, createdUrls: string[]) => void
 }
 
 export default function Toolbar({
@@ -46,6 +48,7 @@ export default function Toolbar({
   title,
   onTitleChange,
   onImport,
+  onImportZip,
 }: ToolbarProps) {
   const [activeTab, setActiveTab] = useState("text")
 
@@ -139,7 +142,10 @@ export default function Toolbar({
             Сохранить
           </Button>
         </div>
-        <ImportDialog onImport={onImport} />
+        <div className="flex items-center gap-2">
+          <ImportDialog onImport={onImport} />
+          <ImportZipDialog onImport={onImportZip} />
+        </div>
       </div>
 
       <div className="flex items-center space-x-2">

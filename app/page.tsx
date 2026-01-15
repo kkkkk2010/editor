@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Play, PanelRight } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
 import type { ImportMetadata, ImportResult } from "@/src/lib/import/importerDoc"
+import { revokeImportObjectUrls } from "@/src/lib/import/zipImport"
 
 export default function Home() {
   const [slides, setSlides] = useState<Slide[]>(defaultSlides)
@@ -28,6 +29,7 @@ export default function Home() {
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [editorScale, setEditorScale] = useState(1)
   const [importMetadata, setImportMetadata] = useState<ImportMetadata | null>(null)
+  const importedAssetUrlsRef = useRef<string[]>([])
 
   const currentSlide = slides[currentSlideIndex]
 
@@ -76,6 +78,12 @@ export default function Home() {
       observer.disconnect()
     }
   }, [slideSize, showPropertyPanel, editorContainerRef])
+
+  useEffect(() => {
+    return () => {
+      revokeImportObjectUrls(importedAssetUrlsRef.current)
+    }
+  }, [])
 
   const addSlide = () => {
     const newSlide: Slide = {
@@ -430,6 +438,12 @@ export default function Home() {
     setImportMetadata(result.metadata)
   }
 
+  const handleImportZip = (result: ImportResult, createdUrls: string[]) => {
+    revokeImportObjectUrls(importedAssetUrlsRef.current)
+    importedAssetUrlsRef.current = createdUrls
+    handleImport(result)
+  }
+
   return (
     <main className="flex flex-col h-screen bg-background">
       {isPreviewMode ? (
@@ -452,6 +466,7 @@ export default function Home() {
             title={presentationTitle}
             onTitleChange={setPresentationTitle}
             onImport={handleImport}
+            onImportZip={handleImportZip}
           />
 
           <div className="flex-1 overflow-hidden">

@@ -60,7 +60,8 @@
     "zod": "^3.24.1",
     "html2canvas": "latest",
     "jszip": "latest",
-    "file-saver": "latest"
+    "file-saver": "latest",
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "@types/node": "^22",
