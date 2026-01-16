@@ -291,14 +291,12 @@ export default function SlideEditor({
       const inner = textInnerRefs.current.get(element.id)
       if (!box || !inner) return
 
-      const boxW = box.clientWidth
       const boxH = box.clientHeight
-      const textW = inner.scrollWidth
       const textH = inner.scrollHeight
 
       let scale = 1
-      if (textW > 0 && textH > 0 && boxW > 0 && boxH > 0) {
-        scale = Math.min(boxW / textW, boxH / textH, 1)
+      if (textH > 0 && boxH > 0 && textH > boxH) {
+        scale = Math.min(boxH / textH, 1)
       }
 
       const prevScale = textScaleMapRef.current.get(element.id)
@@ -327,6 +325,7 @@ export default function SlideEditor({
     if (element.type === "text") {
       // 将文本内容中的换行符转换为<br>标签
       const formattedContent = element.content.replace(/\n/g, "<br>")
+      const hasLineBreaks = element.content.includes("\n")
 
       // 构建动画样式
       let animationStyle = {}
@@ -423,13 +422,18 @@ export default function SlideEditor({
                 textAlign: element.style.textAlign as any,
                 lineHeight: element.style.lineHeight ?? 1,
                 userSelect: "none",
-                whiteSpace: "pre-wrap", // 保留换行和空格
+                whiteSpace: hasLineBreaks ? "pre-wrap" : "normal",
                 padding: 0,
                 margin: 0,
                 verticalAlign: "top",
                 display: "inline-block",
                 transformOrigin: "top left",
                 transform: `scale(${textScaleMapRef.current.get(element.id) ?? 1})`,
+                wordBreak: "normal",
+                overflowWrap: "normal",
+                hyphens: "none",
+                letterSpacing: 0,
+                fontKerning: "normal",
               }}
               ref={(node) => {
                 if (node) {
