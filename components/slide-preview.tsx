@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useLayoutEffect } from "react"
 import type { Slide, SlideSize } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight, X } from "lucide-react"
@@ -16,6 +16,10 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
   const DEBUG_TEXT_BOX = true
   const [currentSlideIndex, setCurrentSlideIndex] = useState(initialSlide)
   const previewRef = useRef<HTMLDivElement>(null)
+  const [textScaleVersion, setTextScaleVersion] = useState(0)
+  const textScaleMapRef = useRef<Map<string, number>>(new Map())
+  const textBoxRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const textInnerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -34,6 +38,38 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
       window.removeEventListener("keydown", handleKeyDown)
     }
   }, [onExit, slides.length])
+
+  useLayoutEffect(() => {
+    let didChange = false
+    const currentSlide = slides[currentSlideIndex]
+
+    currentSlide.elements.forEach((element) => {
+      if (element.type !== "text") return
+      const box = textBoxRefs.current.get(element.id)
+      const inner = textInnerRefs.current.get(element.id)
+      if (!box || !inner) return
+
+      const boxW = box.clientWidth
+      const boxH = box.clientHeight
+      const textW = inner.scrollWidth
+      const textH = inner.scrollHeight
+
+      let scale = 1
+      if (textW > 0 && textH > 0 && boxW > 0 && boxH > 0) {
+        scale = Math.min(boxW / textW, boxH / textH, 1)
+      }
+
+      const prevScale = textScaleMapRef.current.get(element.id)
+      if (prevScale !== scale) {
+        textScaleMapRef.current.set(element.id, scale)
+        didChange = true
+      }
+    })
+
+    if (didChange) {
+      setTextScaleVersion((prev) => prev + 1)
+    }
+  }, [slides, currentSlideIndex, textScaleVersion])
 
   const currentSlide = slides[currentSlideIndex]
   const isFirstSlide = currentSlideIndex === 0
@@ -133,7 +169,10 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
                   top: element.position.y,
                   width: element.size.width,
                   height: element.size.height,
-                  fontSize: `${element.style.fontSize || 16}pt`,
+                  overflow: "hidden",
+                  padding: 0,
+                  margin: 0,
+                  fontSize: element.style.fontSize || 16,
                   fontWeight: element.style.fontWeight,
                   fontStyle: element.style.fontStyle,
                   textDecoration: element.style.textDecoration,
@@ -143,15 +182,45 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
                   whiteSpace: "pre-wrap", // 保留换行和空格
                   transform: element.style.rotation ? `rotate(${element.style.rotation}deg)` : undefined,
                   ...animationStyle,
-                  padding: 0,
-                  margin: 0,
                   verticalAlign: "top",
-                  display: "block",
+                  display: "inline-block",
                   border: DEBUG_TEXT_BOX ? "1px solid red" : undefined,
                   boxSizing: "border-box",
                 }}
-                dangerouslySetInnerHTML={{ __html: formattedContent }}
-              />
+                ref={(node) => {
+                  if (node) {
+                    textBoxRefs.current.set(element.id, node)
+                  } else {
+                    textBoxRefs.current.delete(element.id)
+                  }
+                }}
+              >
+                <div
+                  style={{
+                    display: "inline-block",
+                    whiteSpace: "pre-wrap",
+                    padding: 0,
+                    margin: 0,
+                    transformOrigin: "top left",
+                    transform: `scale(${textScaleMapRef.current.get(element.id) ?? 1})`,
+                    fontSize: element.style.fontSize || 16,
+                    fontWeight: element.style.fontWeight,
+                    fontStyle: element.style.fontStyle,
+                    textDecoration: element.style.textDecoration,
+                    color: element.style.color,
+                    textAlign: element.style.textAlign as any,
+                    lineHeight: element.style.lineHeight ?? 1,
+                  }}
+                  ref={(node) => {
+                    if (node) {
+                      textInnerRefs.current.set(element.id, node)
+                    } else {
+                      textInnerRefs.current.delete(element.id)
+                    }
+                  }}
+                  dangerouslySetInnerHTML={{ __html: formattedContent }}
+                />
+              </div>
             )
           }
           if (element.type === "image") {

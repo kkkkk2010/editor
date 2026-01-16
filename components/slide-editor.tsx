@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useLayoutEffect } from "react"
 import type { Slide, Element, SlideSize } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import * as LucideIcons from "lucide-react"
@@ -35,11 +35,15 @@ export default function SlideEditor({
 }: SlideEditorProps) {
   const DEBUG_TEXT_BOX = true
   const [draggingElement, setDraggingElement] = useState<Element | null>(null)
+  const [textScaleVersion, setTextScaleVersion] = useState(0)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [resizing, setResizing] = useState(false)
   const [resizeDirection, setResizeDirection] = useState("")
   const editorRef = useRef<HTMLDivElement>(null)
   const [editingElementId, setEditingElementId] = useState<string | null>(null)
+  const textScaleMapRef = useRef<Map<string, number>>(new Map())
+  const textBoxRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const textInnerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   const handleElementClick = (element: Element, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -278,6 +282,37 @@ export default function SlideEditor({
     }
   }, [draggingElement, resizing, selectedElement, dragOffset, resizeDirection])
 
+  useLayoutEffect(() => {
+    let didChange = false
+
+    slide.elements.forEach((element) => {
+      if (element.type !== "text") return
+      const box = textBoxRefs.current.get(element.id)
+      const inner = textInnerRefs.current.get(element.id)
+      if (!box || !inner) return
+
+      const boxW = box.clientWidth
+      const boxH = box.clientHeight
+      const textW = inner.scrollWidth
+      const textH = inner.scrollHeight
+
+      let scale = 1
+      if (textW > 0 && textH > 0 && boxW > 0 && boxH > 0) {
+        scale = Math.min(boxW / textW, boxH / textH, 1)
+      }
+
+      const prevScale = textScaleMapRef.current.get(element.id)
+      if (prevScale !== scale) {
+        textScaleMapRef.current.set(element.id, scale)
+        didChange = true
+      }
+    })
+
+    if (didChange) {
+      setTextScaleVersion((prev) => prev + 1)
+    }
+  }, [slide, textScaleVersion])
+
   // 修改整个元素的渲染容器，确保正确的定位
   const renderElement = (element: Element) => {
     const isSelected = selectedElement && selectedElement.id === element.id
@@ -356,22 +391,31 @@ export default function SlideEditor({
               top: element.position.y,
               width: element.size.width,
               height: element.size.height,
+              overflow: "hidden",
+              padding: 0,
+              margin: 0,
               transform: element.style.rotation ? `rotate(${element.style.rotation}deg)` : undefined,
               ...animationStyle,
               border: DEBUG_TEXT_BOX ? "1px solid red" : undefined,
               boxSizing: "border-box",
             }}
+            ref={(node) => {
+              if (node) {
+                textBoxRefs.current.set(element.id, node)
+              } else {
+                textBoxRefs.current.delete(element.id)
+              }
+            }}
           >
             <div
               className={cn(
-                "w-full h-full",
                 !isLocked && "cursor-move",
                 isSelected && "outline outline-2 outline-primary",
                 editingElementId === element.id && "opacity-0", // 当元素正在被编辑时隐藏
                 isLocked && "select-none pointer-events-none opacity-70",
               )}
               style={{
-                fontSize: `${element.style.fontSize || 16}pt`,
+                fontSize: element.style.fontSize || 16,
                 fontWeight: element.style.fontWeight,
                 fontStyle: element.style.fontStyle,
                 textDecoration: element.style.textDecoration,
@@ -383,7 +427,16 @@ export default function SlideEditor({
                 padding: 0,
                 margin: 0,
                 verticalAlign: "top",
-                display: "block",
+                display: "inline-block",
+                transformOrigin: "top left",
+                transform: `scale(${textScaleMapRef.current.get(element.id) ?? 1})`,
+              }}
+              ref={(node) => {
+                if (node) {
+                  textInnerRefs.current.set(element.id, node)
+                } else {
+                  textInnerRefs.current.delete(element.id)
+                }
               }}
               onClick={(e) => handleElementClick(element, e)}
               onMouseDown={(e) => handleElementMouseDown(element, e)}
