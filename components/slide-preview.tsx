@@ -17,7 +17,7 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
   const [currentSlideIndex, setCurrentSlideIndex] = useState(initialSlide)
   const previewRef = useRef<HTMLDivElement>(null)
   const [textScaleVersion, setTextScaleVersion] = useState(0)
-  const textScaleMapRef = useRef<Map<string, { scaleX: number; scaleY: number; overflowWrap: string }>>(new Map())
+  const textScaleMapRef = useRef<Map<string, { scale: number; overflowWrap: string }>>(new Map())
   const textBoxRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const textInnerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
@@ -50,7 +50,10 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
       if (!box || !inner) return
 
       inner.style.transform = "scale(1)"
+      inner.style.transformOrigin = "top left"
       inner.style.overflowWrap = "normal"
+      inner.style.wordBreak = "normal"
+      inner.style.hyphens = "none"
 
       const boxW = box.clientWidth
       const boxH = box.clientHeight
@@ -60,27 +63,24 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
       const overflowX = textW > boxW + 1
       const overflowY = textH > boxH + 1
 
-      let scaleX = 1
-      let scaleY = 1
+      let scale = 1
       let overflowWrap = "normal"
 
-      if (overflowY && textH > 0 && boxH > 0) {
-        const scale = Math.min(boxH / textH, 1)
-        scaleX = scale
-        scaleY = scale
-      } else if (overflowX && textW > 0 && boxW > 0) {
-        scaleX = Math.min(boxW / textW, 1)
-        overflowWrap = "anywhere"
+      if (overflowX || overflowY) {
+        scale = Math.min(1, boxW / textW, boxH / textH)
+
+        if (overflowX) {
+          inner.style.overflowWrap = "anywhere"
+          const wrappedTextW = inner.scrollWidth
+          const wrappedTextH = inner.scrollHeight
+          scale = Math.min(1, boxW / wrappedTextW, boxH / wrappedTextH)
+          overflowWrap = "anywhere"
+        }
       }
 
       const prevScale = textScaleMapRef.current.get(element.id)
-      if (
-        !prevScale ||
-        prevScale.scaleX !== scaleX ||
-        prevScale.scaleY !== scaleY ||
-        prevScale.overflowWrap !== overflowWrap
-      ) {
-        textScaleMapRef.current.set(element.id, { scaleX, scaleY, overflowWrap })
+      if (!prevScale || prevScale.scale !== scale || prevScale.overflowWrap !== overflowWrap) {
+        textScaleMapRef.current.set(element.id, { scale, overflowWrap })
         didChange = true
       }
     })
@@ -221,9 +221,7 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
                     padding: 0,
                     margin: 0,
                     transformOrigin: "top left",
-                    transform: `scale(${textScaleMapRef.current.get(element.id)?.scaleX ?? 1}, ${
-                      textScaleMapRef.current.get(element.id)?.scaleY ?? 1
-                    })`,
+                    transform: `scale(${textScaleMapRef.current.get(element.id)?.scale ?? 1})`,
                     fontSize: element.style.fontSize || 16,
                     fontWeight: element.style.fontWeight,
                     fontStyle: element.style.fontStyle,
