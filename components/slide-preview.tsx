@@ -17,7 +17,7 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
   const [currentSlideIndex, setCurrentSlideIndex] = useState(initialSlide)
   const previewRef = useRef<HTMLDivElement>(null)
   const [textScaleVersion, setTextScaleVersion] = useState(0)
-  const textScaleMapRef = useRef<Map<string, number>>(new Map())
+  const textScaleMapRef = useRef<Map<string, { scaleX: number; scaleY: number; overflowWrap: string }>>(new Map())
   const textBoxRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const textInnerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
@@ -49,17 +49,38 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
       const inner = textInnerRefs.current.get(element.id)
       if (!box || !inner) return
 
+      inner.style.transform = "scale(1)"
+      inner.style.overflowWrap = "normal"
+
+      const boxW = box.clientWidth
       const boxH = box.clientHeight
+      const textW = inner.scrollWidth
       const textH = inner.scrollHeight
 
-      let scale = 1
-      if (textH > 0 && boxH > 0 && textH > boxH) {
-        scale = Math.min(boxH / textH, 1)
+      const overflowX = textW > boxW + 1
+      const overflowY = textH > boxH + 1
+
+      let scaleX = 1
+      let scaleY = 1
+      let overflowWrap = "normal"
+
+      if (overflowY && textH > 0 && boxH > 0) {
+        const scale = Math.min(boxH / textH, 1)
+        scaleX = scale
+        scaleY = scale
+      } else if (overflowX && textW > 0 && boxW > 0) {
+        scaleX = Math.min(boxW / textW, 1)
+        overflowWrap = "anywhere"
       }
 
       const prevScale = textScaleMapRef.current.get(element.id)
-      if (prevScale !== scale) {
-        textScaleMapRef.current.set(element.id, scale)
+      if (
+        !prevScale ||
+        prevScale.scaleX !== scaleX ||
+        prevScale.scaleY !== scaleY ||
+        prevScale.overflowWrap !== overflowWrap
+      ) {
+        textScaleMapRef.current.set(element.id, { scaleX, scaleY, overflowWrap })
         didChange = true
       }
     })
@@ -197,11 +218,12 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
                 <div
                   style={{
                     display: "inline-block",
-                    whiteSpace: "pre-wrap",
                     padding: 0,
                     margin: 0,
                     transformOrigin: "top left",
-                    transform: `scale(${textScaleMapRef.current.get(element.id) ?? 1})`,
+                    transform: `scale(${textScaleMapRef.current.get(element.id)?.scaleX ?? 1}, ${
+                      textScaleMapRef.current.get(element.id)?.scaleY ?? 1
+                    })`,
                     fontSize: element.style.fontSize || 16,
                     fontWeight: element.style.fontWeight,
                     fontStyle: element.style.fontStyle,
@@ -210,7 +232,7 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
                     textAlign: element.style.textAlign as any,
                     lineHeight: element.style.lineHeight ?? 1,
                     wordBreak: "normal",
-                    overflowWrap: "normal",
+                    overflowWrap: textScaleMapRef.current.get(element.id)?.overflowWrap ?? "normal",
                     hyphens: "none",
                     letterSpacing: 0,
                     fontKerning: "normal",
