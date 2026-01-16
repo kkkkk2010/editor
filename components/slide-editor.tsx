@@ -41,7 +41,7 @@ export default function SlideEditor({
   const [resizeDirection, setResizeDirection] = useState("")
   const editorRef = useRef<HTMLDivElement>(null)
   const [editingElementId, setEditingElementId] = useState<string | null>(null)
-  const textScaleMapRef = useRef<Map<string, { scale: number; overflowWrap: string }>>(new Map())
+  const textScaleMapRef = useRef<Map<string, { key: string; scale: number; overflowWrap: string }>>(new Map())
   const textBoxRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const textInnerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
@@ -296,6 +296,15 @@ export default function SlideEditor({
       inner.style.overflowWrap = "normal"
       inner.style.wordBreak = "normal"
       inner.style.hyphens = "none"
+      inner.style.whiteSpace = element.content.includes("\n") ? "pre-wrap" : "normal"
+
+      const cacheKey = `${element.content}::${element.style.fontSize ?? ""}::${element.style.fontFamily ?? ""}::${element.size.width}x${element.size.height}`
+      const cached = textScaleMapRef.current.get(element.id)
+      if (cached?.key === cacheKey) {
+        inner.style.overflowWrap = cached.overflowWrap
+        inner.style.transform = `scale(${cached.scale})`
+        return
+      }
 
       const boxW = box.clientWidth
       const boxH = box.clientHeight
@@ -305,24 +314,26 @@ export default function SlideEditor({
       const overflowX = textW > boxW + 1
       const overflowY = textH > boxH + 1
 
-      let scale = 1
-      let overflowWrap = "normal"
-
-      if (overflowX || overflowY) {
-        scale = Math.min(1, boxW / textW, boxH / textH)
-
-        if (overflowX) {
-          inner.style.overflowWrap = "anywhere"
-          const wrappedTextW = inner.scrollWidth
-          const wrappedTextH = inner.scrollHeight
-          scale = Math.min(1, boxW / wrappedTextW, boxH / wrappedTextH)
-          overflowWrap = "anywhere"
-        }
+      if (!overflowX && !overflowY) {
+        textScaleMapRef.current.set(element.id, { key: cacheKey, scale: 1, overflowWrap: "normal" })
+        didChange = true
+        return
       }
 
+      let overflowWrap = "normal"
+      const hasLongWord = element.content.split(/\s+/).some((word) => word.length >= 18)
+      if (overflowX && hasLongWord) {
+        inner.style.overflowWrap = "anywhere"
+        overflowWrap = "anywhere"
+      }
+
+      const wrappedTextW = inner.scrollWidth
+      const wrappedTextH = inner.scrollHeight
+      const scale = Math.min(1, boxW / wrappedTextW, boxH / wrappedTextH)
+
       const prevScale = textScaleMapRef.current.get(element.id)
-      if (!prevScale || prevScale.scale !== scale || prevScale.overflowWrap !== overflowWrap) {
-        textScaleMapRef.current.set(element.id, { scale, overflowWrap })
+      if (!prevScale || prevScale.key !== cacheKey || prevScale.scale !== scale || prevScale.overflowWrap !== overflowWrap) {
+        textScaleMapRef.current.set(element.id, { key: cacheKey, scale, overflowWrap })
         didChange = true
       }
     })
