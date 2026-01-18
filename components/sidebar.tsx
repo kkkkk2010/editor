@@ -3,7 +3,7 @@
 import { useState } from "react"
 import type { Slide } from "@/lib/types"
 import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface SidebarProps {
@@ -11,9 +11,10 @@ interface SidebarProps {
   currentSlideIndex: number
   onSlideSelect: (index: number) => void
   onAddSlide: () => void
+  onRemoveSlide: (index: number) => void
 }
 
-export default function Sidebar({ slides, currentSlideIndex, onSlideSelect, onAddSlide }: SidebarProps) {
+export default function Sidebar({ slides, currentSlideIndex, onSlideSelect, onAddSlide, onRemoveSlide }: SidebarProps) {
   const [isEditing, setIsEditing] = useState<number | null>(null)
 
   const renderSlidePreview = (slide: Slide, index: number) => {
@@ -33,6 +34,22 @@ export default function Sidebar({ slides, currentSlideIndex, onSlideSelect, onAd
         }}
         onClick={() => onSlideSelect(index)}
       >
+        <button
+          type="button"
+          className={cn(
+            "absolute right-1 top-1 z-10 rounded-full bg-background/90 p-1 text-foreground shadow-sm opacity-0 transition-opacity group-hover:opacity-100",
+            slides.length === 1 && "cursor-not-allowed opacity-50",
+          )}
+          onClick={(event) => {
+            event.stopPropagation()
+            onRemoveSlide(index)
+          }}
+          disabled={slides.length === 1}
+          aria-label="Удалить слайд"
+          title="Удалить слайд"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
         <div
           className="absolute inset-0"
           style={{

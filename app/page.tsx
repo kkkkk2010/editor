@@ -15,6 +15,7 @@ import { type Slide, type Element, defaultSlides, defaultSlideSize, type SlideSi
 import { Button } from "@/components/ui/button"
 import { Play, PanelRight } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
+import { useToast } from "@/hooks/use-toast"
 import type { ImportResult } from "@/src/lib/import/importerDoc"
 import { revokeImportObjectUrls } from "@/src/lib/import/zipImport"
 
@@ -29,6 +30,7 @@ export default function Home() {
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [editorScale, setEditorScale] = useState(1)
   const importedAssetUrlsRef = useRef<string[]>([])
+  const { toast } = useToast()
 
   const currentSlide = slides[currentSlideIndex]
 
@@ -116,6 +118,57 @@ export default function Home() {
     newSlides[currentSlideIndex] = updatedSlide
     setSlides(newSlides)
   }
+
+  const removeSlide = (index: number) => {
+    if (index < 0 || index >= slides.length) {
+      return
+    }
+
+    if (slides.length === 1) {
+      toast({
+        title: "Нельзя удалить единственный слайд",
+      })
+      return
+    }
+
+    const confirmed = window.confirm("Удалить слайд? Это действие нельзя отменить")
+    if (!confirmed) {
+      return
+    }
+
+    const nextSlides = slides.filter((_, slideIndex) => slideIndex !== index)
+    const nextIndex = index >= nextSlides.length ? Math.max(0, nextSlides.length - 1) : index
+
+    setSlides(nextSlides)
+    setCurrentSlideIndex(nextIndex)
+    setSelectedElement(null)
+    setIsPreviewMode(false)
+  }
+
+  useEffect(() => {
+    const handleSlideDeleteKey = (event: KeyboardEvent) => {
+      if (event.key !== "Delete" && event.key !== "Backspace") return
+
+      const activeElement = document.activeElement
+      const isEditingText =
+        activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        activeElement?.isContentEditable
+
+      if (isEditingText) {
+        return
+      }
+
+      event.preventDefault()
+      removeSlide(currentSlideIndex)
+    }
+
+    window.addEventListener("keydown", handleSlideDeleteKey)
+
+    return () => {
+      window.removeEventListener("keydown", handleSlideDeleteKey)
+    }
+  }, [currentSlideIndex, removeSlide])
 
   const updateElement = (updatedElement: Element) => {
     if (!selectedElement) return
@@ -474,6 +527,7 @@ export default function Home() {
                   currentSlideIndex={currentSlideIndex}
                   onSlideSelect={setCurrentSlideIndex}
                   onAddSlide={addSlide}
+                  onRemoveSlide={removeSlide}
                 />
               }
               editor={
