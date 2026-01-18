@@ -3,6 +3,7 @@
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import type { Slide, Element, SlideSize } from "@/lib/types"
+import { cn } from "@/lib/utils"
 import * as LucideIcons from "lucide-react"
 import ElementContextMenu from "@/components/context-menu/element-context-menu"
 import { renderAdvancedShape } from "@/components/shapes/advanced-shapes"
