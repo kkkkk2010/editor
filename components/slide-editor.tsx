@@ -1,12 +1,12 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect, useLayoutEffect } from "react"
+import { useState, useRef, useEffect } from "react"
 import type { Slide, Element, SlideSize } from "@/lib/types"
-import { cn } from "@/lib/utils"
 import * as LucideIcons from "lucide-react"
 import ElementContextMenu from "@/components/context-menu/element-context-menu"
 import { renderAdvancedShape } from "@/components/shapes/advanced-shapes"
+import TextElementView from "@/components/text-element-view"
 
 interface SlideEditorProps {
   slide: Slide
@@ -33,17 +33,12 @@ export default function SlideEditor({
   onMoveElementBackward,
   onLockToggle,
 }: SlideEditorProps) {
-  const DEBUG_TEXT_BOX = true
   const [draggingElement, setDraggingElement] = useState<Element | null>(null)
-  const [textScaleVersion, setTextScaleVersion] = useState(0)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [resizing, setResizing] = useState(false)
   const [resizeDirection, setResizeDirection] = useState("")
   const editorRef = useRef<HTMLDivElement>(null)
   const [editingElementId, setEditingElementId] = useState<string | null>(null)
-  const textScaleMapRef = useRef<Map<string, { key: string; scale: number; overflowWrap: string }>>(new Map())
-  const textBoxRefs = useRef<Map<string, HTMLDivElement>>(new Map())
-  const textInnerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   const handleElementClick = (element: Element, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -282,67 +277,6 @@ export default function SlideEditor({
     }
   }, [draggingElement, resizing, selectedElement, dragOffset, resizeDirection])
 
-  useLayoutEffect(() => {
-    let didChange = false
-
-    slide.elements.forEach((element) => {
-      if (element.type !== "text") return
-      const box = textBoxRefs.current.get(element.id)
-      const inner = textInnerRefs.current.get(element.id)
-      if (!box || !inner) return
-
-      inner.style.transform = "scale(1)"
-      inner.style.transformOrigin = "top left"
-      inner.style.overflowWrap = "normal"
-      inner.style.wordBreak = "normal"
-      inner.style.hyphens = "none"
-      inner.style.whiteSpace = element.content.includes("\n") ? "pre-wrap" : "normal"
-
-      const cacheKey = `${element.content}::${element.style.fontSize ?? ""}::${element.style.fontFamily ?? ""}::${element.size.width}x${element.size.height}`
-      const cached = textScaleMapRef.current.get(element.id)
-      if (cached?.key === cacheKey) {
-        inner.style.overflowWrap = cached.overflowWrap
-        inner.style.transform = `scale(${cached.scale})`
-        return
-      }
-
-      const boxW = box.clientWidth
-      const boxH = box.clientHeight
-      const textW = inner.scrollWidth
-      const textH = inner.scrollHeight
-
-      const overflowX = textW > boxW + 1
-      const overflowY = textH > boxH + 1
-
-      if (!overflowX && !overflowY) {
-        textScaleMapRef.current.set(element.id, { key: cacheKey, scale: 1, overflowWrap: "normal" })
-        didChange = true
-        return
-      }
-
-      let overflowWrap = "normal"
-      const hasLongWord = element.content.split(/\s+/).some((word) => word.length >= 18)
-      if (overflowX && hasLongWord) {
-        inner.style.overflowWrap = "anywhere"
-        overflowWrap = "anywhere"
-      }
-
-      const wrappedTextW = inner.scrollWidth
-      const wrappedTextH = inner.scrollHeight
-      const scale = Math.min(1, boxW / wrappedTextW, boxH / wrappedTextH)
-
-      const prevScale = textScaleMapRef.current.get(element.id)
-      if (!prevScale || prevScale.key !== cacheKey || prevScale.scale !== scale || prevScale.overflowWrap !== overflowWrap) {
-        textScaleMapRef.current.set(element.id, { key: cacheKey, scale, overflowWrap })
-        didChange = true
-      }
-    })
-
-    if (didChange) {
-      setTextScaleVersion((prev) => prev + 1)
-    }
-  }, [slide, textScaleVersion])
-
   // 修改整个元素的渲染容器，确保正确的定位
   const renderElement = (element: Element) => {
     const isSelected = selectedElement && selectedElement.id === element.id
@@ -355,11 +289,6 @@ export default function SlideEditor({
 
     // 修改文本元素的渲染，确保动画效果正确应用
     if (element.type === "text") {
-      // 将文本内容中的换行符转换为<br>标签
-      const formattedContent = element.content.replace(/\n/g, "<br>")
-      const hasLineBreaks = element.content.includes("\n")
-
-      // 构建动画样式
       let animationStyle = {}
       if (element.style.animation && element.style.animationType) {
         const duration = element.style.animationDuration || 0.5
@@ -415,73 +344,19 @@ export default function SlideEditor({
           onEdit={() => handleTextDoubleClick(element, {} as React.MouseEvent)}
           onLockToggle={onLockToggle}
         >
-          <div
-            className="absolute"
-            style={{
-              left: element.position.x,
-              top: element.position.y,
-              width: element.size.width,
-              height: element.size.height,
-              overflow: "hidden",
-              padding: 0,
-              margin: 0,
-              transform: element.style.rotation ? `rotate(${element.style.rotation}deg)` : undefined,
-              ...animationStyle,
-              border: DEBUG_TEXT_BOX ? "1px solid red" : undefined,
-              boxSizing: "border-box",
-            }}
-            ref={(node) => {
-              if (node) {
-                textBoxRefs.current.set(element.id, node)
-              } else {
-                textBoxRefs.current.delete(element.id)
-              }
-            }}
+          <TextElementView
+            element={element}
+            isSelected={isSelected}
+            isLocked={isLocked}
+            isEditing={editingElementId === element.id}
+            containerStyle={animationStyle}
+            onClick={(e) => handleElementClick(element, e)}
+            onMouseDown={(e) => handleElementMouseDown(element, e)}
+            onDoubleClick={(e) => handleTextDoubleClick(element, e)}
+            onContextMenu={handleElementContextMenu}
           >
-            <div
-              className={cn(
-                !isLocked && "cursor-move",
-                isSelected && "outline outline-2 outline-primary",
-                editingElementId === element.id && "opacity-0", // 当元素正在被编辑时隐藏
-                isLocked && "select-none pointer-events-none opacity-70",
-              )}
-              style={{
-                fontSize: element.style.fontSize || 16,
-                fontWeight: element.style.fontWeight,
-                fontStyle: element.style.fontStyle,
-                textDecoration: element.style.textDecoration,
-                color: element.style.color,
-                textAlign: element.style.textAlign as any,
-                lineHeight: element.style.lineHeight ?? 1,
-                userSelect: "none",
-                whiteSpace: hasLineBreaks ? "pre-wrap" : "normal",
-                padding: 0,
-                margin: 0,
-                verticalAlign: "top",
-                display: "inline-block",
-                transformOrigin: "top left",
-                transform: `scale(${textScaleMapRef.current.get(element.id)?.scale ?? 1})`,
-                wordBreak: "normal",
-                overflowWrap: textScaleMapRef.current.get(element.id)?.overflowWrap ?? "normal",
-                hyphens: "none",
-                letterSpacing: 0,
-                fontKerning: "normal",
-              }}
-              ref={(node) => {
-                if (node) {
-                  textInnerRefs.current.set(element.id, node)
-                } else {
-                  textInnerRefs.current.delete(element.id)
-                }
-              }}
-              onClick={(e) => handleElementClick(element, e)}
-              onMouseDown={(e) => handleElementMouseDown(element, e)}
-              onDoubleClick={(e) => handleTextDoubleClick(element, e)}
-              onContextMenu={handleElementContextMenu}
-              dangerouslySetInnerHTML={{ __html: formattedContent }}
-            />
             {isSelected && !isLocked && renderResizeHandles(element)}
-          </div>
+          </TextElementView>
         </ElementContextMenu>
       )
     }

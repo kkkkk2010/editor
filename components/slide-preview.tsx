@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect, useRef, useLayoutEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import type { Slide, SlideSize } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight, X } from "lucide-react"
+import TextElementView from "@/components/text-element-view"
 
 interface SlidePreviewProps {
   slides: Slide[]
@@ -13,13 +14,8 @@ interface SlidePreviewProps {
 }
 
 export default function SlidePreview({ slides, initialSlide, onExit, slideSize }: SlidePreviewProps) {
-  const DEBUG_TEXT_BOX = true
   const [currentSlideIndex, setCurrentSlideIndex] = useState(initialSlide)
   const previewRef = useRef<HTMLDivElement>(null)
-  const [textScaleVersion, setTextScaleVersion] = useState(0)
-  const textScaleMapRef = useRef<Map<string, { key: string; scale: number; overflowWrap: string }>>(new Map())
-  const textBoxRefs = useRef<Map<string, HTMLDivElement>>(new Map())
-  const textInnerRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -38,68 +34,6 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
       window.removeEventListener("keydown", handleKeyDown)
     }
   }, [onExit, slides.length])
-
-  useLayoutEffect(() => {
-    let didChange = false
-    const currentSlide = slides[currentSlideIndex]
-
-    currentSlide.elements.forEach((element) => {
-      if (element.type !== "text") return
-      const box = textBoxRefs.current.get(element.id)
-      const inner = textInnerRefs.current.get(element.id)
-      if (!box || !inner) return
-
-      inner.style.transform = "scale(1)"
-      inner.style.transformOrigin = "top left"
-      inner.style.overflowWrap = "normal"
-      inner.style.wordBreak = "normal"
-      inner.style.hyphens = "none"
-      inner.style.whiteSpace = element.content.includes("\n") ? "pre-wrap" : "normal"
-
-      const cacheKey = `${element.content}::${element.style.fontSize ?? ""}::${element.style.fontFamily ?? ""}::${element.size.width}x${element.size.height}`
-      const cached = textScaleMapRef.current.get(element.id)
-      if (cached?.key === cacheKey) {
-        inner.style.overflowWrap = cached.overflowWrap
-        inner.style.transform = `scale(${cached.scale})`
-        return
-      }
-
-      const boxW = box.clientWidth
-      const boxH = box.clientHeight
-      const textW = inner.scrollWidth
-      const textH = inner.scrollHeight
-
-      const overflowX = textW > boxW + 1
-      const overflowY = textH > boxH + 1
-
-      if (!overflowX && !overflowY) {
-        textScaleMapRef.current.set(element.id, { key: cacheKey, scale: 1, overflowWrap: "normal" })
-        didChange = true
-        return
-      }
-
-      let overflowWrap = "normal"
-      const hasLongWord = element.content.split(/\s+/).some((word) => word.length >= 18)
-      if (overflowX && hasLongWord) {
-        inner.style.overflowWrap = "anywhere"
-        overflowWrap = "anywhere"
-      }
-
-      const wrappedTextW = inner.scrollWidth
-      const wrappedTextH = inner.scrollHeight
-      const scale = Math.min(1, boxW / wrappedTextW, boxH / wrappedTextH)
-
-      const prevScale = textScaleMapRef.current.get(element.id)
-      if (!prevScale || prevScale.key !== cacheKey || prevScale.scale !== scale || prevScale.overflowWrap !== overflowWrap) {
-        textScaleMapRef.current.set(element.id, { key: cacheKey, scale, overflowWrap })
-        didChange = true
-      }
-    })
-
-    if (didChange) {
-      setTextScaleVersion((prev) => prev + 1)
-    }
-  }, [slides, currentSlideIndex, textScaleVersion])
 
   const currentSlide = slides[currentSlideIndex]
   const isFirstSlide = currentSlideIndex === 0
@@ -142,11 +76,6 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
         {currentSlide.elements.map((element) => {
           // 修改预览模式下的元素渲染，添加旋转和动画支持
           if (element.type === "text") {
-            // 将文本内容中的换行符转换为<br>标签
-            const formattedContent = element.content.replace(/\n/g, "<br>")
-            const hasLineBreaks = element.content.includes("\n")
-
-            // 构建动画样式
             let animationStyle = {}
             if (element.style.animation && element.style.animationType) {
               const duration = element.style.animationDuration || 0.5
@@ -192,71 +121,7 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
             }
 
             return (
-              <div
-                key={element.id}
-                style={{
-                  position: "absolute",
-                  left: element.position.x,
-                  top: element.position.y,
-                  width: element.size.width,
-                  height: element.size.height,
-                  overflow: "hidden",
-                  padding: 0,
-                  margin: 0,
-                  fontSize: element.style.fontSize || 16,
-                  fontWeight: element.style.fontWeight,
-                  fontStyle: element.style.fontStyle,
-                  textDecoration: element.style.textDecoration,
-                  color: element.style.color,
-                  textAlign: element.style.textAlign as any,
-                  lineHeight: element.style.lineHeight ?? 1,
-                  whiteSpace: hasLineBreaks ? "pre-wrap" : "normal",
-                  transform: element.style.rotation ? `rotate(${element.style.rotation}deg)` : undefined,
-                  ...animationStyle,
-                  verticalAlign: "top",
-                  display: "inline-block",
-                  border: DEBUG_TEXT_BOX ? "1px solid red" : undefined,
-                  boxSizing: "border-box",
-                }}
-                ref={(node) => {
-                  if (node) {
-                    textBoxRefs.current.set(element.id, node)
-                  } else {
-                    textBoxRefs.current.delete(element.id)
-                  }
-                }}
-              >
-                <div
-                  style={{
-                    display: "inline-block",
-                    padding: 0,
-                    margin: 0,
-                    transformOrigin: "top left",
-                    transform: `scale(${textScaleMapRef.current.get(element.id)?.scale ?? 1})`,
-                    fontSize: element.style.fontSize || 16,
-                    fontWeight: element.style.fontWeight,
-                    fontStyle: element.style.fontStyle,
-                    textDecoration: element.style.textDecoration,
-                    color: element.style.color,
-                    textAlign: element.style.textAlign as any,
-                    lineHeight: element.style.lineHeight ?? 1,
-                    wordBreak: "normal",
-                    overflowWrap: textScaleMapRef.current.get(element.id)?.overflowWrap ?? "normal",
-                    hyphens: "none",
-                    letterSpacing: 0,
-                    fontKerning: "normal",
-                    whiteSpace: hasLineBreaks ? "pre-wrap" : "normal",
-                  }}
-                  ref={(node) => {
-                    if (node) {
-                      textInnerRefs.current.set(element.id, node)
-                    } else {
-                      textInnerRefs.current.delete(element.id)
-                    }
-                  }}
-                  dangerouslySetInnerHTML={{ __html: formattedContent }}
-                />
-              </div>
+              <TextElementView element={element} enablePointerEvents={false} containerStyle={animationStyle} />
             )
           }
           if (element.type === "image") {
