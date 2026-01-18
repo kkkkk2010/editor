@@ -11,7 +11,10 @@ import { cn } from "@/lib/utils"
 interface SlideEditorProps {
   slide: Slide
   onUpdateSlide: (slide: Slide) => void
-  onCommitSlide?: (slide: Slide) => void
+  onBeginTextEdit?: (elementId: string) => void
+  onTextEditChange?: (elementId: string, text: string) => void
+  onEndTextEdit?: (elementId: string) => void
+  onCancelTextEdit?: (elementId: string) => void
   selectedElement: Element | null
   onElementSelect: (element: Element | null) => void
   slideSize: SlideSize
@@ -27,7 +30,10 @@ interface SlideEditorProps {
 export default function SlideEditor({
   slide,
   onUpdateSlide,
-  onCommitSlide,
+  onBeginTextEdit,
+  onTextEditChange,
+  onEndTextEdit,
+  onCancelTextEdit,
   selectedElement,
   onElementSelect,
   slideSize,
@@ -258,6 +264,7 @@ export default function SlideEditor({
     if (element.type !== "text" || element.style.locked) return
 
     const input = document.createElement("textarea")
+    onBeginTextEdit?.(element.id)
     input.value = element.content
     input.style.position = "absolute"
     input.style.left = `${element.position.x}px`
@@ -284,7 +291,12 @@ export default function SlideEditor({
     const editingId = element.id
     setEditingElementId(editingId)
 
+    let didCancel = false
+
     const handleBlur = () => {
+      if (didCancel) {
+        return
+      }
       const updatedElement = {
         ...element,
         content: input.value,
@@ -297,10 +309,7 @@ export default function SlideEditor({
         elements: updatedElements,
       })
 
-      onCommitSlide?.({
-        ...slide,
-        elements: updatedElements,
-      })
+      onEndTextEdit?.(element.id)
 
       if (selectedElement && selectedElement.id === element.id) {
         onElementSelect(updatedElement)
@@ -310,7 +319,23 @@ export default function SlideEditor({
       setEditingElementId(null)
     }
 
+    const handleInput = () => {
+      onTextEditChange?.(element.id, input.value)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        didCancel = true
+        onCancelTextEdit?.(element.id)
+        input.remove()
+        setEditingElementId(null)
+      }
+    }
+
     input.addEventListener("blur", handleBlur)
+    input.addEventListener("input", handleInput)
+    input.addEventListener("keydown", handleKeyDown)
 
     editorRef.current?.appendChild(input)
     input.focus()

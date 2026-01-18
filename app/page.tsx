@@ -75,6 +75,9 @@ export default function Home() {
   const presentRef = useRef(history.present)
   const transformSnapshotRef = useRef<EditorState | null>(null)
   const transformDirtyRef = useRef(false)
+  const textEditSnapshotRef = useRef<EditorState | null>(null)
+  const textEditElementIdRef = useRef<string | null>(null)
+  const textEditOriginalTextRef = useRef<string | null>(null)
 
   const present = history.present
   const slides = present.slides
@@ -130,6 +133,34 @@ export default function Home() {
       const trimmedPast = past.length > MAX_HISTORY ? past.slice(past.length - MAX_HISTORY) : past
       return { past: trimmedPast, present: next, future: [] }
     })
+  }
+
+  const findElementById = (stateSlides: Slide[], elementId: string) => {
+    for (let slideIndex = 0; slideIndex < stateSlides.length; slideIndex += 1) {
+      const elementIndex = stateSlides[slideIndex].elements.findIndex((element) => element.id === elementId)
+      if (elementIndex !== -1) {
+        return { slideIndex, elementIndex }
+      }
+    }
+    return null
+  }
+
+  const updateTextElement = (stateSlides: Slide[], elementId: string, text: string) => {
+    const location = findElementById(stateSlides, elementId)
+    if (!location) {
+      return stateSlides
+    }
+    const { slideIndex, elementIndex } = location
+    const slide = stateSlides[slideIndex]
+    const updatedElements = [...slide.elements]
+    const updatedElement = {
+      ...updatedElements[elementIndex],
+      content: text,
+    }
+    updatedElements[elementIndex] = updatedElement
+    const updatedSlides = [...stateSlides]
+    updatedSlides[slideIndex] = { ...slide, elements: updatedElements }
+    return updatedSlides
   }
 
   const undo = useCallback(() => {
@@ -280,20 +311,6 @@ export default function Home() {
     if (transformSnapshotRef.current) {
       transformDirtyRef.current = true
     }
-  }
-
-  const commitSlide = (updatedSlide: Slide, meta?: HistoryMeta) => {
-    const updatedSlides = [...slides]
-    updatedSlides[currentSlideIndex] = updatedSlide
-
-    commit(
-      {
-        slides: updatedSlides,
-        currentSlideIndex,
-        selectedElementId,
-      },
-      meta,
-    )
   }
 
   const removeSlide = (index: number) => {
@@ -766,8 +783,52 @@ export default function Home() {
     commitFromSnapshot(snapshot, { type: "transform", reason: "end" })
   }
 
-  const handleTextEditEnd = (updatedSlide: Slide) => {
-    commitSlide(updatedSlide, { type: "element", reason: "text-edit" })
+  const beginTextEdit = (elementId: string) => {
+    if (textEditSnapshotRef.current) {
+      return
+    }
+    textEditSnapshotRef.current = cloneState(presentRef.current)
+    textEditElementIdRef.current = elementId
+    const location = findElementById(presentRef.current.slides, elementId)
+    textEditOriginalTextRef.current = location
+      ? presentRef.current.slides[location.slideIndex].elements[location.elementIndex].content
+      : null
+  }
+
+  const updateTextDraft = (elementId: string, text: string) => {
+    setPresent((state) => {
+      const updatedSlides = updateTextElement(state.slides, elementId, text)
+      return { ...state, slides: updatedSlides, selectedElementId: elementId }
+    })
+  }
+
+  const endTextEdit = (elementId: string) => {
+    if (!textEditSnapshotRef.current || textEditElementIdRef.current !== elementId) {
+      return
+    }
+    const location = findElementById(presentRef.current.slides, elementId)
+    const currentText = location
+      ? presentRef.current.slides[location.slideIndex].elements[location.elementIndex].content
+      : null
+    const originalText = textEditOriginalTextRef.current
+
+    if (currentText !== originalText) {
+      commitFromSnapshot(textEditSnapshotRef.current, { type: "element", reason: "edit-text" })
+    }
+
+    textEditSnapshotRef.current = null
+    textEditElementIdRef.current = null
+    textEditOriginalTextRef.current = null
+  }
+
+  const cancelTextEdit = (elementId: string) => {
+    if (!textEditSnapshotRef.current || textEditElementIdRef.current !== elementId) {
+      return
+    }
+    setPresent(textEditSnapshotRef.current)
+    textEditSnapshotRef.current = null
+    textEditElementIdRef.current = null
+    textEditOriginalTextRef.current = null
   }
 
   return (
@@ -830,7 +891,10 @@ export default function Home() {
                     <SlideEditor
                       slide={currentSlide}
                       onUpdateSlide={updateSlideLive}
-                      onCommitSlide={handleTextEditEnd}
+                      onBeginTextEdit={beginTextEdit}
+                      onTextEditChange={updateTextDraft}
+                      onEndTextEdit={endTextEdit}
+                      onCancelTextEdit={cancelTextEdit}
                       selectedElement={selectedElement}
                       onElementSelect={handleElementSelect}
                       slideSize={slideSize}
