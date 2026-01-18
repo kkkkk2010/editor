@@ -224,98 +224,6 @@ export default function Home() {
     setShowPropertyPanel(true)
   }
 
-  const handleAddTable = (rows: number, cols: number) => {
-    // 创建空表格数据
-    const tableData = Array(rows)
-      .fill(0)
-      .map(() =>
-        Array(cols)
-          .fill("")
-          .map(() => "Ячейка"), // Перевел: "单元格"
-      )
-
-    const newElement: Element = {
-      id: `table-${Date.now()}`,
-      type: "table",
-      content: JSON.stringify(tableData),
-      position: { x: slideSize.width / 2 - 200, y: slideSize.height / 2 - 100 },
-      size: { width: 400, height: 200 },
-      style: {
-        borderColor: "#000000",
-        borderWidth: 1,
-        headerBackground: "#f1f5f9",
-        cellPadding: 4,
-      },
-    }
-
-    const updatedSlide = {
-      ...currentSlide,
-      elements: [...currentSlide.elements, newElement],
-    }
-
-    updateSlide(updatedSlide)
-    setSelectedElement(newElement)
-    setShowPropertyPanel(true)
-  }
-
-  const handleAddChart = (chartType: string) => {
-    // 创建默认图表数据
-    const chartData = [
-      { label: "Проект 1", value: 30 }, // Перевел: "项目1"
-      { label: "Проект 2", value: 50 }, // Перевел: "项目2"
-      { label: "Проект 3", value: 20 }, // Перевел: "项目3"
-    ]
-
-    const newElement: Element = {
-      id: `chart-${Date.now()}`,
-      type: "chart",
-      content: JSON.stringify(chartData),
-      position: { x: slideSize.width / 2 - 200, y: slideSize.height / 2 - 150 },
-      size: { width: 400, height: 300 },
-      style: {
-        chartType: chartType,
-        title: "Заголовок диаграммы", // Перевел: "图表标题"
-        color: "#3b82f6",
-        showLegend: true,
-        showValues: true,
-      },
-    }
-
-    const updatedSlide = {
-      ...currentSlide,
-      elements: [...currentSlide.elements, newElement],
-    }
-
-    updateSlide(updatedSlide)
-    setSelectedElement(newElement)
-    setShowPropertyPanel(true)
-  }
-
-  const handleAddIcon = (iconName: string) => {
-    const newElement: Element = {
-      id: `icon-${Date.now()}`,
-      type: "icon",
-      content: iconName,
-      position: { x: slideSize.width / 2 - 25, y: slideSize.height / 2 - 25 },
-      size: { width: 50, height: 50 },
-      style: {
-        color: "#000000",
-        size: 24,
-        rotation: 0,
-        opacity: 1,
-      },
-    }
-
-    const updatedSlide = {
-      ...currentSlide,
-      elements: [...currentSlide.elements, newElement],
-    }
-
-    updateSlide(updatedSlide)
-    setSelectedElement(newElement)
-    setShowPropertyPanel(true)
-  }
-
   const handleAddImage = (imageUrl: string) => {
     const newElement: Element = {
       id: `image-${Date.now()}`,
@@ -510,9 +418,6 @@ export default function Home() {
             selectedElement={selectedElement}
             onUpdateElement={updateElement}
             onAddShape={handleAddShape}
-            onAddTable={handleAddTable}
-            onAddChart={handleAddChart}
-            onAddIcon={handleAddIcon}
             onAddText={handleAddText}
             title={presentationTitle}
             onTitleChange={setPresentationTitle}

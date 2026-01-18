@@ -10,9 +10,6 @@ import {
   AlignRight,
   Type,
   Square,
-  Table,
-  BarChart,
-  FileSymlink,
   Save,
   Plus,
 } from "lucide-react"
@@ -26,9 +23,6 @@ interface ToolbarProps {
   selectedElement: Element | null
   onUpdateElement: (element: Element) => void
   onAddShape: (type: string) => void
-  onAddTable: (rows: number, cols: number) => void
-  onAddChart: (type: string) => void
-  onAddIcon: (iconName: string) => void
   onAddText: () => void
   title: string
   onTitleChange: (title: string) => void
@@ -39,9 +33,6 @@ export default function Toolbar({
   selectedElement,
   onUpdateElement,
   onAddShape,
-  onAddTable,
-  onAddChart,
-  onAddIcon,
   onAddText,
   title,
   onTitleChange,
@@ -49,7 +40,7 @@ export default function Toolbar({
 }: ToolbarProps) {
   const [activeTab, setActiveTab] = useState("text")
 
-  const updateTextStyle = (property: string, value: any) => {
+  const updateTextStyle = <K extends keyof Element["style"]>(property: K, value: Element["style"][K]) => {
     if (!selectedElement || selectedElement.type !== "text") return
 
     onUpdateElement({
@@ -158,10 +149,6 @@ export default function Toolbar({
             <DropdownMenuItem onClick={() => onAddShape("rectangle")}>
               <Square className="h-4 w-4 mr-2" />
               Фигура
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onAddTable(3, 3)}>
-              <Table className="h-4 w-4 mr-2" />
-              Таблица
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

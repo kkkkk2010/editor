@@ -92,7 +92,7 @@ export default function LayerPropertyPanel({
   )
 }
 
-function getElementTypeName(type: string): string {
+function getElementTypeName(type: Element["type"]): string {
   switch (type) {
     case "text":
       return "Текст"
@@ -100,12 +100,6 @@ function getElementTypeName(type: string): string {
       return "Изображение"
     case "shape":
       return "Фигура"
-    case "table":
-      return "Таблица"
-    case "chart":
-      return "Диаграмма"
-    case "icon":
-      return "Иконка"
     default:
       return type
   }

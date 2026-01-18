@@ -423,7 +423,7 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
           img.src = element.content
           img.style.width = "100%"
           img.style.height = "100%"
-          img.style.objectFit = (element.style.objectFit as any) || "cover"
+          img.style.objectFit = element.style.objectFit || "cover"
           img.style.borderRadius = `${element.style.borderRadius || 0}px`
           img.style.opacity = `${element.style.opacity || 1}`
           elementDiv.appendChild(img)
@@ -434,14 +434,6 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
           if (element.content === "circle") {
             elementDiv.style.borderRadius = "50%"
           }
-        } else if (element.type === "table" || element.type === "chart" || element.type === "icon") {
-          // 这些元素需要更复杂的渲染，这里简化处理
-          elementDiv.style.border = "1px solid #ccc"
-          elementDiv.style.backgroundColor = "#f9f9f9"
-          elementDiv.innerText = `${element.type.toUpperCase()} 元素`
-          elementDiv.style.display = "flex"
-          elementDiv.style.alignItems = "center"
-          elementDiv.style.justifyContent = "center"
         }
 
         slideElement.appendChild(elementDiv)
@@ -477,4 +469,3 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
     return false
   }
 }
-

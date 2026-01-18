@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import type { CSSProperties } from "react"
 import type { Slide } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Plus, Trash2 } from "lucide-react"
@@ -15,8 +15,6 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ slides, currentSlideIndex, onSlideSelect, onAddSlide, onRemoveSlide }: SidebarProps) {
-  const [isEditing, setIsEditing] = useState<number | null>(null)
-
   const renderSlidePreview = (slide: Slide, index: number) => {
     // Calculate scale to fit the thumbnail
     const scale = 0.2
@@ -70,7 +68,7 @@ export default function Sidebar({ slides, currentSlideIndex, onSlideSelect, onAd
                     fontSize: (element.style.fontSize || 16) * scale,
                     fontWeight: element.style.fontWeight,
                     color: element.style.color,
-                    textAlign: element.style.textAlign as any,
+                    textAlign: element.style.textAlign as CSSProperties["textAlign"],
                     overflow: "hidden",
                   }}
                 >

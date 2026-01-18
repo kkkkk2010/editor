@@ -26,13 +26,6 @@ export interface TextStyle {
   borderRadius?: number
   objectFit?: string
   filter?: string
-  chartType?: string
-  title?: string
-  showLegend?: boolean
-  showValues?: boolean
-  headerBackground?: string
-  cellPadding?: number
-  size?: number
   rotation?: number
   // 动画相关属性
   animation?: boolean
@@ -45,7 +38,7 @@ export interface TextStyle {
 
 export interface Element {
   id: string
-  type: "text" | "image" | "shape" | "table" | "chart" | "icon"
+  type: "text" | "image" | "shape"
   content: string
   position: Position
   size: Size
