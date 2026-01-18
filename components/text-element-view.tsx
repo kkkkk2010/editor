@@ -1,12 +1,12 @@
 "use client"
 
 import type React from "react"
-import { useLayoutEffect, useMemo, useRef } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import type { Element } from "@/lib/types"
 
 const DEBUG_TEXT_BOX = true
-const DEBUG_MAX_LOGS = 2
+const DEBUG_MAX_LOGS = 5
 const debugLoggedIds = new Set<string>()
 
 interface TextElementViewProps {
@@ -52,72 +52,131 @@ export default function TextElementView({
   const cacheKey = useMemo(() => getCacheKey(element), [element])
   const hasLineBreaks = element.content.includes("\n")
   const formattedContent = element.content.replace(/\n/g, "<br>")
+  const [fontsReadyFlag, setFontsReadyFlag] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+    if (typeof document !== "undefined" && "fonts" in document) {
+      document.fonts.ready
+        .then(() => {
+          if (isMounted) {
+            setFontsReadyFlag(true)
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setFontsReadyFlag(true)
+          }
+        })
+    } else {
+      setFontsReadyFlag(true)
+    }
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   useLayoutEffect(() => {
+    let isActive = true
     const box = boxRef.current
     const visual = visualRef.current
     const textLayout = textLayoutRef.current
     if (!box || !visual || !textLayout) return
 
-    const cachedScale = scaleCache.get(cacheKey)
+    const keyWithFonts = `${cacheKey}|fontsReady=${fontsReadyFlag}`
+    const cachedScale = scaleCache.get(keyWithFonts)
     if (cachedScale !== undefined) {
       visual.style.transform = `scale(${cachedScale})`
-      return
-    }
-
-    if (isEditing) {
-      return
-    }
-
-    visual.style.transform = "scale(1)"
-    visual.style.transformOrigin = "top left"
-    textLayout.style.overflowWrap = "normal"
-    textLayout.style.wordBreak = "normal"
-    textLayout.style.hyphens = "none"
-    textLayout.style.whiteSpace = hasLineBreaks ? "pre-wrap" : "normal"
-
-
-    const boxW = box.clientWidth
-    const boxH = box.clientHeight
-    let textW = textLayout.scrollWidth
-    let textH = textLayout.scrollHeight
-
-    const overflowX = textW > boxW + 1
-    const overflowY = textH > boxH + 1
-
-    if (overflowX && shouldWrapAnywhere(element.content)) {
-      textLayout.style.overflowWrap = "anywhere"
-      textW = textLayout.scrollWidth
-      textH = textLayout.scrollHeight
-    }
-
-    let scale = 1
-    if (overflowX || overflowY) {
-      scale = Math.min(1, boxW / textW, boxH / textH)
-      if (scale > 0.985) {
-        scale = 1
+      return () => {
+        isActive = false
       }
     }
 
-    visual.style.transform = `scale(${scale})`
-    scaleCache.set(cacheKey, scale)
-
-    if (debugLoggedIds.size < DEBUG_MAX_LOGS && !debugLoggedIds.has(element.id)) {
-      debugLoggedIds.add(element.id)
-      const computedWidth = typeof window !== "undefined" ? getComputedStyle(textLayout).width : "n/a"
-      console.debug("Text fit", {
-        id: element.id,
-        overflowX,
-        overflowY,
-        scale,
-        boxW,
-        boxH,
-        textW,
-        textH,
-        textLayoutWidth: computedWidth,
-      })
+    if (isEditing) {
+      return () => {
+        isActive = false
+      }
     }
-  }, [cacheKey, element.content, element.id, hasLineBreaks, isEditing])
+
+    const measure = async () => {
+      const boxW = box.clientWidth
+      const boxH = box.clientHeight
+
+      textLayout.style.width = `${boxW}px`
+      textLayout.style.height = `${boxH}px`
+      textLayout.style.maxWidth = `${boxW}px`
+      textLayout.style.maxHeight = `${boxH}px`
+      textLayout.style.boxSizing = "border-box"
+      textLayout.style.position = "absolute"
+      textLayout.style.left = "0"
+      textLayout.style.top = "0"
+
+      visual.style.transform = "none"
+      visual.style.transformOrigin = "top left"
+      textLayout.style.overflowWrap = "normal"
+      textLayout.style.wordBreak = "normal"
+      textLayout.style.hyphens = "none"
+      textLayout.style.whiteSpace = hasLineBreaks ? "pre-wrap" : "normal"
+
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      })
+
+      let textW = textLayout.scrollWidth
+      let textH = textLayout.scrollHeight
+
+      const dx = textW - boxW
+      const dy = textH - boxH
+      const overflowX = dx > Math.max(2, boxW * 0.01)
+      const overflowY = dy > Math.max(2, boxH * 0.01)
+
+      if (overflowX && shouldWrapAnywhere(element.content)) {
+        textLayout.style.overflowWrap = "anywhere"
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        })
+        textW = textLayout.scrollWidth
+        textH = textLayout.scrollHeight
+      }
+
+      let scale = 1
+      if (overflowX || overflowY) {
+        scale = Math.min(1, boxW / textW, boxH / textH)
+        if (scale > 0.99) {
+          scale = 1
+        }
+      }
+
+      if (!isActive) return
+      visual.style.transform = scale === 1 ? "none" : `scale(${scale})`
+      scaleCache.set(keyWithFonts, scale)
+
+      if (debugLoggedIds.size < DEBUG_MAX_LOGS && !debugLoggedIds.has(element.id)) {
+        debugLoggedIds.add(element.id)
+        const computedWidth = typeof window !== "undefined" ? getComputedStyle(textLayout).width : "n/a"
+        console.debug("Text fit", {
+          id: element.id,
+          boxW,
+          boxH,
+          textW,
+          textH,
+          dx,
+          dy,
+          overflowX,
+          overflowY,
+          scale,
+          textLayoutWidth: computedWidth,
+        })
+      }
+    }
+
+    void measure()
+
+    return () => {
+      isActive = false
+    }
+  }, [cacheKey, element.content, element.id, hasLineBreaks, isEditing, fontsReadyFlag])
 
   return (
     <div
@@ -172,7 +231,9 @@ export default function TextElementView({
             width: "100%",
             height: "100%",
             minWidth: 0,
+            minHeight: 0,
             maxWidth: "none",
+            maxHeight: "none",
             boxSizing: "border-box",
             whiteSpace: hasLineBreaks ? "pre-wrap" : "normal",
             overflowWrap: "normal",
