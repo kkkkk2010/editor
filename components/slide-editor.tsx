@@ -352,7 +352,6 @@ export default function SlideEditor({
             isSelected={isSelected}
             isLocked={isLocked}
             isEditing={editingElementId === element.id}
-            importSettings={importSettings}
             containerStyle={animationStyle}
             onClick={(e) => handleElementClick(element, e)}
             onMouseDown={(e) => handleElementMouseDown(element, e)}

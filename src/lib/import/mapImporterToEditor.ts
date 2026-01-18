@@ -108,9 +108,6 @@ function mapElement(
       size,
       style: {
         fontFamily: style.fontFamily,
-        baseFontSizePx: basePx,
-        fontSizePx: basePx,
-        importShrinkPx: 0,
         fontSize: basePx,
         color: style.color,
         fontWeight: style.bold ? "bold" : "normal",

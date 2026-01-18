@@ -126,7 +126,6 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize, 
                 element={element}
                 enablePointerEvents={false}
                 containerStyle={animationStyle}
-                importSettings={importSettings}
               />
             )
           }
