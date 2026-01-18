@@ -3,7 +3,7 @@
 import type { CSSProperties } from "react"
 import type { Slide } from "@/lib/types"
 import { Button } from "@/components/ui/button"
-import { Plus, Trash2 } from "lucide-react"
+import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface SidebarProps {
@@ -12,19 +12,32 @@ interface SidebarProps {
   onSlideSelect: (index: number) => void
   onAddSlide: () => void
   onRemoveSlide: (index: number) => void
+  onDuplicateSlide: (index: number) => void
+  onMoveSlideUp: (index: number) => void
+  onMoveSlideDown: (index: number) => void
 }
 
-export default function Sidebar({ slides, currentSlideIndex, onSlideSelect, onAddSlide, onRemoveSlide }: SidebarProps) {
+export default function Sidebar({
+  slides,
+  currentSlideIndex,
+  onSlideSelect,
+  onAddSlide,
+  onRemoveSlide,
+  onDuplicateSlide,
+  onMoveSlideUp,
+  onMoveSlideDown,
+}: SidebarProps) {
   const renderSlidePreview = (slide: Slide, index: number) => {
     // Calculate scale to fit the thumbnail
     const scale = 0.2
+    const isCurrent = index === currentSlideIndex
 
     return (
       <div
         key={slide.id}
         className={cn(
           "relative border rounded-md overflow-hidden cursor-pointer transition-all mb-3 group",
-          index === currentSlideIndex ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-primary/50",
+          isCurrent ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-primary/50",
         )}
         style={{
           width: 192,
@@ -32,6 +45,54 @@ export default function Sidebar({ slides, currentSlideIndex, onSlideSelect, onAd
         }}
         onClick={() => onSlideSelect(index)}
       >
+        {isCurrent && (
+          <div className="absolute left-1 top-1 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            <button
+              type="button"
+              className={cn(
+                "rounded-full bg-background/90 p-1 text-foreground shadow-sm",
+                index === 0 && "cursor-not-allowed opacity-50",
+              )}
+              onClick={(event) => {
+                event.stopPropagation()
+                onMoveSlideUp(index)
+              }}
+              disabled={index === 0}
+              aria-label="Переместить слайд вверх"
+              title="Переместить слайд вверх"
+            >
+              <ArrowUp className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "rounded-full bg-background/90 p-1 text-foreground shadow-sm",
+                index === slides.length - 1 && "cursor-not-allowed opacity-50",
+              )}
+              onClick={(event) => {
+                event.stopPropagation()
+                onMoveSlideDown(index)
+              }}
+              disabled={index === slides.length - 1}
+              aria-label="Переместить слайд вниз"
+              title="Переместить слайд вниз"
+            >
+              <ArrowDown className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              className="rounded-full bg-background/90 p-1 text-foreground shadow-sm"
+              onClick={(event) => {
+                event.stopPropagation()
+                onDuplicateSlide(index)
+              }}
+              aria-label="Дублировать слайд"
+              title="Дублировать слайд"
+            >
+              <Copy className="h-3 w-3" />
+            </button>
+          </div>
+        )}
         <button
           type="button"
           className={cn(

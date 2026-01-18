@@ -12,6 +12,8 @@ import {
   Square,
   Save,
   Plus,
+  Undo2,
+  Redo2,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
@@ -27,6 +29,10 @@ interface ToolbarProps {
   title: string
   onTitleChange: (title: string) => void
   onImportZip: (result: ImportResult, createdUrls: string[]) => void
+  onUndo: () => void
+  onRedo: () => void
+  canUndo: boolean
+  canRedo: boolean
 }
 
 export default function Toolbar({
@@ -37,6 +43,10 @@ export default function Toolbar({
   title,
   onTitleChange,
   onImportZip,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
 }: ToolbarProps) {
   const [activeTab, setActiveTab] = useState("text")
 
@@ -124,6 +134,14 @@ export default function Toolbar({
     <div className="border-b bg-background p-2">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center">
+          <div className="flex items-center mr-2 space-x-1">
+            <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} aria-label="Undo">
+              <Undo2 className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onRedo} disabled={!canRedo} aria-label="Redo">
+              <Redo2 className="h-4 w-4" />
+            </Button>
+          </div>
           <TitleEditor title={title} onTitleChange={onTitleChange} />
           <Button variant="ghost" size="sm">
             <Save className="h-4 w-4 mr-2" />

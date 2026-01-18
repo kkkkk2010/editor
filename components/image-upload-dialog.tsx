@@ -10,9 +10,21 @@ import { cn } from "@/lib/utils"
 
 interface ImageUploadDialogProps {
   onImageSelect: (imageUrl: string) => void
+  triggerLabel?: string
+  triggerIcon?: React.ReactNode
+  triggerVariant?: "default" | "secondary" | "destructive" | "outline" | "ghost" | "link"
+  triggerSize?: "default" | "sm" | "lg" | "icon"
+  triggerClassName?: string
 }
 
-export default function ImageUploadDialog({ onImageSelect }: ImageUploadDialogProps) {
+export default function ImageUploadDialog({
+  onImageSelect,
+  triggerLabel = "Загрузить изображение",
+  triggerIcon,
+  triggerVariant = "outline",
+  triggerSize = "sm",
+  triggerClassName,
+}: ImageUploadDialogProps) {
   const [open, setOpen] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
@@ -84,9 +96,9 @@ export default function ImageUploadDialog({ onImageSelect }: ImageUploadDialogPr
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Image className="h-4 w-4 mr-2" />
-          Загрузить изображение {/* Перевел: "上传图片" */}
+        <Button variant={triggerVariant} size={triggerSize} className={triggerClassName}>
+          {triggerIcon ?? <Image className="h-4 w-4 mr-2" />}
+          {triggerLabel} {/* Перевел: "上传图片" */}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">

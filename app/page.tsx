@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useCallback, useMemo, useRef, useState, useEffect } from "react"
 import Sidebar from "@/components/sidebar"
 import Toolbar from "@/components/toolbar"
 import SlideEditor from "@/components/slide-editor"
@@ -19,11 +19,52 @@ import { useToast } from "@/hooks/use-toast"
 import type { ImportResult } from "@/src/lib/import/importerDoc"
 import { revokeImportObjectUrls } from "@/src/lib/import/zipImport"
 
+type EditorState = {
+  slides: Slide[]
+  currentSlideIndex: number
+  selectedElementId: string | null
+}
+
+type HistoryMeta = {
+  type?: string
+  reason?: string
+}
+
+const MAX_HISTORY = 100
+
+function createId(prefix: string) {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function cloneState(state: EditorState): EditorState {
+  if (typeof structuredClone === "function") {
+    return structuredClone(state) as EditorState
+  }
+  return JSON.parse(JSON.stringify(state)) as EditorState
+}
+
+function isSameState(a: EditorState, b: EditorState) {
+  return (
+    a.slides === b.slides &&
+    a.currentSlideIndex === b.currentSlideIndex &&
+    a.selectedElementId === b.selectedElementId
+  )
+}
+
 export default function Home() {
-  const [slides, setSlides] = useState<Slide[]>(defaultSlides)
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(0)
+  const [history, setHistory] = useState(() => ({
+    past: [] as EditorState[],
+    present: {
+      slides: defaultSlides,
+      currentSlideIndex: 0,
+      selectedElementId: null,
+    },
+    future: [] as EditorState[],
+  }))
   const [isPreviewMode, setIsPreviewMode] = useState(false)
-  const [selectedElement, setSelectedElement] = useState<Element | null>(null)
   const [slideSize, setSlideSize] = useState<SlideSize>(defaultSlideSize)
   const [showPropertyPanel, setShowPropertyPanel] = useState(false)
   const [presentationTitle, setPresentationTitle] = useState("Презентация") // Перевел: "flowmix多模态产品系列"
@@ -31,8 +72,122 @@ export default function Home() {
   const [editorScale, setEditorScale] = useState(1)
   const importedAssetUrlsRef = useRef<string[]>([])
   const { toast } = useToast()
+  const presentRef = useRef(history.present)
+  const transformSnapshotRef = useRef<EditorState | null>(null)
+  const transformDirtyRef = useRef(false)
+
+  const present = history.present
+  const slides = present.slides
+  const currentSlideIndex = present.currentSlideIndex
+  const selectedElementId = present.selectedElementId
+  const canUndo = history.past.length > 0
+  const canRedo = history.future.length > 0
+
+  useEffect(() => {
+    presentRef.current = present
+  }, [present])
 
   const currentSlide = slides[currentSlideIndex]
+  const selectedElement = useMemo(() => {
+    if (!selectedElementId) return null
+    return currentSlide?.elements.find((el) => el.id === selectedElementId) ?? null
+  }, [currentSlide, selectedElementId])
+
+  useEffect(() => {
+    if (selectedElementId && !selectedElement) {
+      setPresent((state) => ({ ...state, selectedElementId: null }))
+    }
+  }, [selectedElementId, selectedElement])
+
+  const setPresent = (updater: EditorState | ((state: EditorState) => EditorState)) => {
+    setHistory((state) => {
+      const next = typeof updater === "function" ? updater(state.present) : updater
+      if (isSameState(state.present, next)) {
+        return state
+      }
+      return { ...state, present: next }
+    })
+  }
+
+  const commit = (next: EditorState, _meta?: HistoryMeta) => {
+    setHistory((state) => {
+      if (isSameState(state.present, next)) {
+        return state
+      }
+      const past = [...state.past, state.present]
+      const trimmedPast = past.length > MAX_HISTORY ? past.slice(past.length - MAX_HISTORY) : past
+      return { past: trimmedPast, present: next, future: [] }
+    })
+  }
+
+  const commitFromSnapshot = (snapshot: EditorState, _meta?: HistoryMeta) => {
+    setHistory((state) => {
+      const next = state.present
+      if (isSameState(snapshot, next)) {
+        return state
+      }
+      const past = [...state.past, snapshot]
+      const trimmedPast = past.length > MAX_HISTORY ? past.slice(past.length - MAX_HISTORY) : past
+      return { past: trimmedPast, present: next, future: [] }
+    })
+  }
+
+  const undo = useCallback(() => {
+    setHistory((state) => {
+      if (state.past.length === 0) return state
+      const previous = state.past[state.past.length - 1]
+      const past = state.past.slice(0, -1)
+      const future = [state.present, ...state.future]
+      return { past, present: previous, future }
+    })
+  }, [])
+
+  const redo = useCallback(() => {
+    setHistory((state) => {
+      if (state.future.length === 0) return state
+      const next = state.future[0]
+      const future = state.future.slice(1)
+      const past = [...state.past, state.present]
+      return { past, present: next, future }
+    })
+  }, [])
+
+  useEffect(() => {
+    const handleHistoryShortcuts = (event: KeyboardEvent) => {
+      const activeElement = document.activeElement
+      const isInputElement =
+        activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        activeElement?.isContentEditable
+
+      if (isInputElement) {
+        return
+      }
+
+      const isModifier = event.ctrlKey || event.metaKey
+      if (!isModifier) return
+
+      if (event.key.toLowerCase() === "z") {
+        event.preventDefault()
+        if (event.shiftKey) {
+          redo()
+        } else {
+          undo()
+        }
+      }
+
+      if (event.key.toLowerCase() === "y") {
+        event.preventDefault()
+        redo()
+      }
+    }
+
+    window.addEventListener("keydown", handleHistoryShortcuts)
+
+    return () => {
+      window.removeEventListener("keydown", handleHistoryShortcuts)
+    }
+  }, [redo, undo])
 
   // 确保slideSize变化时立即更新
   useEffect(() => {
@@ -47,7 +202,6 @@ export default function Home() {
 
       const containerWidth = editorContainerRef.current.clientWidth
       const containerHeight = editorContainerRef.current.clientHeight
-      const slideAspectRatio = slideSize.width / slideSize.height
 
       // 计算水平和垂直方向的缩放比例
       const scaleX = (containerWidth - 80) / slideSize.width
@@ -88,14 +242,14 @@ export default function Home() {
 
   const addSlide = () => {
     const newSlide: Slide = {
-      id: `slide-${Date.now()}`,
+      id: createId("slide"),
       background: {
         type: "gradient",
         value: "linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)",
       },
       elements: [
         {
-          id: `text-${Date.now()}`,
+          id: createId("text"),
           type: "text",
           content: "Новый слайд", // Перевел: "新幻灯片"
           position: { x: slideSize.width / 2 - 200, y: slideSize.height / 2 - 40 },
@@ -109,14 +263,37 @@ export default function Home() {
         },
       ],
     }
-    setSlides([...slides, newSlide])
-    setCurrentSlideIndex(slides.length)
+    const nextSlides = [...slides, newSlide]
+    commit({
+      slides: nextSlides,
+      currentSlideIndex: slides.length,
+      selectedElementId: null,
+    }, { type: "slide", reason: "add" })
   }
 
-  const updateSlide = (updatedSlide: Slide) => {
-    const newSlides = [...slides]
-    newSlides[currentSlideIndex] = updatedSlide
-    setSlides(newSlides)
+  const updateSlideLive = (updatedSlide: Slide) => {
+    setPresent((state) => {
+      const newSlides = [...state.slides]
+      newSlides[state.currentSlideIndex] = updatedSlide
+      return { ...state, slides: newSlides }
+    })
+    if (transformSnapshotRef.current) {
+      transformDirtyRef.current = true
+    }
+  }
+
+  const commitSlide = (updatedSlide: Slide, meta?: HistoryMeta) => {
+    const updatedSlides = [...slides]
+    updatedSlides[currentSlideIndex] = updatedSlide
+
+    commit(
+      {
+        slides: updatedSlides,
+        currentSlideIndex,
+        selectedElementId,
+      },
+      meta,
+    )
   }
 
   const removeSlide = (index: number) => {
@@ -139,10 +316,66 @@ export default function Home() {
     const nextSlides = slides.filter((_, slideIndex) => slideIndex !== index)
     const nextIndex = index >= nextSlides.length ? Math.max(0, nextSlides.length - 1) : index
 
-    setSlides(nextSlides)
-    setCurrentSlideIndex(nextIndex)
-    setSelectedElement(null)
+    commit(
+      {
+        slides: nextSlides,
+        currentSlideIndex: nextIndex,
+        selectedElementId: null,
+      },
+      { type: "slide", reason: "remove" },
+    )
     setIsPreviewMode(false)
+  }
+
+  const duplicateSlide = (index: number) => {
+    if (index < 0 || index >= slides.length) return
+
+    const sourceSlide = slides[index]
+    const duplicatedSlide: Slide = {
+      ...sourceSlide,
+      id: createId("slide"),
+      elements: sourceSlide.elements.map((element) => ({
+        ...element,
+        id: createId(element.type),
+      })),
+    }
+
+    const nextSlides = [...slides]
+    nextSlides.splice(index + 1, 0, duplicatedSlide)
+
+    commit(
+      {
+        slides: nextSlides,
+        currentSlideIndex: index + 1,
+        selectedElementId: null,
+      },
+      { type: "slide", reason: "duplicate" },
+    )
+  }
+
+  const moveSlide = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1
+    if (targetIndex < 0 || targetIndex >= slides.length) return
+
+    const nextSlides = [...slides]
+    const [movedSlide] = nextSlides.splice(index, 1)
+    nextSlides.splice(targetIndex, 0, movedSlide)
+
+    let nextCurrentIndex = currentSlideIndex
+    if (currentSlideIndex === index) {
+      nextCurrentIndex = targetIndex
+    } else if (currentSlideIndex === targetIndex) {
+      nextCurrentIndex = index
+    }
+
+    commit(
+      {
+        slides: nextSlides,
+        currentSlideIndex: nextCurrentIndex,
+        selectedElementId: null,
+      },
+      { type: "slide", reason: "reorder" },
+    )
   }
 
   useEffect(() => {
@@ -171,25 +404,37 @@ export default function Home() {
   }, [currentSlideIndex, removeSlide])
 
   const updateElement = (updatedElement: Element) => {
-    if (!selectedElement) return
+    const slide = slides[currentSlideIndex]
+    if (!slide) return
 
-    const elementIndex = currentSlide.elements.findIndex((el) => el.id === selectedElement.id)
+    const elementIndex = slide.elements.findIndex((el) => el.id === updatedElement.id)
 
     if (elementIndex === -1) return
 
-    const updatedElements = [...currentSlide.elements]
+    const updatedElements = [...slide.elements]
     updatedElements[elementIndex] = updatedElement
 
-    updateSlide({
-      ...currentSlide,
+    const updatedSlides = [...slides]
+    updatedSlides[currentSlideIndex] = {
+      ...slide,
       elements: updatedElements,
-    })
+    }
 
-    setSelectedElement(updatedElement)
+    commit(
+      {
+        slides: updatedSlides,
+        currentSlideIndex,
+        selectedElementId: updatedElement.id,
+      },
+      { type: "element", reason: "update" },
+    )
   }
 
   const handleElementSelect = (element: Element | null) => {
-    setSelectedElement(element)
+    setPresent((state) => ({
+      ...state,
+      selectedElementId: element?.id ?? null,
+    }))
     if (element && !showPropertyPanel) {
       setShowPropertyPanel(true)
     }
@@ -201,7 +446,7 @@ export default function Home() {
 
   const handleAddShape = (shapeType: string) => {
     const newElement: Element = {
-      id: `shape-${Date.now()}`,
+      id: createId("shape"),
       type: "shape",
       content: shapeType,
       position: { x: slideSize.width / 2 - 75, y: slideSize.height / 2 - 75 },
@@ -218,15 +463,23 @@ export default function Home() {
       ...currentSlide,
       elements: [...currentSlide.elements, newElement],
     }
+    const updatedSlides = [...slides]
+    updatedSlides[currentSlideIndex] = updatedSlide
 
-    updateSlide(updatedSlide)
-    setSelectedElement(newElement)
+    commit(
+      {
+        slides: updatedSlides,
+        currentSlideIndex,
+        selectedElementId: newElement.id,
+      },
+      { type: "element", reason: "add" },
+    )
     setShowPropertyPanel(true)
   }
 
   const handleAddImage = (imageUrl: string) => {
     const newElement: Element = {
-      id: `image-${Date.now()}`,
+      id: createId("image"),
       type: "image",
       content: imageUrl,
       position: { x: slideSize.width / 2 - 150, y: slideSize.height / 2 - 100 },
@@ -242,9 +495,17 @@ export default function Home() {
       ...currentSlide,
       elements: [...currentSlide.elements, newElement],
     }
+    const updatedSlides = [...slides]
+    updatedSlides[currentSlideIndex] = updatedSlide
 
-    updateSlide(updatedSlide)
-    setSelectedElement(newElement)
+    commit(
+      {
+        slides: updatedSlides,
+        currentSlideIndex,
+        selectedElementId: newElement.id,
+      },
+      { type: "element", reason: "add" },
+    )
     setShowPropertyPanel(true)
   }
 
@@ -252,7 +513,7 @@ export default function Home() {
   const handleCopyElement = (element: Element) => {
     const newElement: Element = {
       ...element,
-      id: `${element.type}-${Date.now()}`,
+      id: createId(element.type),
       position: {
         x: element.position.x + 20,
         y: element.position.y + 20,
@@ -263,20 +524,36 @@ export default function Home() {
       ...currentSlide,
       elements: [...currentSlide.elements, newElement],
     }
+    const updatedSlides = [...slides]
+    updatedSlides[currentSlideIndex] = updatedSlide
 
-    updateSlide(updatedSlide)
-    setSelectedElement(newElement)
+    commit(
+      {
+        slides: updatedSlides,
+        currentSlideIndex,
+        selectedElementId: newElement.id,
+      },
+      { type: "element", reason: "copy" },
+    )
   }
 
   const handleDeleteElement = (element: Element) => {
     const updatedElements = currentSlide.elements.filter((el) => el.id !== element.id)
 
-    updateSlide({
+    const updatedSlides = [...slides]
+    updatedSlides[currentSlideIndex] = {
       ...currentSlide,
       elements: updatedElements,
-    })
+    }
 
-    setSelectedElement(null)
+    commit(
+      {
+        slides: updatedSlides,
+        currentSlideIndex,
+        selectedElementId: null,
+      },
+      { type: "element", reason: "delete" },
+    )
   }
 
   const handleMoveElementForward = (element: Element) => {
@@ -288,10 +565,20 @@ export default function Home() {
     updatedElements[elementIndex] = updatedElements[elementIndex + 1]
     updatedElements[elementIndex + 1] = temp
 
-    updateSlide({
+    const updatedSlides = [...slides]
+    updatedSlides[currentSlideIndex] = {
       ...currentSlide,
       elements: updatedElements,
-    })
+    }
+
+    commit(
+      {
+        slides: updatedSlides,
+        currentSlideIndex,
+        selectedElementId: element.id,
+      },
+      { type: "element", reason: "move-forward" },
+    )
   }
 
   const handleMoveElementBackward = (element: Element) => {
@@ -303,10 +590,20 @@ export default function Home() {
     updatedElements[elementIndex] = updatedElements[elementIndex - 1]
     updatedElements[elementIndex - 1] = temp
 
-    updateSlide({
+    const updatedSlides = [...slides]
+    updatedSlides[currentSlideIndex] = {
       ...currentSlide,
       elements: updatedElements,
-    })
+    }
+
+    commit(
+      {
+        slides: updatedSlides,
+        currentSlideIndex,
+        selectedElementId: element.id,
+      },
+      { type: "element", reason: "move-backward" },
+    )
   }
 
   const handleLockToggle = (element: Element) => {
@@ -323,7 +620,7 @@ export default function Home() {
 
   const handleAddText = () => {
     const newElement: Element = {
-      id: `text-${Date.now()}`,
+      id: createId("text"),
       type: "text",
       content: "Дважды щелкните для редактирования", // Перевел: "双击编辑文本"
       position: { x: slideSize.width / 2 - 100, y: slideSize.height / 2 - 20 },
@@ -340,9 +637,17 @@ export default function Home() {
       ...currentSlide,
       elements: [...currentSlide.elements, newElement],
     }
+    const updatedSlides = [...slides]
+    updatedSlides[currentSlideIndex] = updatedSlide
 
-    updateSlide(updatedSlide)
-    setSelectedElement(newElement)
+    commit(
+      {
+        slides: updatedSlides,
+        currentSlideIndex,
+        selectedElementId: newElement.id,
+      },
+      { type: "element", reason: "add" },
+    )
     setShowPropertyPanel(true)
   }
 
@@ -355,10 +660,20 @@ export default function Home() {
       updatedBackground.value = `url(${background.value})`
     }
 
-    updateSlide({
+    const updatedSlides = [...slides]
+    updatedSlides[currentSlideIndex] = {
       ...currentSlide,
       background: updatedBackground,
-    })
+    }
+
+    commit(
+      {
+        slides: updatedSlides,
+        currentSlideIndex,
+        selectedElementId,
+      },
+      { type: "slide", reason: "background" },
+    )
   }
 
   const handleMoveElementToFront = (element: Element) => {
@@ -369,10 +684,20 @@ export default function Home() {
     const elementToMove = updatedElements.splice(elementIndex, 1)[0]
     updatedElements.push(elementToMove)
 
-    updateSlide({
+    const updatedSlides = [...slides]
+    updatedSlides[currentSlideIndex] = {
       ...currentSlide,
       elements: updatedElements,
-    })
+    }
+
+    commit(
+      {
+        slides: updatedSlides,
+        currentSlideIndex,
+        selectedElementId: element.id,
+      },
+      { type: "element", reason: "move-front" },
+    )
   }
 
   const handleMoveElementToBack = (element: Element) => {
@@ -383,17 +708,32 @@ export default function Home() {
     const elementToMove = updatedElements.splice(elementIndex, 1)[0]
     updatedElements.unshift(elementToMove)
 
-    updateSlide({
+    const updatedSlides = [...slides]
+    updatedSlides[currentSlideIndex] = {
       ...currentSlide,
       elements: updatedElements,
-    })
+    }
+
+    commit(
+      {
+        slides: updatedSlides,
+        currentSlideIndex,
+        selectedElementId: element.id,
+      },
+      { type: "element", reason: "move-back" },
+    )
   }
 
   const handleImport = (result: ImportResult) => {
-    setSlides(result.slides)
     setSlideSize(result.slideSize)
-    setCurrentSlideIndex(0)
-    setSelectedElement(null)
+    commit(
+      {
+        slides: result.slides,
+        currentSlideIndex: 0,
+        selectedElementId: null,
+      },
+      { type: "document", reason: "import" },
+    )
     setShowPropertyPanel(false)
   }
 
@@ -401,6 +741,33 @@ export default function Home() {
     revokeImportObjectUrls(importedAssetUrlsRef.current)
     importedAssetUrlsRef.current = createdUrls
     handleImport(result)
+  }
+
+  const handleTransformStart = () => {
+    if (transformSnapshotRef.current) {
+      return
+    }
+    transformSnapshotRef.current = cloneState(presentRef.current)
+    transformDirtyRef.current = false
+  }
+
+  const handleTransformEnd = () => {
+    const snapshot = transformSnapshotRef.current
+    if (!snapshot) return
+
+    transformSnapshotRef.current = null
+
+    if (!transformDirtyRef.current) {
+      transformDirtyRef.current = false
+      return
+    }
+
+    transformDirtyRef.current = false
+    commitFromSnapshot(snapshot, { type: "transform", reason: "end" })
+  }
+
+  const handleTextEditEnd = (updatedSlide: Slide) => {
+    commitSlide(updatedSlide, { type: "element", reason: "text-edit" })
   }
 
   return (
@@ -422,6 +789,10 @@ export default function Home() {
             title={presentationTitle}
             onTitleChange={setPresentationTitle}
             onImportZip={handleImportZip}
+            onUndo={undo}
+            onRedo={redo}
+            canUndo={canUndo}
+            canRedo={canRedo}
           />
 
           <div className="flex-1 overflow-hidden">
@@ -430,9 +801,18 @@ export default function Home() {
                 <Sidebar
                   slides={slides}
                   currentSlideIndex={currentSlideIndex}
-                  onSlideSelect={setCurrentSlideIndex}
+                  onSlideSelect={(index) =>
+                    setPresent((state) => ({
+                      ...state,
+                      currentSlideIndex: index,
+                      selectedElementId: null,
+                    }))
+                  }
                   onAddSlide={addSlide}
                   onRemoveSlide={removeSlide}
+                  onDuplicateSlide={duplicateSlide}
+                  onMoveSlideUp={(index) => moveSlide(index, "up")}
+                  onMoveSlideDown={(index) => moveSlide(index, "down")}
                 />
               }
               editor={
@@ -449,7 +829,8 @@ export default function Home() {
                   >
                     <SlideEditor
                       slide={currentSlide}
-                      onUpdateSlide={updateSlide}
+                      onUpdateSlide={updateSlideLive}
+                      onCommitSlide={handleTextEditEnd}
                       selectedElement={selectedElement}
                       onElementSelect={handleElementSelect}
                       slideSize={slideSize}
@@ -458,6 +839,8 @@ export default function Home() {
                       onMoveElementForward={handleMoveElementForward}
                       onMoveElementBackward={handleMoveElementBackward}
                       onLockToggle={handleLockToggle}
+                      onTransformStart={handleTransformStart}
+                      onTransformEnd={handleTransformEnd}
                     />
                   </div>
                 </div>

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils"
 interface SlideEditorProps {
   slide: Slide
   onUpdateSlide: (slide: Slide) => void
+  onCommitSlide?: (slide: Slide) => void
   selectedElement: Element | null
   onElementSelect: (element: Element | null) => void
   slideSize: SlideSize
@@ -19,11 +20,14 @@ interface SlideEditorProps {
   onMoveElementForward: (element: Element) => void
   onMoveElementBackward: (element: Element) => void
   onLockToggle: (element: Element) => void
+  onTransformStart?: () => void
+  onTransformEnd?: () => void
 }
 
 export default function SlideEditor({
   slide,
   onUpdateSlide,
+  onCommitSlide,
   selectedElement,
   onElementSelect,
   slideSize,
@@ -32,6 +36,8 @@ export default function SlideEditor({
   onMoveElementForward,
   onMoveElementBackward,
   onLockToggle,
+  onTransformStart,
+  onTransformEnd,
 }: SlideEditorProps) {
   const [draggingElement, setDraggingElement] = useState<Element | null>(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
@@ -106,6 +112,7 @@ export default function SlideEditor({
       return
     }
 
+    onTransformStart?.()
     setDraggingElement(element)
 
     const editorRect = editorRef.current?.getBoundingClientRect()
@@ -122,6 +129,7 @@ export default function SlideEditor({
     e.stopPropagation()
     if (element.style.locked) return
     onElementSelect(element)
+    onTransformStart?.()
     setResizing(true)
     setResizeDirection(direction)
     setDraggingElement(element)
@@ -239,6 +247,9 @@ export default function SlideEditor({
   }
 
   const handleMouseUp = () => {
+    if (draggingElement || resizing) {
+      onTransformEnd?.()
+    }
     setDraggingElement(null)
     setResizing(false)
   }
@@ -282,6 +293,11 @@ export default function SlideEditor({
       const updatedElements = slide.elements.map((el) => (el.id === element.id ? updatedElement : el))
 
       onUpdateSlide({
+        ...slide,
+        elements: updatedElements,
+      })
+
+      onCommitSlide?.({
         ...slide,
         elements: updatedElements,
       })

@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import ImageUploadDialog from "@/components/image-upload-dialog"
+import { Image as ImageIcon } from "lucide-react"
 
 interface ImagePropertyPanelProps {
   element: Element
@@ -24,6 +26,23 @@ export default function ImagePropertyPanel({ element, onUpdateElement }: ImagePr
 
   return (
     <div className="space-y-4">
+      <div>
+        <Label>Изображение</Label>
+        <div className="mt-2">
+          <ImageUploadDialog
+            onImageSelect={(imageUrl) =>
+              onUpdateElement({
+                ...element,
+                content: imageUrl,
+              })
+            }
+            triggerLabel="Заменить изображение"
+            triggerVariant="secondary"
+            triggerSize="sm"
+            triggerIcon={<ImageIcon className="h-4 w-4 mr-2" />}
+          />
+        </div>
+      </div>
       <div>
         <Label htmlFor="borderRadius">Скругление углов</Label>
         <div className="flex items-center mt-1 space-x-2">
