@@ -7,6 +7,7 @@ import * as LucideIcons from "lucide-react"
 import ElementContextMenu from "@/components/context-menu/element-context-menu"
 import { renderAdvancedShape } from "@/components/shapes/advanced-shapes"
 import TextElementView from "@/components/text-element-view"
+import { cn } from "@/lib/utils"
 
 interface SlideEditorProps {
   slide: Slide
