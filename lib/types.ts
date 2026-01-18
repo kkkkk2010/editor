@@ -11,6 +11,8 @@ export interface Size {
 export interface TextStyle {
   fontFamily?: string
   fontSize?: number
+  baseFontSize?: number
+  importShrink?: number
   fontWeight?: string
   fontStyle?: string
   textDecoration?: string

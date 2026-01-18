@@ -25,6 +25,7 @@ interface TextElementViewProps {
 }
 
 const scaleCache = new Map<string, number>()
+const fontShrinkCache = new Map<string, number>()
 
 function getCacheKey(element: Element) {
   return `${element.id}::${element.content}::${element.style.fontFamily ?? ""}::${element.style.fontSize ?? ""}::${element.style.fontWeight ?? ""}::${element.style.fontStyle ?? ""}::${element.size.width}x${element.size.height}`
@@ -55,6 +56,7 @@ export default function TextElementView({
   const hasLineBreaks = element.content.includes("\n")
   const formattedContent = element.content.replace(/\n/g, "<br>")
   const [fontsReadyFlag, setFontsReadyFlag] = useState(false)
+  const baseFontSize = element.style.baseFontSize ?? element.style.fontSize ?? 16
 
   useEffect(() => {
     let isMounted = true
@@ -86,23 +88,10 @@ export default function TextElementView({
     const textLayout = textLayoutRef.current
     if (!box || !visual || !textLayout) return
 
-    if (importSettings?.imported) {
-      visual.style.transform = "none"
-      return () => {
-        isActive = false
-      }
-    }
-
     const keyWithFonts = `${cacheKey}|fontsReady=${fontsReadyFlag}`
     const cachedScale = scaleCache.get(keyWithFonts)
     if (cachedScale !== undefined) {
       visual.style.transform = `scale(${cachedScale})`
-      return () => {
-        isActive = false
-      }
-    }
-
-    if (isEditing) {
       return () => {
         isActive = false
       }
@@ -139,6 +128,78 @@ export default function TextElementView({
       const dy = textH - boxH
       const overflowX = dx > 3
       const overflowY = dy > 3
+
+      if (importSettings?.imported) {
+        const shrinkKey = `${cacheKey}|${boxW}x${boxH}|base=${baseFontSize}|fontsReady=${fontsReadyFlag}`
+        const cachedFontSize = fontShrinkCache.get(shrinkKey)
+        if (cachedFontSize !== undefined) {
+          textLayout.style.fontSize = `${cachedFontSize}pt`
+        } else {
+          if (overflowX && shouldWrapAnywhere(element.content)) {
+            textLayout.style.overflowWrap = "anywhere"
+            await new Promise<void>((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+            })
+            textW = textLayout.scrollWidth
+            textH = textLayout.scrollHeight
+          }
+
+          const minDelta = baseFontSize < 12 ? 1 : 3
+          const minFontSize = Math.max(8, baseFontSize - minDelta)
+          let bestFontSize = baseFontSize
+
+          if (overflowX || overflowY) {
+            for (let fs = baseFontSize; fs >= minFontSize; fs -= 0.5) {
+              textLayout.style.fontSize = `${fs}pt`
+              await new Promise<void>((resolve) => {
+                requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+              })
+              const testW = textLayout.scrollWidth
+              const testH = textLayout.scrollHeight
+              if (testW <= boxW - 2 && testH <= boxH - 2) {
+                bestFontSize = fs
+                break
+              }
+            }
+          }
+
+          textLayout.style.fontSize = `${bestFontSize}pt`
+          fontShrinkCache.set(shrinkKey, bestFontSize)
+        }
+
+        if (!isActive) return
+        visual.style.transform = "none"
+
+        if (debugLoggedIds.size < DEBUG_MAX_LOGS && !debugLoggedIds.has(element.id)) {
+          debugLoggedIds.add(element.id)
+          const computedWidth = typeof window !== "undefined" ? getComputedStyle(textLayout).width : "n/a"
+          const computedFontSize = typeof window !== "undefined" ? getComputedStyle(textLayout).fontSize : "n/a"
+          const computedLineHeight = typeof window !== "undefined" ? getComputedStyle(textLayout).lineHeight : "n/a"
+          const clientHeight = textLayout.clientHeight
+          console.debug("Text fit", {
+            id: element.id,
+            boxW,
+            boxH,
+            textW,
+            textH,
+            clientHeight,
+            dx,
+            dy,
+            overflowX,
+            overflowY,
+            scale: 1,
+            textLayoutWidth: computedWidth,
+            computedFontSize,
+            computedLineHeight,
+          })
+        }
+
+        return
+      }
+
+      if (isEditing) {
+        return
+      }
 
       if (overflowX && shouldWrapAnywhere(element.content)) {
         textLayout.style.overflowWrap = "anywhere"
@@ -191,7 +252,7 @@ export default function TextElementView({
     return () => {
       isActive = false
     }
-  }, [cacheKey, element.content, element.id, hasLineBreaks, isEditing, fontsReadyFlag])
+  }, [cacheKey, element.content, element.id, hasLineBreaks, isEditing, fontsReadyFlag, baseFontSize, importSettings?.imported])
 
   return (
     <div
@@ -264,7 +325,7 @@ export default function TextElementView({
             fontStyle: element.style.fontStyle,
             textDecoration: element.style.textDecoration,
             color: element.style.color,
-            fontSize: element.style.fontSize || 16,
+            fontSize: `${element.style.baseFontSize ?? element.style.fontSize ?? 16}pt`,
             textAlign: element.style.textAlign as any,
             letterSpacing: "0px",
             textRendering: "geometricPrecision",
