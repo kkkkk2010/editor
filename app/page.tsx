@@ -503,7 +503,12 @@ export default function Home() {
 
               <ImageUploadDialog onImageSelect={handleAddImage} />
 
-              <ExportDialog slides={slides} slideSize={slideSize} title={presentationTitle} />
+              <ExportDialog
+                slides={slides}
+                slideSize={slideSize}
+                title={presentationTitle}
+                onTitleChange={setPresentationTitle}
+              />
 
               <Button size="sm" onClick={() => setIsPreviewMode(true)}>
                 <Play className="h-4 w-4 mr-2" />

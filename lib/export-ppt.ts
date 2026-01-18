@@ -3,6 +3,22 @@ import JSZip from "jszip"
 import FileSaver from "file-saver"
 import type { Slide, SlideSize } from "@/lib/types"
 
+const INVALID_FILENAME_CHARS = /[<>:"/\\|?*]/g
+
+function sanitizeFilename(value: string) {
+  const normalized = value.replace(INVALID_FILENAME_CHARS, "").trim().replace(/\s+/g, " ")
+  return normalized.length > 0 ? normalized : "presentation"
+}
+
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
+}
+
 // 创建PPT的XML内容
 function createPresentationXml(slideCount: number, width: number, height: number) {
   // 将像素转换为EMU (English Metric Units)，Office使用的单位
@@ -46,6 +62,7 @@ function createContentTypesXml(slideCount: number) {
 <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 <Default Extension="jpeg" ContentType="image/jpeg"/>
 <Default Extension="png" ContentType="image/png"/>
+<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
 <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
 <Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
 <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
@@ -59,7 +76,19 @@ function createRelationshipsXml() {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
 </Relationships>`
+}
+
+function createCorePropertiesXml(title: string) {
+  const now = new Date().toISOString()
+  const escapedTitle = escapeXml(title)
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>${escapedTitle}</dc:title>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified>
+</cp:coreProperties>`
 }
 
 // 创建演示文稿关系XML
@@ -341,6 +370,7 @@ async function renderSlideToImage(slide: HTMLElement): Promise<Blob> {
 // 导出PPT
 export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title = "Presentation") {
   try {
+    const normalizedTitle = sanitizeFilename(title)
     // 创建一个临时容器来渲染幻灯片
     const container = document.createElement("div")
     container.style.position = "absolute"
@@ -352,6 +382,7 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
 
     // 创建PPT文件夹结构
     zip.folder("_rels")
+    zip.folder("docProps")
     const pptFolder = zip.folder("ppt")
     pptFolder?.folder("_rels")
     pptFolder?.folder("media")
@@ -368,6 +399,7 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
 
     // 添加关系XML
     zip.file("_rels/.rels", createRelationshipsXml())
+    zip.file("docProps/core.xml", createCorePropertiesXml(normalizedTitle))
 
     // 添加演示文稿XML
     pptFolder?.file("presentation.xml", createPresentationXml(slides.length, slideSize.width, slideSize.height))
@@ -458,7 +490,7 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
 
     // 生成ZIP文件并下载
     const content = await zip.generateAsync({ type: "blob" })
-    FileSaver.saveAs(content, `${title}.pptx`)
+    FileSaver.saveAs(content, `${normalizedTitle}.pptx`)
 
     // 清理临时容器
     document.body.removeChild(container)

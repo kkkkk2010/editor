@@ -13,17 +13,17 @@ interface ExportDialogProps {
   slides: Slide[]
   slideSize: SlideSize
   title?: string
+  onTitleChange: (title: string) => void
 }
 
-export default function ExportDialog({ slides, slideSize, title }: ExportDialogProps) {
+export default function ExportDialog({ slides, slideSize, title, onTitleChange }: ExportDialogProps) {
   const [open, setOpen] = useState(false)
-  const [exportTitle, setExportTitle] = useState(title || "Презентация технологических продуктов") // Перевел: "科技产品展示之道"
   const [isExporting, setIsExporting] = useState(false)
 
   const handleExport = async () => {
     setIsExporting(true)
     try {
-      await exportToPPT(slides, slideSize, exportTitle)
+      await exportToPPT(slides, slideSize, title || "")
       setOpen(false)
     } catch (error) {
       console.error("导出失败:", error)
@@ -51,8 +51,8 @@ export default function ExportDialog({ slides, slideSize, title }: ExportDialogP
             <Label htmlFor="title">Название презентации</Label> {/* Перевел: "演示文稿标题" */}
             <Input
               id="title"
-              value={exportTitle}
-              onChange={(e) => setExportTitle(e.target.value)}
+              value={title || ""}
+              onChange={(e) => onTitleChange(e.target.value)}
               placeholder="Введите название"
             /> {/* Перевел: "输入标题" */}
           </div>
