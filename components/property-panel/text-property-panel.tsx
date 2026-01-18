@@ -5,6 +5,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -14,7 +21,7 @@ interface TextPropertyPanelProps {
 }
 
 export default function TextPropertyPanel({ element, onUpdateElement }: TextPropertyPanelProps) {
-  const updateStyle = (property: string, value: any) => {
+  const updateStyle = <K extends keyof Element["style"]>(property: K, value: Element["style"][K]) => {
     onUpdateElement({
       ...element,
       style: {
@@ -24,8 +31,26 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
     })
   }
 
+  const fontFamilies = ["Arial", "Times New Roman", "Georgia", "Verdana", "Courier New"]
+  const currentFontFamily = element.style.fontFamily || "Arial"
+
   return (
     <div className="space-y-4">
+      <div>
+        <Label htmlFor="fontFamily">Шрифт</Label>
+        <Select value={currentFontFamily} onValueChange={(value) => updateStyle("fontFamily", value)}>
+          <SelectTrigger id="fontFamily" className="mt-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {fontFamilies.map((fontFamily) => (
+              <SelectItem key={fontFamily} value={fontFamily}>
+                {fontFamily}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <div>
         <Label htmlFor="fontSize">Размер шрифта</Label>
         <div className="flex items-center mt-1 space-x-2">
