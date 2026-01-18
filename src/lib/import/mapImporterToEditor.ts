@@ -76,7 +76,13 @@ function calculateScale(canvas: { width: number; height: number }, target: Slide
   return Math.min(scaleX, scaleY)
 }
 
-function mapElement(element: ImporterElement, scale: number, baseUrl?: string): Element {
+function mapElement(
+  element: ImporterElement,
+  scale: number,
+  baseUrl?: string,
+  textScale = 1,
+  textFontDeltaPt = 0,
+): Element {
   const position = {
     x: element.x * scale,
     y: element.y * scale,
@@ -88,7 +94,9 @@ function mapElement(element: ImporterElement, scale: number, baseUrl?: string): 
 
   if (element.type === "text") {
     const style = element.style || {}
-    const fontSize = style.fontSize ? style.fontSize * scale : undefined
+    const fontSize = style.fontSize
+      ? Math.round((style.fontSize * textScale + textFontDeltaPt) * 2) / 2
+      : undefined
 
     return {
       id: element.id,
@@ -122,7 +130,13 @@ function mapElement(element: ImporterElement, scale: number, baseUrl?: string): 
   }
 }
 
-function mapSlide(slide: ImporterSlide, scale: number, baseUrl?: string): Slide {
+function mapSlide(
+  slide: ImporterSlide,
+  scale: number,
+  baseUrl?: string,
+  textScale = 1,
+  textFontDeltaPt = 0,
+): Slide {
   let background = DEFAULT_BACKGROUND
 
   if (slide.background?.type === "image") {
@@ -136,7 +150,7 @@ function mapSlide(slide: ImporterSlide, scale: number, baseUrl?: string): Slide 
   return {
     id: slide.id,
     background,
-    elements: slide.elements.map((element) => mapElement(element, scale, baseUrl)),
+    elements: slide.elements.map((element) => mapElement(element, scale, baseUrl, textScale, textFontDeltaPt)),
   }
 }
 
@@ -147,14 +161,18 @@ export function mapImporterToEditor(
     slideSize?: SlideSize
     sourceSlideSize?: { width: number; height: number }
     allowResize?: boolean
+    importSettings?: { imported: boolean; textScale: number; textFontDeltaPt?: number }
   },
 ): ImportResult {
+  const importSettings = options?.importSettings
+  const textScale = importSettings?.textScale ?? 1
+  const textFontDeltaPt = importSettings?.textFontDeltaPt ?? 0
   const sourceSize = options?.sourceSlideSize ?? computeSourceSlideSize(doc)
   const canvasSize = sourceSize.width > 0 && sourceSize.height > 0 ? sourceSize : defaultSlideSize
   const targetSlideSize = options?.allowResize ? canvasSize : options?.slideSize || defaultSlideSize
   const scale = options?.allowResize ? 1 : calculateScale(canvasSize, targetSlideSize)
 
-  const slides = doc.slides.map((slide) => mapSlide(slide, scale, options?.baseUrl))
+  const slides = doc.slides.map((slide) => mapSlide(slide, scale, options?.baseUrl, textScale, textFontDeltaPt))
 
   const metadata: ImportMetadata = {
     baseUrl: options?.baseUrl,
@@ -165,6 +183,13 @@ export function mapImporterToEditor(
       height: canvasSize.height,
       unit: doc.slideSize?.unit,
     },
+    importSettings: importSettings
+      ? {
+          imported: importSettings.imported,
+          textScale: importSettings.textScale,
+          textFontDeltaPt: importSettings.textFontDeltaPt,
+        }
+      : undefined,
   }
 
   return {

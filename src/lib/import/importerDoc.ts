@@ -65,6 +65,11 @@ export interface ImportMetadata {
     height: number
     unit?: string
   }
+  importSettings?: {
+    imported: boolean
+    textScale: number
+    textFontDeltaPt?: number
+  }
 }
 
 export interface ImportResult {

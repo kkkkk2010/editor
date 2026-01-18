@@ -19,7 +19,26 @@ export default function ImportZipDialog({ onImport }: ImportZipDialogProps) {
   const [open, setOpen] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isImporting, setIsImporting] = useState(false)
+  const [textScaleOption, setTextScaleOption] = useState("scale:0.92")
   const { toast } = useToast()
+
+  const importOptions = [
+    { label: "-1pt", value: "delta:-1" },
+    { label: "-2pt", value: "delta:-2" },
+    { label: "-3pt", value: "delta:-3" },
+    { label: "0.92x", value: "scale:0.92" },
+    { label: "0.90x", value: "scale:0.90" },
+  ]
+
+  const getImportSettings = () => {
+    const [type, rawValue] = textScaleOption.split(":")
+    const numericValue = Number(rawValue)
+    if (type === "delta") {
+      return { imported: true, textScale: 1, textFontDeltaPt: numericValue }
+    }
+
+    return { imported: true, textScale: numericValue }
+  }
 
   const handleImport = async () => {
     if (!selectedFile) {
@@ -34,7 +53,11 @@ export default function ImportZipDialog({ onImport }: ImportZipDialogProps) {
     setIsImporting(true)
     try {
       const { doc, createdUrls, sourceSlideSize } = await importZipFile(selectedFile)
-      const mapped = mapImporterToEditor(doc, { sourceSlideSize, allowResize: true })
+      const mapped = mapImporterToEditor(doc, {
+        sourceSlideSize,
+        allowResize: true,
+        importSettings: getImportSettings(),
+      })
       onImport(mapped, createdUrls)
       setOpen(false)
       setSelectedFile(null)
@@ -76,6 +99,22 @@ export default function ImportZipDialog({ onImport }: ImportZipDialogProps) {
             onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
           />
           {selectedFile && <p className="text-sm text-muted-foreground">Выбран файл: {selectedFile.name}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="import-text-scale">Уменьшить шрифт для импорта</Label>
+          <select
+            id="import-text-scale"
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={textScaleOption}
+            onChange={(event) => setTextScaleOption(event.target.value)}
+          >
+            {importOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
 
         <DialogFooter>

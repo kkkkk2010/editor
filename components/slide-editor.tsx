@@ -15,6 +15,7 @@ interface SlideEditorProps {
   selectedElement: Element | null
   onElementSelect: (element: Element | null) => void
   slideSize: SlideSize
+  importSettings?: { imported: boolean; textScale: number; textFontDeltaPt?: number }
   onCopyElement: (element: Element) => void
   onDeleteElement: (element: Element) => void
   onMoveElementForward: (element: Element) => void
@@ -28,6 +29,7 @@ export default function SlideEditor({
   selectedElement,
   onElementSelect,
   slideSize,
+  importSettings,
   onCopyElement,
   onDeleteElement,
   onMoveElementForward,
@@ -350,6 +352,7 @@ export default function SlideEditor({
             isSelected={isSelected}
             isLocked={isLocked}
             isEditing={editingElementId === element.id}
+            importSettings={importSettings}
             containerStyle={animationStyle}
             onClick={(e) => handleElementClick(element, e)}
             onMouseDown={(e) => handleElementMouseDown(element, e)}

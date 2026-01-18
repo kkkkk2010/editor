@@ -15,7 +15,7 @@ import { type Slide, type Element, defaultSlides, defaultSlideSize, type SlideSi
 import { Button } from "@/components/ui/button"
 import { Play, PanelRight } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
-import type { ImportResult } from "@/src/lib/import/importerDoc"
+import type { ImportMetadata, ImportResult } from "@/src/lib/import/importerDoc"
 import { revokeImportObjectUrls } from "@/src/lib/import/zipImport"
 
 export default function Home() {
@@ -29,6 +29,7 @@ export default function Home() {
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [editorScale, setEditorScale] = useState(1)
   const importedAssetUrlsRef = useRef<string[]>([])
+  const [importSettings, setImportSettings] = useState<ImportMetadata["importSettings"] | null>(null)
 
   const currentSlide = slides[currentSlideIndex]
 
@@ -434,6 +435,7 @@ export default function Home() {
     setCurrentSlideIndex(0)
     setSelectedElement(null)
     setShowPropertyPanel(false)
+    setImportSettings(result.metadata.importSettings ?? null)
   }
 
   const handleImportZip = (result: ImportResult, createdUrls: string[]) => {
@@ -450,6 +452,7 @@ export default function Home() {
           initialSlide={currentSlideIndex}
           onExit={() => setIsPreviewMode(false)}
           slideSize={slideSize}
+          importSettings={importSettings ?? undefined}
         />
       ) : (
         <>
@@ -494,6 +497,7 @@ export default function Home() {
                       selectedElement={selectedElement}
                       onElementSelect={handleElementSelect}
                       slideSize={slideSize}
+                      importSettings={importSettings ?? undefined}
                       onCopyElement={handleCopyElement}
                       onDeleteElement={handleDeleteElement}
                       onMoveElementForward={handleMoveElementForward}

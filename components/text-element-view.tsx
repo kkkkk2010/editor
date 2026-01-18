@@ -14,6 +14,7 @@ interface TextElementViewProps {
   isSelected?: boolean
   isLocked?: boolean
   isEditing?: boolean
+  importSettings?: { imported: boolean; textScale: number; textFontDeltaPt?: number }
   containerStyle?: React.CSSProperties
   enablePointerEvents?: boolean
   onClick?: (event: React.MouseEvent<HTMLDivElement>) => void
@@ -38,6 +39,7 @@ export default function TextElementView({
   isSelected,
   isLocked,
   isEditing,
+  importSettings,
   containerStyle,
   enablePointerEvents = true,
   onClick,
@@ -83,6 +85,13 @@ export default function TextElementView({
     const visual = visualRef.current
     const textLayout = textLayoutRef.current
     if (!box || !visual || !textLayout) return
+
+    if (importSettings?.imported) {
+      visual.style.transform = "none"
+      return () => {
+        isActive = false
+      }
+    }
 
     const keyWithFonts = `${cacheKey}|fontsReady=${fontsReadyFlag}`
     const cachedScale = scaleCache.get(keyWithFonts)

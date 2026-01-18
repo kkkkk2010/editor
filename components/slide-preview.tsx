@@ -11,9 +11,10 @@ interface SlidePreviewProps {
   initialSlide: number
   onExit: () => void
   slideSize: SlideSize
+  importSettings?: { imported: boolean; textScale: number; textFontDeltaPt?: number }
 }
 
-export default function SlidePreview({ slides, initialSlide, onExit, slideSize }: SlidePreviewProps) {
+export default function SlidePreview({ slides, initialSlide, onExit, slideSize, importSettings }: SlidePreviewProps) {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(initialSlide)
   const previewRef = useRef<HTMLDivElement>(null)
 
@@ -121,7 +122,12 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
             }
 
             return (
-              <TextElementView element={element} enablePointerEvents={false} containerStyle={animationStyle} />
+              <TextElementView
+                element={element}
+                enablePointerEvents={false}
+                containerStyle={animationStyle}
+                importSettings={importSettings}
+              />
             )
           }
           if (element.type === "image") {
