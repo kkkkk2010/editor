@@ -3,6 +3,8 @@ import type { ImporterDoc, ImporterSlide, ImporterElement, ImportMetadata, Impor
 import { defaultSlideSize } from "@/lib/types"
 
 const ptToPx = (pt: number) => (pt * 96) / 72
+const IMPORT_TEXT_SCALE = 0.92
+let loggedTextCount = 0
 
 const DEFAULT_BACKGROUND: Background = {
   type: "color",
@@ -82,8 +84,6 @@ function mapElement(
   element: ImporterElement,
   scale: number,
   baseUrl?: string,
-  textScale = 1,
-  textFontDeltaPt = 0,
 ): Element {
   const position = {
     x: element.x * scale,
@@ -96,9 +96,20 @@ function mapElement(
 
   if (element.type === "text") {
     const style = element.style || {}
-    const basePx = style.fontSize
-      ? Math.round((ptToPx(style.fontSize) * textScale + ptToPx(textFontDeltaPt)) * 2) / 2
-      : undefined
+    const sourceSize = style.fontSize
+    const isProbablyPt = typeof sourceSize === "number" && sourceSize <= 72
+    const sizePx = typeof sourceSize === "number" ? (isProbablyPt ? ptToPx(sourceSize) : sourceSize) : undefined
+    const finalPx = typeof sizePx === "number" ? Math.round(sizePx * IMPORT_TEXT_SCALE * 2) / 2 : undefined
+
+    if (loggedTextCount < 10) {
+      console.log({
+        text: element.text.slice(0, 30),
+        sourceSize,
+        sizePx,
+        finalPx,
+      })
+      loggedTextCount += 1
+    }
 
     return {
       id: element.id,
@@ -108,7 +119,7 @@ function mapElement(
       size,
       style: {
         fontFamily: style.fontFamily,
-        fontSize: basePx,
+        fontSize: finalPx,
         color: style.color,
         fontWeight: style.bold ? "bold" : "normal",
         fontStyle: style.italic ? "italic" : "normal",
@@ -132,13 +143,7 @@ function mapElement(
   }
 }
 
-function mapSlide(
-  slide: ImporterSlide,
-  scale: number,
-  baseUrl?: string,
-  textScale = 1,
-  textFontDeltaPt = 0,
-): Slide {
+function mapSlide(slide: ImporterSlide, scale: number, baseUrl?: string): Slide {
   let background = DEFAULT_BACKGROUND
 
   if (slide.background?.type === "image") {
@@ -152,7 +157,7 @@ function mapSlide(
   return {
     id: slide.id,
     background,
-    elements: slide.elements.map((element) => mapElement(element, scale, baseUrl, textScale, textFontDeltaPt)),
+    elements: slide.elements.map((element) => mapElement(element, scale, baseUrl)),
   }
 }
 
@@ -167,14 +172,12 @@ export function mapImporterToEditor(
   },
 ): ImportResult {
   const importSettings = options?.importSettings
-  const textScale = importSettings?.textScale ?? 1
-  const textFontDeltaPt = importSettings?.textFontDeltaPt ?? 0
   const sourceSize = options?.sourceSlideSize ?? computeSourceSlideSize(doc)
   const canvasSize = sourceSize.width > 0 && sourceSize.height > 0 ? sourceSize : defaultSlideSize
   const targetSlideSize = options?.allowResize ? canvasSize : options?.slideSize || defaultSlideSize
   const scale = options?.allowResize ? 1 : calculateScale(canvasSize, targetSlideSize)
 
-  const slides = doc.slides.map((slide) => mapSlide(slide, scale, options?.baseUrl, textScale, textFontDeltaPt))
+  const slides = doc.slides.map((slide) => mapSlide(slide, scale, options?.baseUrl))
 
   const metadata: ImportMetadata = {
     baseUrl: options?.baseUrl,
