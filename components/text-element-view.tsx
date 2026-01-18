@@ -128,8 +128,8 @@ export default function TextElementView({
 
       const dx = textW - boxW
       const dy = textH - boxH
-      const overflowX = dx > Math.max(2, boxW * 0.01)
-      const overflowY = dy > Math.max(2, boxH * 0.01)
+      const overflowX = dx > 3
+      const overflowY = dy > 3
 
       if (overflowX && shouldWrapAnywhere(element.content)) {
         textLayout.style.overflowWrap = "anywhere"
@@ -155,18 +155,24 @@ export default function TextElementView({
       if (debugLoggedIds.size < DEBUG_MAX_LOGS && !debugLoggedIds.has(element.id)) {
         debugLoggedIds.add(element.id)
         const computedWidth = typeof window !== "undefined" ? getComputedStyle(textLayout).width : "n/a"
+        const computedFontSize = typeof window !== "undefined" ? getComputedStyle(textLayout).fontSize : "n/a"
+        const computedLineHeight = typeof window !== "undefined" ? getComputedStyle(textLayout).lineHeight : "n/a"
+        const clientHeight = textLayout.clientHeight
         console.debug("Text fit", {
           id: element.id,
           boxW,
           boxH,
           textW,
           textH,
+          clientHeight,
           dx,
           dy,
           overflowX,
           overflowY,
           scale,
           textLayoutWidth: computedWidth,
+          computedFontSize,
+          computedLineHeight,
         })
       }
     }
@@ -226,6 +232,7 @@ export default function TextElementView({
       >
         <div
           ref={textLayoutRef}
+          data-text-layout
           style={{
             display: "block",
             width: "100%",
@@ -239,16 +246,20 @@ export default function TextElementView({
             overflowWrap: "normal",
             wordBreak: "normal",
             hyphens: "none",
-            lineHeight: 1.1,
+            lineHeight: 1,
             padding: 0,
             margin: 0,
-            fontFamily: element.style.fontFamily,
+            border: 0,
+            fontFamily: `${element.style.fontFamily ?? ""}, Arial, \"Helvetica Neue\", Helvetica, sans-serif`,
             fontWeight: element.style.fontWeight,
             fontStyle: element.style.fontStyle,
             textDecoration: element.style.textDecoration,
             color: element.style.color,
             fontSize: element.style.fontSize || 16,
             textAlign: element.style.textAlign as any,
+            letterSpacing: "0px",
+            textRendering: "geometricPrecision",
+            fontKerning: "none",
           }}
           dangerouslySetInnerHTML={{ __html: formattedContent }}
         />
