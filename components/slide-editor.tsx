@@ -40,6 +40,48 @@ export default function SlideEditor({
   const [resizeDirection, setResizeDirection] = useState("")
   const editorRef = useRef<HTMLDivElement>(null)
   const [editingElementId, setEditingElementId] = useState<string | null>(null)
+  const RESIZE_DEBUG = false
+  const MIN_ELEMENT_WIDTH = 50
+  const MIN_ELEMENT_HEIGHT = 20
+
+  const getEditorScale = (rect: DOMRect) => {
+    const scaleX = rect.width / slideSize.width
+    const scaleY = rect.height / slideSize.height
+    const scale = Math.min(scaleX, scaleY)
+    if (!Number.isFinite(scale) || scale <= 0) {
+      return 1
+    }
+    return scale
+  }
+
+  const getPointerPosition = (event: { clientX: number; clientY: number }, rect: DOMRect) => {
+    const scale = getEditorScale(rect)
+    return {
+      x: (event.clientX - rect.left) / scale,
+      y: (event.clientY - rect.top) / scale,
+      scale,
+    }
+  }
+
+  const normalizeDimension = (value: number, minValue: number, fallback: number, label: string) => {
+    if (!Number.isFinite(value)) {
+      if (RESIZE_DEBUG) {
+        console.warn(`[resize] ${label} is not finite`, value)
+      }
+      return fallback
+    }
+    return Math.max(minValue, value)
+  }
+
+  const normalizePosition = (value: number, fallback: number, label: string) => {
+    if (!Number.isFinite(value)) {
+      if (RESIZE_DEBUG) {
+        console.warn(`[resize] ${label} position is not finite`, value)
+      }
+      return fallback
+    }
+    return value
+  }
 
   const handleElementClick = (element: Element, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -67,10 +109,13 @@ export default function SlideEditor({
 
     setDraggingElement(element)
 
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const editorRect = editorRef.current?.getBoundingClientRect()
+    if (!editorRect) return
+
+    const pointer = getPointerPosition(e, editorRect)
     setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: pointer.x - element.position.x,
+      y: pointer.y - element.position.y,
     })
   }
 
@@ -87,39 +132,78 @@ export default function SlideEditor({
     if (!editorRef.current || (!draggingElement && !resizing)) return
 
     const editorRect = editorRef.current.getBoundingClientRect()
+    const pointer = getPointerPosition(e, editorRect)
 
     if (resizing && selectedElement) {
-      const newSize = { ...selectedElement.size }
-      const newPosition = { ...selectedElement.position }
+      let newWidth = selectedElement.size.width
+      let newHeight = selectedElement.size.height
+      let newX = selectedElement.position.x
+      let newY = selectedElement.position.y
 
       if (resizeDirection.includes("e")) {
-        newSize.width = Math.max(50, e.clientX - editorRect.left - selectedElement.position.x)
+        newWidth = pointer.x - selectedElement.position.x
       }
 
       if (resizeDirection.includes("s")) {
-        newSize.height = Math.max(20, e.clientY - editorRect.top - selectedElement.position.y)
+        newHeight = pointer.y - selectedElement.position.y
       }
 
       if (resizeDirection.includes("w")) {
-        const newWidth = selectedElement.position.x + selectedElement.size.width - (e.clientX - editorRect.left)
-        if (newWidth >= 50) {
-          newPosition.x = e.clientX - editorRect.left
-          newSize.width = newWidth
-        }
+        newWidth = selectedElement.position.x + selectedElement.size.width - pointer.x
+        newX = pointer.x
       }
 
       if (resizeDirection.includes("n")) {
-        const newHeight = selectedElement.position.y + selectedElement.size.height - (e.clientY - editorRect.top)
-        if (newHeight >= 20) {
-          newPosition.y = e.clientY - editorRect.top
-          newSize.height = newHeight
-        }
+        newHeight = selectedElement.position.y + selectedElement.size.height - pointer.y
+        newY = pointer.y
+      }
+
+      const normalizedWidth = normalizeDimension(
+        newWidth,
+        MIN_ELEMENT_WIDTH,
+        selectedElement.size.width,
+        "width",
+      )
+      const normalizedHeight = normalizeDimension(
+        newHeight,
+        MIN_ELEMENT_HEIGHT,
+        selectedElement.size.height,
+        "height",
+      )
+
+      if (resizeDirection.includes("w")) {
+        newX = selectedElement.position.x + selectedElement.size.width - normalizedWidth
+      }
+
+      if (resizeDirection.includes("n")) {
+        newY = selectedElement.position.y + selectedElement.size.height - normalizedHeight
+      }
+
+      newX = normalizePosition(newX, selectedElement.position.x, "x")
+      newY = normalizePosition(newY, selectedElement.position.y, "y")
+
+      const newSize = {
+        width: normalizedWidth,
+        height: normalizedHeight,
+      }
+      const newPosition = {
+        x: newX,
+        y: newY,
       }
 
       const updatedElement = {
         ...selectedElement,
         size: newSize,
         position: newPosition,
+      }
+
+      if (RESIZE_DEBUG) {
+        console.debug("[resize] update", {
+          id: selectedElement.id,
+          width: newSize.width,
+          height: newSize.height,
+          scale: pointer.scale,
+        })
       }
 
       const updatedElements = slide.elements.map((el) => (el.id === selectedElement.id ? updatedElement : el))
@@ -131,8 +215,8 @@ export default function SlideEditor({
 
       onElementSelect(updatedElement)
     } else if (draggingElement) {
-      const newX = e.clientX - editorRect.left - dragOffset.x
-      const newY = e.clientY - editorRect.top - dragOffset.y
+      const newX = pointer.x - dragOffset.x
+      const newY = pointer.y - dragOffset.y
 
       const updatedElement = {
         ...draggingElement,

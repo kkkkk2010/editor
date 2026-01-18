@@ -158,6 +158,7 @@ export default function TextElementView({
         className="absolute inset-0"
         style={{
           pointerEvents: "none",
+          opacity: isEditing ? 0 : 1,
           transformOrigin: "top left",
         }}
       >
