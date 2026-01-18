@@ -28,7 +28,7 @@ const scaleCache = new Map<string, number>()
 const fontShrinkCache = new Map<string, number>()
 
 function getCacheKey(element: Element) {
-  return `${element.id}::${element.content}::${element.style.fontFamily ?? ""}::${element.style.fontSize ?? ""}::${element.style.fontWeight ?? ""}::${element.style.fontStyle ?? ""}::${element.size.width}x${element.size.height}`
+  return `${element.id}::${element.content}::${element.style.fontFamily ?? ""}::${element.style.fontSizePx ?? element.style.fontSize ?? ""}::${element.style.fontWeight ?? ""}::${element.style.fontStyle ?? ""}::${element.size.width}x${element.size.height}`
 }
 
 function shouldWrapAnywhere(text: string) {
@@ -56,7 +56,7 @@ export default function TextElementView({
   const hasLineBreaks = element.content.includes("\n")
   const formattedContent = element.content.replace(/\n/g, "<br>")
   const [fontsReadyFlag, setFontsReadyFlag] = useState(false)
-  const baseFontSize = element.style.baseFontSize ?? element.style.fontSize ?? 16
+  const baseFontSizePx = element.style.baseFontSizePx ?? element.style.fontSizePx ?? element.style.fontSize ?? 16
 
   useEffect(() => {
     let isMounted = true
@@ -130,11 +130,11 @@ export default function TextElementView({
       const overflowY = dy > 3
 
       if (importSettings?.imported) {
-        const shrinkKey = `${cacheKey}|${boxW}x${boxH}|base=${baseFontSize}|fontsReady=${fontsReadyFlag}`
-        const cachedFontSize = fontShrinkCache.get(shrinkKey)
-        if (cachedFontSize !== undefined) {
-          textLayout.style.fontSize = `${cachedFontSize}pt`
-        } else {
+      const shrinkKey = `${cacheKey}|${boxW}x${boxH}|base=${baseFontSizePx}|fontsReady=${fontsReadyFlag}`
+      const cachedFontSize = fontShrinkCache.get(shrinkKey)
+      if (cachedFontSize !== undefined) {
+        textLayout.style.fontSize = `${cachedFontSize}px`
+      } else {
           if (overflowX && shouldWrapAnywhere(element.content)) {
             textLayout.style.overflowWrap = "anywhere"
             await new Promise<void>((resolve) => {
@@ -144,16 +144,16 @@ export default function TextElementView({
             textH = textLayout.scrollHeight
           }
 
-          const minDelta = baseFontSize < 12 ? 1 : 3
-          const minFontSize = Math.max(8, baseFontSize - minDelta)
-          let bestFontSize = baseFontSize
+        const minDelta = baseFontSizePx < 12 ? 1 : 4
+        const minFontSize = Math.max(8, baseFontSizePx - minDelta)
+        let bestFontSize = baseFontSizePx
 
-          if (overflowX || overflowY) {
-            for (let fs = baseFontSize; fs >= minFontSize; fs -= 0.5) {
-              textLayout.style.fontSize = `${fs}pt`
-              await new Promise<void>((resolve) => {
-                requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-              })
+        if (overflowX || overflowY) {
+          for (let fs = baseFontSizePx; fs >= minFontSize; fs -= 0.5) {
+            textLayout.style.fontSize = `${fs}px`
+            await new Promise<void>((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+            })
               const testW = textLayout.scrollWidth
               const testH = textLayout.scrollHeight
               if (testW <= boxW - 2 && testH <= boxH - 2) {
@@ -161,11 +161,11 @@ export default function TextElementView({
                 break
               }
             }
-          }
-
-          textLayout.style.fontSize = `${bestFontSize}pt`
-          fontShrinkCache.set(shrinkKey, bestFontSize)
         }
+
+        textLayout.style.fontSize = `${bestFontSize}px`
+        fontShrinkCache.set(shrinkKey, bestFontSize)
+      }
 
         if (!isActive) return
         visual.style.transform = "none"
@@ -252,7 +252,7 @@ export default function TextElementView({
     return () => {
       isActive = false
     }
-  }, [cacheKey, element.content, element.id, hasLineBreaks, isEditing, fontsReadyFlag, baseFontSize, importSettings?.imported])
+  }, [cacheKey, element.content, element.id, hasLineBreaks, isEditing, fontsReadyFlag, baseFontSizePx, importSettings?.imported])
 
   return (
     <div
@@ -325,7 +325,7 @@ export default function TextElementView({
             fontStyle: element.style.fontStyle,
             textDecoration: element.style.textDecoration,
             color: element.style.color,
-            fontSize: `${element.style.baseFontSize ?? element.style.fontSize ?? 16}pt`,
+            fontSize: `${baseFontSizePx}px`,
             textAlign: element.style.textAlign as any,
             letterSpacing: "0px",
             textRendering: "geometricPrecision",

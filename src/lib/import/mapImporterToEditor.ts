@@ -2,6 +2,8 @@ import type { Slide, SlideSize, Element, Background } from "@/lib/types"
 import type { ImporterDoc, ImporterSlide, ImporterElement, ImportMetadata, ImportResult } from "@/src/lib/import/importerDoc"
 import { defaultSlideSize } from "@/lib/types"
 
+const ptToPx = (pt: number) => (pt * 96) / 72
+
 const DEFAULT_BACKGROUND: Background = {
   type: "color",
   value: "#ffffff",
@@ -94,8 +96,8 @@ function mapElement(
 
   if (element.type === "text") {
     const style = element.style || {}
-    const fontSize = style.fontSize
-      ? Math.round((style.fontSize * textScale + textFontDeltaPt) * 2) / 2
+    const basePx = style.fontSize
+      ? Math.round((ptToPx(style.fontSize) * textScale + ptToPx(textFontDeltaPt)) * 2) / 2
       : undefined
 
     return {
@@ -106,9 +108,10 @@ function mapElement(
       size,
       style: {
         fontFamily: style.fontFamily,
-        baseFontSize: fontSize,
-        fontSize,
-        importShrink: 0,
+        baseFontSizePx: basePx,
+        fontSizePx: basePx,
+        importShrinkPx: 0,
+        fontSize: basePx,
         color: style.color,
         fontWeight: style.bold ? "bold" : "normal",
         fontStyle: style.italic ? "italic" : "normal",
