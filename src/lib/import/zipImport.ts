@@ -2,6 +2,7 @@ import { unzipSync } from "fflate"
 import type { ImporterDoc } from "@/src/lib/import/importerDoc"
 import { validateImporterDoc } from "@/src/lib/import/validateImporterDoc"
 import { computeSourceSlideSize } from "@/src/lib/import/mapImporterToEditor"
+import type { AssetStore } from "@/src/lib/assets/assetStore"
 
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -82,7 +83,7 @@ async function getImageDimensions(bytes: Uint8Array, mimeType: string): Promise<
   return null
 }
 
-export async function importZipFile(file: File): Promise<ZipImportResult> {
+export async function importZipFile(file: File, assetStore?: AssetStore): Promise<ZipImportResult> {
   const arrayBuffer = await file.arrayBuffer()
   const zipContents = unzipSync(new Uint8Array(arrayBuffer))
   const entries = new Map(Object.entries(zipContents))
@@ -120,6 +121,7 @@ export async function importZipFile(file: File): Promise<ZipImportResult> {
     }
     const extension = getExtension(path)
     const mimeType = MIME_TYPES[extension] || "application/octet-stream"
+    assetStore?.setAsset(path, assetBytes, mimeType)
     const url = URL.createObjectURL(new Blob([assetBytes], { type: mimeType }))
     createdUrls.push(url)
     return url
@@ -147,12 +149,19 @@ export async function importZipFile(file: File): Promise<ZipImportResult> {
 
     doc.slides.forEach((slide) => {
       if (slide.background?.type === "image") {
-        slide.background.src = resolveAsset(slide.background.src)
+        const assetPath = slide.background.src
+        slide.background = {
+          ...slide.background,
+          src: resolveAsset(assetPath),
+          assetPath,
+        } as typeof slide.background & { assetPath?: string }
       }
 
       slide.elements.forEach((element) => {
         if (element.type === "image") {
-          element.src = resolveAsset(element.src)
+          const assetPath = element.src
+          element.src = resolveAsset(assetPath)
+          ;(element as typeof element & { assetPath?: string }).assetPath = assetPath
         }
       })
     })

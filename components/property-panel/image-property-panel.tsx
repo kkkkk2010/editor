@@ -11,9 +11,10 @@ import { Image as ImageIcon } from "lucide-react"
 interface ImagePropertyPanelProps {
   element: Element
   onUpdateElement: (element: Element) => void
+  onReplaceImage?: (imageUrl: string, file?: File) => void
 }
 
-export default function ImagePropertyPanel({ element, onUpdateElement }: ImagePropertyPanelProps) {
+export default function ImagePropertyPanel({ element, onUpdateElement, onReplaceImage }: ImagePropertyPanelProps) {
   const updateStyle = (property: string, value: any) => {
     onUpdateElement({
       ...element,
@@ -30,12 +31,16 @@ export default function ImagePropertyPanel({ element, onUpdateElement }: ImagePr
         <Label>Изображение</Label>
         <div className="mt-2">
           <ImageUploadDialog
-            onImageSelect={(imageUrl) =>
+            onImageSelect={(imageUrl, file) => {
+              if (onReplaceImage) {
+                onReplaceImage(imageUrl, file)
+                return
+              }
               onUpdateElement({
                 ...element,
                 content: imageUrl,
               })
-            }
+            }}
             triggerLabel="Заменить изображение"
             triggerVariant="secondary"
             triggerSize="sm"

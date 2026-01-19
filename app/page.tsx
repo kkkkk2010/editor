@@ -18,6 +18,11 @@ import { Toaster } from "@/components/ui/toaster"
 import { useToast } from "@/hooks/use-toast"
 import type { ImportResult } from "@/src/lib/import/importerDoc"
 import { revokeImportObjectUrls } from "@/src/lib/import/zipImport"
+import { AssetStore } from "@/src/lib/assets/assetStore"
+import { mapEditorToImporter } from "@/src/lib/import/mapEditorToImporter"
+import { exportProjectZip } from "@/src/lib/project/exportProjectZip"
+import FileSaver from "file-saver"
+import html2canvas from "html2canvas"
 
 type EditorState = {
   slides: Slide[]
@@ -37,6 +42,46 @@ function createId(prefix: string) {
     return `${prefix}-${crypto.randomUUID()}`
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function getExtensionFromFile(file: File) {
+  const nameParts = file.name.split(".")
+  if (nameParts.length > 1) {
+    return nameParts[nameParts.length - 1].toLowerCase()
+  }
+  const mimeParts = file.type.split("/")
+  return mimeParts.length > 1 ? mimeParts[1].toLowerCase() : "png"
+}
+
+function getExtensionFromUrl(url: string) {
+  const cleaned = url.split("?")[0]
+  const parts = cleaned.split(".")
+  if (parts.length > 1) {
+    return parts[parts.length - 1].toLowerCase()
+  }
+  return "png"
+}
+
+function decodeDataUrl(dataUrl: string): Uint8Array | null {
+  if (!dataUrl.startsWith("data:")) {
+    return null
+  }
+  const [meta, base64] = dataUrl.split(",")
+  if (!base64) return null
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes
+}
+
+function normalizeBackgroundValue(background: Background) {
+  if (background.type !== "image") return background.value
+  if (background.value.startsWith("url(")) {
+    return background.value
+  }
+  return `url(${background.value})`
 }
 
 function cloneState(state: EditorState): EditorState {
@@ -71,6 +116,7 @@ export default function Home() {
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [editorScale, setEditorScale] = useState(1)
   const importedAssetUrlsRef = useRef<string[]>([])
+  const assetStoreRef = useRef(new AssetStore())
   const { toast } = useToast()
   const presentRef = useRef(history.present)
   const transformSnapshotRef = useRef<EditorState | null>(null)
@@ -494,11 +540,43 @@ export default function Home() {
     setShowPropertyPanel(true)
   }
 
-  const handleAddImage = (imageUrl: string) => {
+  const storeAssetFromFile = async (file: File) => {
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    const extension = getExtensionFromFile(file)
+    const assetPath = `assets/images/${createId("image")}.${extension}`
+    assetStoreRef.current.setAsset(assetPath, bytes, file.type || "application/octet-stream")
+    return assetPath
+  }
+
+  const storeAssetFromUrl = async (url: string, fallbackName: string) => {
+    const dataBytes = decodeDataUrl(url)
+    if (dataBytes) {
+      const extension = getExtensionFromUrl(url)
+      const assetPath = `assets/images/${fallbackName}.${extension}`
+      assetStoreRef.current.setAsset(assetPath, dataBytes, "application/octet-stream")
+      return assetPath
+    }
+
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`Не удалось загрузить ассет: ${url}`)
+    }
+    const buffer = await response.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    const contentType = response.headers.get("Content-Type") || "application/octet-stream"
+    const extension = getExtensionFromUrl(url)
+    const assetPath = `assets/images/${fallbackName}.${extension}`
+    assetStoreRef.current.setAsset(assetPath, bytes, contentType)
+    return assetPath
+  }
+
+  const handleAddImage = async (imageUrl: string, file?: File) => {
+    const assetPath = file ? await storeAssetFromFile(file) : undefined
     const newElement: Element = {
       id: createId("image"),
       type: "image",
       content: imageUrl,
+      assetPath,
       position: { x: slideSize.width / 2 - 150, y: slideSize.height / 2 - 100 },
       size: { width: 300, height: 200 },
       style: {
@@ -524,6 +602,23 @@ export default function Home() {
       { type: "element", reason: "add" },
     )
     setShowPropertyPanel(true)
+  }
+
+  const handleReplaceImage = async (imageUrl: string, file?: File) => {
+    if (!selectedElement || selectedElement.type !== "image") {
+      return
+    }
+    let assetPath = selectedElement.assetPath
+    if (file) {
+      assetPath = await storeAssetFromFile(file)
+    } else if (!assetPath) {
+      assetPath = await storeAssetFromUrl(imageUrl, createId("image"))
+    }
+    updateElement({
+      ...selectedElement,
+      content: imageUrl,
+      assetPath,
+    })
   }
 
   // 右键菜单功能
@@ -760,6 +855,113 @@ export default function Home() {
     handleImport(result)
   }
 
+  const renderBackgroundBytes = async (background: Background) => {
+    const container = document.createElement("div")
+    container.style.width = `${slideSize.width}px`
+    container.style.height = `${slideSize.height}px`
+    container.style.position = "fixed"
+    container.style.left = "-10000px"
+    container.style.top = "0"
+    container.style.background = normalizeBackgroundValue(background)
+    container.style.backgroundSize = "100% 100%"
+    container.style.backgroundRepeat = "no-repeat"
+    container.style.backgroundPosition = "center"
+    document.body.appendChild(container)
+
+    try {
+      const canvas = await html2canvas(container, {
+        backgroundColor: null,
+        scale: 1,
+        width: slideSize.width,
+        height: slideSize.height,
+        useCORS: true,
+      })
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((result) => {
+          if (result) {
+            resolve(result)
+          } else {
+            reject(new Error("Не удалось создать изображение фона"))
+          }
+        }, "image/png")
+      })
+      const buffer = await blob.arrayBuffer()
+      return new Uint8Array(buffer)
+    } finally {
+      document.body.removeChild(container)
+    }
+  }
+
+  const handleSaveProject = async () => {
+    try {
+      const assetStore = assetStoreRef.current
+      const hasShapes = slides.some((slide) => slide.elements.some((element) => element.type === "shape"))
+      if (hasShapes) {
+        toast({
+          title: "Сохранение невозможно",
+          description: "Фигуры пока не поддерживаются в формате проекта.",
+          variant: "destructive",
+        })
+        return
+      }
+      const slidesForExport = await Promise.all(
+        slides.map(async (slide, slideIndex) => {
+          const backgroundAssetPath = `backgrounds/slide-${slideIndex + 1}.png`
+          if (!assetStore.hasAsset(backgroundAssetPath)) {
+            const bytes = await renderBackgroundBytes(slide.background)
+            assetStore.setAsset(backgroundAssetPath, bytes, "image/png")
+          }
+
+          const elements = await Promise.all(
+            slide.elements.map(async (element, elementIndex) => {
+              if (element.type !== "image") {
+                return element
+              }
+
+              if (element.assetPath && assetStore.hasAsset(element.assetPath)) {
+                return element
+              }
+
+              const fallbackName = `${element.id}-${elementIndex + 1}`
+              const assetPath = await storeAssetFromUrl(element.content, fallbackName)
+
+              return {
+                ...element,
+                assetPath,
+              }
+            }),
+          )
+
+          return {
+            ...slide,
+            background: {
+              ...slide.background,
+              type: "image" as const,
+              value: normalizeBackgroundValue(slide.background),
+              assetPath: backgroundAssetPath,
+            },
+            elements,
+          }
+        }),
+      )
+
+      const importerDoc = mapEditorToImporter(slidesForExport, slideSize)
+      const zipBytes = exportProjectZip(importerDoc, assetStore)
+      FileSaver.saveAs(new Blob([zipBytes], { type: "application/zip" }), "out.zip")
+      toast({
+        title: "Проект сохранен",
+        description: "Файл out.zip скачан на устройство.",
+      })
+    } catch (error) {
+      console.error("Save project failed:", error)
+      toast({
+        title: "Не удалось сохранить проект",
+        description: error instanceof Error ? error.message : "Попробуйте снова.",
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleTransformStart = () => {
     if (transformSnapshotRef.current) {
       return
@@ -850,10 +1052,12 @@ export default function Home() {
             title={presentationTitle}
             onTitleChange={setPresentationTitle}
             onImportZip={handleImportZip}
+            assetStore={assetStoreRef.current}
             onUndo={undo}
             onRedo={redo}
             canUndo={canUndo}
             canRedo={canRedo}
+            onSaveProject={handleSaveProject}
           />
 
           <div className="flex-1 overflow-hidden">
@@ -913,6 +1117,7 @@ export default function Home() {
                 <PropertyPanel
                   selectedElement={selectedElement}
                   onUpdateElement={updateElement}
+                  onReplaceImage={handleReplaceImage}
                   onClose={() => setShowPropertyPanel(false)}
                   currentSlide={currentSlide}
                   onMoveElementForward={handleMoveElementForward}

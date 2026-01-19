@@ -9,7 +9,7 @@ import { Image, Upload, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ImageUploadDialogProps {
-  onImageSelect: (imageUrl: string) => void
+  onImageSelect: (imageUrl: string, file?: File) => void
   triggerLabel?: string
   triggerIcon?: React.ReactNode
   triggerVariant?: "default" | "secondary" | "destructive" | "outline" | "ghost" | "link"
@@ -28,6 +28,7 @@ export default function ImageUploadDialog({
   const [open, setOpen] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleDrag = (e: React.DragEvent) => {
@@ -71,6 +72,7 @@ export default function ImageUploadDialog({
     reader.onload = (e) => {
       if (e.target && typeof e.target.result === "string") {
         setPreview(e.target.result)
+        setSelectedFile(file)
       }
     }
     reader.readAsDataURL(file)
@@ -78,14 +80,16 @@ export default function ImageUploadDialog({
 
   const handleConfirm = () => {
     if (preview) {
-      onImageSelect(preview)
+      onImageSelect(preview, selectedFile || undefined)
       setOpen(false)
       setPreview(null)
+      setSelectedFile(null)
     }
   }
 
   const handleCancel = () => {
     setPreview(null)
+    setSelectedFile(null)
     setOpen(false)
   }
 

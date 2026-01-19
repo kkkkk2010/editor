@@ -76,7 +76,11 @@ function calculateScale(canvas: { width: number; height: number }, target: Slide
   return Math.min(scaleX, scaleY)
 }
 
-function mapElement(element: ImporterElement, scale: number, baseUrl?: string): Element {
+function mapElement(
+  element: ImporterElement & { assetPath?: string },
+  scale: number,
+  baseUrl?: string,
+): Element {
   const position = {
     x: element.x * scale,
     y: element.y * scale,
@@ -113,6 +117,7 @@ function mapElement(element: ImporterElement, scale: number, baseUrl?: string): 
     id: element.id,
     type: "image",
     content: resolveAssetUrl(element.src, baseUrl),
+    assetPath: element.assetPath,
     position,
     size,
     style: {
@@ -122,7 +127,7 @@ function mapElement(element: ImporterElement, scale: number, baseUrl?: string): 
   }
 }
 
-function mapSlide(slide: ImporterSlide, scale: number, baseUrl?: string): Slide {
+function mapSlide(slide: ImporterSlide & { background?: ImporterSlide["background"] & { assetPath?: string } }, scale: number, baseUrl?: string): Slide {
   let background = DEFAULT_BACKGROUND
 
   if (slide.background?.type === "image") {
@@ -130,6 +135,7 @@ function mapSlide(slide: ImporterSlide, scale: number, baseUrl?: string): Slide 
     background = {
       type: "image",
       value: `url(${resolvedBackground})`,
+      assetPath: slide.background.assetPath,
     }
   }
 

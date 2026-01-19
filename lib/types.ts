@@ -40,6 +40,7 @@ export interface Element {
   id: string
   type: "text" | "image" | "shape"
   content: string
+  assetPath?: string
   position: Position
   size: Size
   style: TextStyle
@@ -48,6 +49,7 @@ export interface Element {
 export interface Background {
   type: "color" | "gradient" | "image"
   value: string
+  assetPath?: string
 }
 
 export interface Slide {

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 interface PropertyPanelProps {
   selectedElement: Element | null
   onUpdateElement: (element: Element) => void
+  onReplaceImage?: (imageUrl: string, file?: File) => void
   onClose: () => void
   currentSlide?: Slide
 }
@@ -18,6 +19,7 @@ interface PropertyPanelProps {
 export default function PropertyPanel({
   selectedElement,
   onUpdateElement,
+  onReplaceImage,
   onClose,
 }: PropertyPanelProps) {
   if (!selectedElement) {
@@ -60,7 +62,11 @@ export default function PropertyPanel({
             <ShapePropertyPanel element={selectedElement} onUpdateElement={onUpdateElement} />
           )}
           {selectedElement.type === "image" && (
-            <ImagePropertyPanel element={selectedElement} onUpdateElement={onUpdateElement} />
+            <ImagePropertyPanel
+              element={selectedElement}
+              onUpdateElement={onUpdateElement}
+              onReplaceImage={onReplaceImage}
+            />
           )}
         </div>
       </ScrollArea>

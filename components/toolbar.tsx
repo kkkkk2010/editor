@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils"
 import TitleEditor from "./title-editor"
 import ImportZipDialog from "@/components/import-zip-dialog"
 import type { ImportResult } from "@/src/lib/import/importerDoc"
+import type { AssetStore } from "@/src/lib/assets/assetStore"
 
 interface ToolbarProps {
   selectedElement: Element | null
@@ -33,6 +34,8 @@ interface ToolbarProps {
   onRedo: () => void
   canUndo: boolean
   canRedo: boolean
+  onSaveProject: () => void
+  assetStore?: AssetStore
 }
 
 export default function Toolbar({
@@ -47,6 +50,8 @@ export default function Toolbar({
   onRedo,
   canUndo,
   canRedo,
+  onSaveProject,
+  assetStore,
 }: ToolbarProps) {
   const [activeTab, setActiveTab] = useState("text")
 
@@ -143,12 +148,12 @@ export default function Toolbar({
             </Button>
           </div>
           <TitleEditor title={title} onTitleChange={onTitleChange} />
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={onSaveProject}>
             <Save className="h-4 w-4 mr-2" />
             Сохранить
           </Button>
         </div>
-        <ImportZipDialog onImport={onImportZip} />
+        <ImportZipDialog onImport={onImportZip} assetStore={assetStore} />
       </div>
 
       <div className="flex items-center space-x-2">

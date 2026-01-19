@@ -8,14 +8,16 @@ import { Label } from "@/components/ui/label"
 import { Loader2, Upload } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { importZipFile } from "@/src/lib/import/zipImport"
+import type { AssetStore } from "@/src/lib/assets/assetStore"
 import { mapImporterToEditor } from "@/src/lib/import/mapImporterToEditor"
 import type { ImportResult } from "@/src/lib/import/importerDoc"
 
 interface ImportZipDialogProps {
   onImport: (result: ImportResult, createdUrls: string[]) => void
+  assetStore?: AssetStore
 }
 
-export default function ImportZipDialog({ onImport }: ImportZipDialogProps) {
+export default function ImportZipDialog({ onImport, assetStore }: ImportZipDialogProps) {
   const [open, setOpen] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isImporting, setIsImporting] = useState(false)
@@ -33,7 +35,8 @@ export default function ImportZipDialog({ onImport }: ImportZipDialogProps) {
 
     setIsImporting(true)
     try {
-      const { doc, createdUrls, sourceSlideSize } = await importZipFile(selectedFile)
+      assetStore?.clear()
+      const { doc, createdUrls, sourceSlideSize } = await importZipFile(selectedFile, assetStore)
       const mapped = mapImporterToEditor(doc, { sourceSlideSize, allowResize: true })
       onImport(mapped, createdUrls)
       setOpen(false)
