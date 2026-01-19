@@ -154,6 +154,7 @@ export default function Home() {
   const [slideSize, setSlideSize] = useState<SlideSize>(defaultSlideSize)
   const [showPropertyPanel, setShowPropertyPanel] = useState(false)
   const [presentationTitle, setPresentationTitle] = useState("Презентация") // Перевел: "flowmix多模态产品系列"
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [editorScale, setEditorScale] = useState(1)
   const importedAssetUrlsRef = useRef<string[]>([])
@@ -208,6 +209,7 @@ export default function Home() {
       const trimmedPast = past.length > MAX_HISTORY ? past.slice(past.length - MAX_HISTORY) : past
       return { past: trimmedPast, present: next, future: [] }
     })
+    setHasUnsavedChanges(true)
   }
 
   const commitFromSnapshot = (snapshot: EditorState, _meta?: HistoryMeta) => {
@@ -220,6 +222,7 @@ export default function Home() {
       const trimmedPast = past.length > MAX_HISTORY ? past.slice(past.length - MAX_HISTORY) : past
       return { past: trimmedPast, present: next, future: [] }
     })
+    setHasUnsavedChanges(true)
   }
 
   const resetHistory = (next: EditorState) => {
@@ -561,6 +564,7 @@ export default function Home() {
 
   const handleSizeChange = (width: number, height: number) => {
     setSlideSize({ width, height })
+    setHasUnsavedChanges(true)
   }
 
   const handleAddShape = (shapeType: string) => {
@@ -917,6 +921,7 @@ export default function Home() {
       selectedElementId: null,
     })
     setShowPropertyPanel(false)
+    setHasUnsavedChanges(false)
   }
 
   const handleImportZip = (result: ImportResult, createdUrls: string[]) => {
@@ -1028,6 +1033,7 @@ export default function Home() {
       const importerDoc = mapEditorToImporter(slidesForExport, slideSize)
       const zipBytes = exportProjectZip(importerDoc, assetStore)
       FileSaver.saveAs(new Blob([zipBytes], { type: "application/zip" }), "out.zip")
+      setHasUnsavedChanges(false)
       toast({
         title: "Проект сохранен",
         description: "Файл out.zip скачан на устройство.",
@@ -1138,6 +1144,7 @@ export default function Home() {
             canUndo={canUndo}
             canRedo={canRedo}
             onSaveProject={handleSaveProject}
+            hasUnsavedChanges={hasUnsavedChanges}
           />
 
           <div className="flex-1 overflow-hidden">

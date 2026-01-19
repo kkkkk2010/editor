@@ -36,6 +36,7 @@ interface ToolbarProps {
   canRedo: boolean
   onSaveProject: () => void
   assetStore?: AssetStore
+  hasUnsavedChanges?: boolean
 }
 
 export default function Toolbar({
@@ -52,6 +53,7 @@ export default function Toolbar({
   canRedo,
   onSaveProject,
   assetStore,
+  hasUnsavedChanges,
 }: ToolbarProps) {
   const [activeTab, setActiveTab] = useState("text")
 
@@ -153,7 +155,7 @@ export default function Toolbar({
             Сохранить
           </Button>
         </div>
-        <ImportZipDialog onImport={onImportZip} assetStore={assetStore} />
+        <ImportZipDialog onImport={onImportZip} assetStore={assetStore} hasUnsavedChanges={hasUnsavedChanges} />
       </div>
 
       <div className="flex items-center space-x-2">

@@ -15,7 +15,7 @@ interface ImagePropertyPanelProps {
 }
 
 export default function ImagePropertyPanel({ element, onUpdateElement, onReplaceImage }: ImagePropertyPanelProps) {
-  const updateStyle = (property: string, value: any) => {
+  const updateStyle = <K extends keyof Element["style"]>(property: K, value: Element["style"][K]) => {
     onUpdateElement({
       ...element,
       style: {

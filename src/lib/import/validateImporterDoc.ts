@@ -18,8 +18,8 @@ const baseElementSchema = z.object({
   id: z.string(),
   x: z.number(),
   y: z.number(),
-  width: z.number(),
-  height: z.number(),
+  width: z.number().positive(),
+  height: z.number().positive(),
   rotation: z.number().optional(),
 })
 
@@ -52,8 +52,8 @@ const importerDocSchema = z.object({
   schemaVersion: z.literal(1),
   slideSize: z
     .object({
-      width: z.number(),
-      height: z.number(),
+      width: z.number().positive(),
+      height: z.number().positive(),
       unit: z.string(),
     })
     .optional(),

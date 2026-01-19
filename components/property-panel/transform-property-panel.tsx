@@ -17,7 +17,7 @@ interface TransformPropertyPanelProps {
 export default function TransformPropertyPanel({ element, onUpdateElement }: TransformPropertyPanelProps) {
   const [animationType, setAnimationType] = useState(element.style.animationType || "none")
 
-  const updateStyle = (property: string, value: any) => {
+  const updateStyle = <K extends keyof Element["style"]>(property: K, value: Element["style"][K]) => {
     onUpdateElement({
       ...element,
       style: {

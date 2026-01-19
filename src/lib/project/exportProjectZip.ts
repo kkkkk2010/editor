@@ -2,15 +2,34 @@ import { zipSync } from "fflate"
 import type { ImporterDoc } from "@/src/lib/import/importerDoc"
 import type { AssetStore } from "@/src/lib/assets/assetStore"
 
+const INVALID_ASSET_PREFIX = /^(blob:|data:|https?:|file:)/i
+
+function assertRelativeAssetPath(path: string) {
+  if (!path.trim()) {
+    throw new Error("Пустой путь ассета для экспорта")
+  }
+  if (INVALID_ASSET_PREFIX.test(path)) {
+    throw new Error(`Недопустимый URL ассета для экспорта: ${path}`)
+  }
+  if (path.startsWith("/") || path.startsWith("\\")) {
+    throw new Error(`Абсолютные пути ассетов не поддерживаются: ${path}`)
+  }
+  if (path.includes("..")) {
+    throw new Error(`Небезопасный путь ассета для экспорта: ${path}`)
+  }
+}
+
 function collectAssetPaths(doc: ImporterDoc): string[] {
   const paths = new Set<string>()
 
   doc.slides.forEach((slide) => {
     if (slide.background?.type === "image") {
+      assertRelativeAssetPath(slide.background.src)
       paths.add(slide.background.src)
     }
     slide.elements.forEach((element) => {
       if (element.type === "image") {
+        assertRelativeAssetPath(element.src)
         paths.add(element.src)
       }
     })

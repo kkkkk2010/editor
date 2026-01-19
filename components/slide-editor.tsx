@@ -258,6 +258,7 @@ export default function SlideEditor({
     }
     setDraggingElement(null)
     setResizing(false)
+    setResizeDirection("")
   }
 
   const handleTextDoubleClick = (element: Element, e: React.MouseEvent) => {

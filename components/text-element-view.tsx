@@ -5,7 +5,7 @@ import { useLayoutEffect, useMemo, useRef } from "react"
 import { cn } from "@/lib/utils"
 import type { Element } from "@/lib/types"
 
-const DEBUG_TEXT_BOX = true
+const DEBUG_TEXT_BOX = false
 const DEBUG_MAX_LOGS = 2
 const debugLoggedIds = new Set<string>()
 
@@ -104,7 +104,7 @@ export default function TextElementView({
     visual.style.transform = `scale(${scale})`
     scaleCache.set(cacheKey, scale)
 
-    if (debugLoggedIds.size < DEBUG_MAX_LOGS && !debugLoggedIds.has(element.id)) {
+    if (DEBUG_TEXT_BOX && debugLoggedIds.size < DEBUG_MAX_LOGS && !debugLoggedIds.has(element.id)) {
       debugLoggedIds.add(element.id)
       console.debug("Text fit", {
         id: element.id,
@@ -146,7 +146,7 @@ export default function TextElementView({
           isLocked && "select-none pointer-events-none opacity-70",
         )}
         style={{
-          pointerEvents: enablePointerEvents ? "auto" : "none",
+          pointerEvents: enablePointerEvents && !isEditing ? "auto" : "none",
         }}
         onClick={onClick}
         onMouseDown={onMouseDown}
@@ -179,7 +179,7 @@ export default function TextElementView({
             textDecoration: element.style.textDecoration,
             color: element.style.color,
             fontSize: element.style.fontSize || 16,
-            textAlign: element.style.textAlign as any,
+            textAlign: element.style.textAlign as React.CSSProperties["textAlign"],
           }}
           dangerouslySetInnerHTML={{ __html: formattedContent }}
         />

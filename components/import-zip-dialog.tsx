@@ -15,9 +15,10 @@ import type { ImportResult } from "@/src/lib/import/importerDoc"
 interface ImportZipDialogProps {
   onImport: (result: ImportResult, createdUrls: string[]) => void
   assetStore?: AssetStore
+  hasUnsavedChanges?: boolean
 }
 
-export default function ImportZipDialog({ onImport, assetStore }: ImportZipDialogProps) {
+export default function ImportZipDialog({ onImport, assetStore, hasUnsavedChanges }: ImportZipDialogProps) {
   const [open, setOpen] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isImporting, setIsImporting] = useState(false)
@@ -31,6 +32,12 @@ export default function ImportZipDialog({ onImport, assetStore }: ImportZipDialo
         variant: "destructive",
       })
       return
+    }
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm("Есть несохраненные изменения. Продолжить импорт и потерять их?")
+      if (!confirmed) {
+        return
+      }
     }
 
     setIsImporting(true)
