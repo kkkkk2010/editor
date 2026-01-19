@@ -11,12 +11,17 @@ export interface Size {
 export interface TextStyle {
   fontFamily?: string
   fontSize?: number
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  align?: "left" | "center" | "right" | "justify"
   fontWeight?: string
   fontStyle?: string
   textDecoration?: string
   color?: string
   textAlign?: string
   lineHeight?: string | number
+  letterSpacing?: number
   fill?: string
   stroke?: string
   strokeWidth?: number
@@ -34,6 +39,7 @@ export interface TextStyle {
   animationDelay?: number
   animationLoop?: boolean
   locked?: boolean
+  [key: string]: unknown
 }
 
 export interface Element {

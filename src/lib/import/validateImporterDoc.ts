@@ -8,7 +8,9 @@ const textStyleSchema = z
     bold: z.boolean().optional(),
     italic: z.boolean().optional(),
     underline: z.boolean().optional(),
-    align: z.enum(["left", "center", "right"]).optional(),
+    align: z.enum(["left", "center", "right", "justify"]).optional(),
+    lineHeight: z.number().optional(),
+    letterSpacing: z.number().optional(),
   })
   .passthrough()
 

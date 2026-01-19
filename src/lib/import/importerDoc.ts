@@ -38,7 +38,10 @@ export interface ImporterTextStyle {
   bold?: boolean
   italic?: boolean
   underline?: boolean
-  align?: "left" | "center" | "right"
+  align?: "left" | "center" | "right" | "justify"
+  lineHeight?: number
+  letterSpacing?: number
+  [key: string]: unknown
 }
 
 export interface ImporterTextElement extends ImporterBaseElement {

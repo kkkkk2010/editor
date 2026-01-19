@@ -114,7 +114,7 @@ export async function importZipFile(file: File, assetStore?: AssetStore): Promis
   const elementBounds = computeSourceSlideSize(doc)
   let sourceSlideSize = elementBounds
 
-  const resolveAsset = (path: string): string => {
+  const resolveAsset = (path: string): { url: string; mimeType: string } => {
     const assetBytes = entries.get(path)
     if (!assetBytes) {
       throw new Error(`Файл ассета не найден: ${path}`)
@@ -124,7 +124,7 @@ export async function importZipFile(file: File, assetStore?: AssetStore): Promis
     assetStore?.setAsset(path, assetBytes, mimeType)
     const url = URL.createObjectURL(new Blob([assetBytes], { type: mimeType }))
     createdUrls.push(url)
-    return url
+    return { url, mimeType }
   }
 
   try {
@@ -150,9 +150,11 @@ export async function importZipFile(file: File, assetStore?: AssetStore): Promis
     doc.slides.forEach((slide) => {
       if (slide.background?.type === "image") {
         const assetPath = slide.background.src
+        const resolved = resolveAsset(assetPath)
         slide.background = {
           ...slide.background,
-          src: resolveAsset(assetPath),
+          runtimeSrc: resolved.url,
+          src: assetPath,
           assetPath,
         } as typeof slide.background & { assetPath?: string }
       }
@@ -160,8 +162,10 @@ export async function importZipFile(file: File, assetStore?: AssetStore): Promis
       slide.elements.forEach((element) => {
         if (element.type === "image") {
           const assetPath = element.src
-          element.src = resolveAsset(assetPath)
-          ;(element as typeof element & { assetPath?: string }).assetPath = assetPath
+          const resolved = resolveAsset(assetPath)
+          element.src = assetPath
+          ;(element as typeof element & { assetPath?: string; runtimeSrc?: string }).assetPath = assetPath
+          ;(element as typeof element & { assetPath?: string; runtimeSrc?: string }).runtimeSrc = resolved.url
         }
       })
     })

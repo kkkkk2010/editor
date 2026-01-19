@@ -84,6 +84,47 @@ function normalizeBackgroundValue(background: Background) {
   return `url(${background.value})`
 }
 
+function extractBackgroundUrl(background: Background): string | null {
+  if (background.type !== "image") return null
+  const value = background.value.trim()
+  const urlMatch = value.match(/^url\\((.*)\\)$/i)
+  if (urlMatch) {
+    const rawUrl = urlMatch[1].trim().replace(/^['"]|['"]$/g, "")
+    return rawUrl
+  }
+  return value
+}
+
+function syncTextStyle(style: Element["style"]): Element["style"] {
+  const next = { ...style }
+
+  if (typeof style.fontWeight === "string") {
+    next.bold = style.fontWeight === "bold"
+  } else if (typeof style.bold === "boolean") {
+    next.fontWeight = style.bold ? "bold" : "normal"
+  }
+
+  if (typeof style.fontStyle === "string") {
+    next.italic = style.fontStyle === "italic"
+  } else if (typeof style.italic === "boolean") {
+    next.fontStyle = style.italic ? "italic" : "normal"
+  }
+
+  if (typeof style.textDecoration === "string") {
+    next.underline = style.textDecoration === "underline"
+  } else if (typeof style.underline === "boolean") {
+    next.textDecoration = style.underline ? "underline" : "none"
+  }
+
+  if (typeof style.textAlign === "string") {
+    next.align = style.textAlign as "left" | "center" | "right" | "justify"
+  } else if (typeof style.align === "string") {
+    next.textAlign = style.align
+  }
+
+  return next
+}
+
 function cloneState(state: EditorState): EditorState {
   if (typeof structuredClone === "function") {
     return structuredClone(state) as EditorState
@@ -483,7 +524,14 @@ export default function Home() {
     if (elementIndex === -1) return
 
     const updatedElements = [...slide.elements]
-    updatedElements[elementIndex] = updatedElement
+    const normalizedElement =
+      updatedElement.type === "text"
+        ? {
+            ...updatedElement,
+            style: syncTextStyle(updatedElement.style),
+          }
+        : updatedElement
+    updatedElements[elementIndex] = normalizedElement
 
     const updatedSlides = [...slides]
     updatedSlides[currentSlideIndex] = {
@@ -495,7 +543,7 @@ export default function Home() {
       {
         slides: updatedSlides,
         currentSlideIndex,
-        selectedElementId: updatedElement.id,
+        selectedElementId: normalizedElement.id,
       },
       { type: "element", reason: "update" },
     )
@@ -576,6 +624,23 @@ export default function Home() {
     const assetPath = `assets/images/${fallbackName}.${extension}`
     assetStoreRef.current.setAsset(assetPath, bytes, contentType)
     return assetPath
+  }
+
+  const storeAssetFromUrlAtPath = async (url: string, assetPath: string) => {
+    const dataBytes = decodeDataUrl(url)
+    if (dataBytes) {
+      assetStoreRef.current.setAsset(assetPath, dataBytes, "application/octet-stream")
+      return
+    }
+
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`Не удалось загрузить ассет: ${url}`)
+    }
+    const buffer = await response.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    const contentType = response.headers.get("Content-Type") || "application/octet-stream"
+    assetStoreRef.current.setAsset(assetPath, bytes, contentType)
   }
 
   const handleAddImage = async (imageUrl: string, file?: File) => {
@@ -911,10 +976,19 @@ export default function Home() {
       }
       const slidesForExport = await Promise.all(
         slides.map(async (slide, slideIndex) => {
-          const backgroundAssetPath = `backgrounds/bg-${slide.id}.png`
+          const existingBackgroundPath =
+            slide.background.type === "image" ? slide.background.assetPath : undefined
+          const backgroundAssetPath = existingBackgroundPath || `backgrounds/bg-${slide.id}.png`
           if (!assetStore.hasAsset(backgroundAssetPath)) {
-            const bytes = await renderBackgroundBytes(slide.background)
-            assetStore.setAsset(backgroundAssetPath, bytes, "image/png")
+            if (existingBackgroundPath) {
+              const backgroundUrl = extractBackgroundUrl(slide.background)
+              if (backgroundUrl) {
+                await storeAssetFromUrlAtPath(backgroundUrl, backgroundAssetPath)
+              }
+            } else {
+              const bytes = await renderBackgroundBytes(slide.background)
+              assetStore.setAsset(backgroundAssetPath, bytes, "image/png")
+            }
           }
 
           const elements = await Promise.all(
@@ -925,19 +999,10 @@ export default function Home() {
 
               const existingPath = element.assetPath
               const extension = existingPath ? getExtensionFromUrl(existingPath) : getExtensionFromUrl(element.content)
-              const assetPath = `assets/images/${element.id}.${extension}`
+              const assetPath = existingPath || `assets/images/${element.id}.${extension}`
 
               if (!assetStore.hasAsset(assetPath)) {
-                if (existingPath) {
-                  const existingAsset = assetStore.getAsset(existingPath)
-                  if (existingAsset) {
-                    assetStore.setAsset(assetPath, existingAsset.bytes, existingAsset.mimeType)
-                  } else {
-                    await storeAssetFromUrl(element.content, element.id)
-                  }
-                } else {
-                  await storeAssetFromUrl(element.content, element.id)
-                }
+                await storeAssetFromUrlAtPath(element.content, assetPath)
               }
 
               return {

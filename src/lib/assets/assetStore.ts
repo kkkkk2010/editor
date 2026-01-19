@@ -1,13 +1,13 @@
 export type AssetEntry = {
   bytes: Uint8Array
-  mimeType: string
+  mime?: string
 }
 
 export class AssetStore {
   private assets = new Map<string, AssetEntry>()
 
-  setAsset(path: string, bytes: Uint8Array, mimeType = "application/octet-stream") {
-    this.assets.set(path, { bytes, mimeType })
+  setAsset(path: string, bytes: Uint8Array, mime = "application/octet-stream") {
+    this.assets.set(path, { bytes, mime })
   }
 
   getAsset(path: string): AssetEntry | undefined {

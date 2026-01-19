@@ -1,7 +1,11 @@
 import type { Slide, SlideSize } from "@/lib/types"
 import type { ImporterDoc, ImporterElement, ImporterSlide } from "@/src/lib/import/importerDoc"
+import { editorFontSizeToImporter } from "@/src/lib/units/fontUnits"
 
 function mapTextElement(element: import("@/lib/types").Element): ImporterElement {
+  const exportFontSize =
+    typeof element.style.fontSize === "number" ? editorFontSizeToImporter(element.style.fontSize, "px") : undefined
+
   return {
     id: element.id,
     type: "text",
@@ -12,13 +16,8 @@ function mapTextElement(element: import("@/lib/types").Element): ImporterElement
     height: element.size.height,
     rotation: element.style.rotation,
     style: {
-      fontFamily: element.style.fontFamily,
-      fontSize: element.style.fontSize,
-      color: element.style.color,
-      bold: element.style.fontWeight === "bold",
-      italic: element.style.fontStyle === "italic",
-      underline: element.style.textDecoration === "underline",
-      align: element.style.textAlign as "left" | "center" | "right" | undefined,
+      ...element.style,
+      fontSize: exportFontSize ?? element.style.fontSize,
     },
   }
 }
