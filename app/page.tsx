@@ -181,6 +181,14 @@ export default function Home() {
     })
   }
 
+  const resetHistory = (next: EditorState) => {
+    setHistory({
+      past: [],
+      present: next,
+      future: [],
+    })
+  }
+
   const findElementById = (stateSlides: Slide[], elementId: string) => {
     for (let slideIndex = 0; slideIndex < stateSlides.length; slideIndex += 1) {
       const elementIndex = stateSlides[slideIndex].elements.findIndex((element) => element.id === elementId)
@@ -838,14 +846,11 @@ export default function Home() {
 
   const handleImport = (result: ImportResult) => {
     setSlideSize(result.slideSize)
-    commit(
-      {
-        slides: result.slides,
-        currentSlideIndex: 0,
-        selectedElementId: null,
-      },
-      { type: "document", reason: "import" },
-    )
+    resetHistory({
+      slides: result.slides,
+      currentSlideIndex: 0,
+      selectedElementId: null,
+    })
     setShowPropertyPanel(false)
   }
 
@@ -906,24 +911,34 @@ export default function Home() {
       }
       const slidesForExport = await Promise.all(
         slides.map(async (slide, slideIndex) => {
-          const backgroundAssetPath = `backgrounds/slide-${slideIndex + 1}.png`
+          const backgroundAssetPath = `backgrounds/bg-${slide.id}.png`
           if (!assetStore.hasAsset(backgroundAssetPath)) {
             const bytes = await renderBackgroundBytes(slide.background)
             assetStore.setAsset(backgroundAssetPath, bytes, "image/png")
           }
 
           const elements = await Promise.all(
-            slide.elements.map(async (element, elementIndex) => {
+            slide.elements.map(async (element) => {
               if (element.type !== "image") {
                 return element
               }
 
-              if (element.assetPath && assetStore.hasAsset(element.assetPath)) {
-                return element
-              }
+              const existingPath = element.assetPath
+              const extension = existingPath ? getExtensionFromUrl(existingPath) : getExtensionFromUrl(element.content)
+              const assetPath = `assets/images/${element.id}.${extension}`
 
-              const fallbackName = `${element.id}-${elementIndex + 1}`
-              const assetPath = await storeAssetFromUrl(element.content, fallbackName)
+              if (!assetStore.hasAsset(assetPath)) {
+                if (existingPath) {
+                  const existingAsset = assetStore.getAsset(existingPath)
+                  if (existingAsset) {
+                    assetStore.setAsset(assetPath, existingAsset.bytes, existingAsset.mimeType)
+                  } else {
+                    await storeAssetFromUrl(element.content, element.id)
+                  }
+                } else {
+                  await storeAssetFromUrl(element.content, element.id)
+                }
+              }
 
               return {
                 ...element,

@@ -7,6 +7,13 @@ const DEFAULT_BACKGROUND: Background = {
   value: "#ffffff",
 }
 
+function createId(prefix: string) {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 function resolveAssetUrl(source: string, baseUrl?: string): string {
   if (!source) return source
   try {
@@ -95,7 +102,7 @@ function mapElement(
     const fontSize = style.fontSize ? style.fontSize * scale : undefined
 
     return {
-      id: element.id,
+      id: createId("text"),
       type: "text",
       content: element.text,
       position,
@@ -114,7 +121,7 @@ function mapElement(
   }
 
   return {
-    id: element.id,
+    id: createId("image"),
     type: "image",
     content: resolveAssetUrl(element.src, baseUrl),
     assetPath: element.assetPath,
@@ -127,7 +134,11 @@ function mapElement(
   }
 }
 
-function mapSlide(slide: ImporterSlide & { background?: ImporterSlide["background"] & { assetPath?: string } }, scale: number, baseUrl?: string): Slide {
+function mapSlide(
+  slide: ImporterSlide & { background?: ImporterSlide["background"] & { assetPath?: string } },
+  scale: number,
+  baseUrl?: string,
+): Slide {
   let background = DEFAULT_BACKGROUND
 
   if (slide.background?.type === "image") {
@@ -140,7 +151,7 @@ function mapSlide(slide: ImporterSlide & { background?: ImporterSlide["backgroun
   }
 
   return {
-    id: slide.id,
+    id: createId("slide"),
     background,
     elements: slide.elements.map((element) => mapElement(element, scale, baseUrl)),
   }
