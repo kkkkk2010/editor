@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select"
 import { Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { normalizeFontFamily } from "@/lib/text-style"
 
 interface TextPropertyPanelProps {
   element: Element
@@ -32,18 +33,24 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
   }
 
   const fontFamilies = ["Arial", "Times New Roman", "Georgia", "Verdana", "Courier New"]
-  const currentFontFamily = element.style.fontFamily || "Arial"
+  const normalizedFontFamily = normalizeFontFamily(element.style.fontFamily) ?? "Arial"
+  const availableFontFamilies = fontFamilies.includes(normalizedFontFamily)
+    ? fontFamilies
+    : [normalizedFontFamily, ...fontFamilies]
 
   return (
     <div className="space-y-4">
       <div>
         <Label htmlFor="fontFamily">Шрифт</Label>
-        <Select value={currentFontFamily} onValueChange={(value) => updateStyle("fontFamily", value)}>
+        <Select
+          value={normalizedFontFamily}
+          onValueChange={(value) => updateStyle("fontFamily", normalizeFontFamily(value) ?? value)}
+        >
           <SelectTrigger id="fontFamily" className="mt-1">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {fontFamilies.map((fontFamily) => (
+            {availableFontFamilies.map((fontFamily) => (
               <SelectItem key={fontFamily} value={fontFamily}>
                 {fontFamily}
               </SelectItem>

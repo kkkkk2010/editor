@@ -8,6 +8,7 @@ import type {
   ImporterShapeType,
 } from "@/src/lib/import/importerDoc"
 import { defaultSlideSize } from "@/lib/types"
+import { normalizeFontFamily } from "@/lib/text-style"
 
 const DEFAULT_BACKGROUND: Background = {
   type: "color",
@@ -106,8 +107,7 @@ function mapElement(
 
   if (element.type === "text") {
     const style = element.style || {}
-    const baseFontSize = style.fontSize ?? 18
-    const fontSize = baseFontSize * scale
+    const fontSize = style.fontSize ?? 18
     const fontWeight =
       style.fontWeight ?? (style.bold === undefined ? undefined : style.bold ? "bold" : "normal")
     const fontStyle =
@@ -124,7 +124,7 @@ function mapElement(
       size,
       style: {
         ...style,
-        fontFamily: style.fontFamily,
+        fontFamily: normalizeFontFamily(style.fontFamily),
         fontSize,
         color: style.color,
         fontWeight,
