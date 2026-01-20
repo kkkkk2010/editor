@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import type { Element } from "@/lib/types"
 
 const DEBUG_TEXT_BOX = false
+const DEBUG_TEXT = false
 const DEBUG_MAX_LOGS = 2
 const debugLoggedIds = new Set<string>()
 
@@ -104,7 +105,12 @@ export default function TextElementView({
     visual.style.transform = `scale(${scale})`
     scaleCache.set(cacheKey, scale)
 
-    if (DEBUG_TEXT_BOX && debugLoggedIds.size < DEBUG_MAX_LOGS && !debugLoggedIds.has(element.id)) {
+    if (
+      DEBUG_TEXT &&
+      element.id.endsWith("t1") &&
+      debugLoggedIds.size < DEBUG_MAX_LOGS &&
+      !debugLoggedIds.has(element.id)
+    ) {
       debugLoggedIds.add(element.id)
       console.debug("Text fit", {
         id: element.id,
@@ -160,12 +166,22 @@ export default function TextElementView({
           pointerEvents: "none",
           opacity: isEditing ? 0 : 1,
           transformOrigin: "top left",
+          width: "100%",
+          height: "100%",
+          minWidth: 0,
+          minHeight: 0,
         }}
       >
         <div
           ref={measureRef}
           style={{
-            display: "inline-block",
+            display: "block",
+            width: "100%",
+            height: "100%",
+            minWidth: 0,
+            minHeight: 0,
+            maxWidth: "none",
+            boxSizing: "border-box",
             whiteSpace: hasLineBreaks ? "pre-wrap" : "normal",
             overflowWrap: "normal",
             wordBreak: "normal",
