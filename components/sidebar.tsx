@@ -5,6 +5,7 @@ import type { Slide } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ptToPx } from "@/lib/utils/units"
 
 interface SidebarProps {
   slides: Slide[]
@@ -283,10 +284,16 @@ export default function Sidebar({
                         top: element.position.y,
                         width: element.size.width,
                         height: element.size.height,
-                        fontSize: `${element.style.fontSize ?? 18}pt`,
+                        fontSize: `${ptToPx(element.style.fontSizePt ?? 18)}px`,
+                        fontFamily: element.style.fontFamily,
                         fontWeight: element.style.fontWeight,
                         color: element.style.color,
                         textAlign: element.style.textAlign as CSSProperties["textAlign"],
+                        lineHeight:
+                          element.style.lineHeight !== undefined ? String(element.style.lineHeight) : "normal",
+                        display: "block",
+                        minWidth: 0,
+                        minHeight: 0,
                         overflow: "hidden",
                         zIndex: 1,
                       }}

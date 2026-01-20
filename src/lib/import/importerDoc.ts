@@ -33,6 +33,7 @@ export interface ImporterBaseElement {
 
 export interface ImporterTextStyle {
   fontFamily?: string
+  fontSizePt?: number
   fontSize?: number
   color?: string
   bold?: boolean

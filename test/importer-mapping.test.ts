@@ -25,7 +25,7 @@ const baseDoc: ImporterDoc = {
           rotation: 0,
           style: {
             fontFamily: "Inter",
-            fontSize: 24,
+            fontSizePt: 24,
             color: "#111111",
             bold: true,
             italic: true,

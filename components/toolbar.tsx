@@ -79,12 +79,12 @@ export default function Toolbar({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="w-24">
-              {selectedElement.style.fontSize ?? 18}pt
+              {selectedElement.style.fontSizePt ?? 18}pt
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             {[8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48, 56, 64, 72].map((size) => (
-              <DropdownMenuItem key={size} onClick={() => updateTextStyle("fontSize", size)}>
+              <DropdownMenuItem key={size} onClick={() => updateTextStyle("fontSizePt", size)}>
                 {size}pt
               </DropdownMenuItem>
             ))}

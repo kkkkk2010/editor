@@ -384,7 +384,7 @@ export default function Home() {
           position: { x: slideSize.width / 2 - 200, y: slideSize.height / 2 - 40 },
           size: { width: 400, height: 80 },
           style: {
-            fontSize: 48,
+            fontSizePt: 48,
             fontWeight: "bold",
             color: "#ffffff",
             textAlign: "center",
@@ -815,7 +815,7 @@ export default function Home() {
       position: { x: slideSize.width / 2 - 100, y: slideSize.height / 2 - 20 },
       size: { width: 200, height: 40 },
       style: {
-        fontSize: 24,
+        fontSizePt: 24,
         fontWeight: "normal",
         color: "#000000",
         textAlign: "center",

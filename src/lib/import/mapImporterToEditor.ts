@@ -9,6 +9,7 @@ import type {
 } from "@/src/lib/import/importerDoc"
 import { defaultSlideSize } from "@/lib/types"
 import { normalizeFontFamily } from "@/lib/text-style"
+import { pxToPt } from "@/lib/utils/units"
 
 const DEFAULT_BACKGROUND: Background = {
   type: "color",
@@ -107,7 +108,7 @@ function mapElement(
 
   if (element.type === "text") {
     const style = element.style || {}
-    const fontSize = style.fontSize ?? 18
+    const fontSizePt = style.fontSizePt ?? (style.fontSize !== undefined ? pxToPt(style.fontSize) : undefined) ?? 18
     const fontWeight =
       style.fontWeight ?? (style.bold === undefined ? undefined : style.bold ? "bold" : "normal")
     const fontStyle =
@@ -115,6 +116,7 @@ function mapElement(
     const textDecoration =
       style.textDecoration ?? (style.underline === undefined ? undefined : style.underline ? "underline" : "none")
     const textAlign = style.textAlign ?? style.align
+    const { fontFamily, fontSize, fontSizePt: _fontSizePt, ...restStyle } = style
 
     return {
       id: createId("text"),
@@ -123,9 +125,9 @@ function mapElement(
       position,
       size,
       style: {
-        ...style,
-        fontFamily: normalizeFontFamily(style.fontFamily),
-        fontSize,
+        ...restStyle,
+        fontFamily: normalizeFontFamily(fontFamily),
+        fontSizePt,
         color: style.color,
         fontWeight,
         fontStyle,

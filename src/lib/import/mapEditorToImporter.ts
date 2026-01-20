@@ -6,6 +6,7 @@ import type {
   ImporterShapeType,
 } from "@/src/lib/import/importerDoc"
 function mapTextElement(element: import("@/lib/types").Element): ImporterElement {
+  const { fontSizePt, fontSize: _fontSize, ...restStyle } = element.style
   return {
     id: element.id,
     type: "text",
@@ -16,8 +17,8 @@ function mapTextElement(element: import("@/lib/types").Element): ImporterElement
     height: element.size.height,
     rotation: element.style.rotation,
     style: {
-      ...element.style,
-      fontSize: element.style.fontSize,
+      ...restStyle,
+      fontSizePt: fontSizePt ?? 18,
     },
   }
 }

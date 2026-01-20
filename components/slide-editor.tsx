@@ -7,6 +7,7 @@ import ElementContextMenu from "@/components/context-menu/element-context-menu"
 import { renderAdvancedShape } from "@/components/shapes/advanced-shapes"
 import TextElementView from "@/components/text-element-view"
 import { cn } from "@/lib/utils"
+import { ptToPx } from "@/lib/utils/units"
 
 interface SlideEditorProps {
   slide: Slide
@@ -272,7 +273,8 @@ export default function SlideEditor({
     input.style.top = `${element.position.y}px`
     input.style.width = `${element.size.width}px`
     input.style.height = `${element.size.height}px`
-    input.style.fontSize = `${element.style.fontSize ?? 18}pt`
+    input.style.fontSize = `${ptToPx(element.style.fontSizePt ?? 18)}px`
+    input.style.fontFamily = element.style.fontFamily || "Times New Roman"
     input.style.fontWeight = element.style.fontWeight || "normal"
     input.style.fontStyle = element.style.fontStyle || "normal"
     input.style.textDecoration = element.style.textDecoration || "none"
@@ -287,6 +289,13 @@ export default function SlideEditor({
     input.style.resize = "none"
     input.style.outline = "2px solid #3b82f6"
     input.style.whiteSpace = "pre-wrap" // 保留换行和空格
+    input.style.overflowWrap = "normal"
+    input.style.wordBreak = "normal"
+    input.style.hyphens = "none"
+    input.style.boxSizing = "border-box"
+    input.style.display = "block"
+    input.style.minWidth = "0"
+    input.style.minHeight = "0"
 
     // 设置编辑元素的ID，用于在渲染时隐藏原始元素
     const editingId = element.id

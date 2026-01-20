@@ -4,6 +4,7 @@ import type React from "react"
 import { useLayoutEffect, useMemo, useRef } from "react"
 import { cn } from "@/lib/utils"
 import type { Element } from "@/lib/types"
+import { ptToPx } from "@/lib/utils/units"
 
 const DEBUG_TEXT_BOX = false
 const DEBUG_TEXT = false
@@ -24,18 +25,12 @@ interface TextElementViewProps {
   children?: React.ReactNode
 }
 
-const scaleCache = new Map<string, number>()
-
 function getCacheKey(element: Element) {
   return `${element.id}::${element.content}::${element.style.fontFamily ?? ""}::${
-    element.style.fontSize ?? ""
+    element.style.fontSizePt ?? ""
   }::${element.style.fontWeight ?? ""}::${element.style.fontStyle ?? ""}::${
     element.size.width
   }x${element.size.height}`
-}
-
-function shouldWrapAnywhere(text: string) {
-  return text.split(/\s+/).some((word) => word.length >= 18)
 }
 
 export default function TextElementView({
@@ -60,70 +55,43 @@ export default function TextElementView({
 
   useLayoutEffect(() => {
     const box = boxRef.current
-    const visual = visualRef.current
     const measure = measureRef.current
-    if (!box || !visual || !measure) return
+    if (!box || !measure) return
 
-    const cachedScale = scaleCache.get(cacheKey)
-    if (cachedScale !== undefined) {
-      visual.style.transform = `scale(${cachedScale})`
-      return
-    }
-
-    if (isEditing) {
-      return
-    }
-
-    visual.style.transform = "scale(1)"
     measure.style.overflowWrap = "normal"
     measure.style.wordBreak = "normal"
     measure.style.hyphens = "none"
     measure.style.whiteSpace = hasLineBreaks ? "pre-wrap" : "normal"
 
-    const boxW = box.clientWidth
-    const boxH = box.clientHeight
-    let textW = measure.scrollWidth
-    let textH = measure.scrollHeight
-
-    const overflowX = textW > boxW + 1
-    const overflowY = textH > boxH + 1
-
-    if (overflowX && shouldWrapAnywhere(element.content)) {
-      measure.style.overflowWrap = "anywhere"
-      textW = measure.scrollWidth
-      textH = measure.scrollHeight
-    }
-
-    let scale = 1
-    if (overflowX || overflowY) {
-      scale = Math.min(1, boxW / textW, boxH / textH)
-      if (scale > 0.98) {
-        scale = 1
+    if (DEBUG_TEXT || window.localStorage.getItem("DEBUG_TEXT") === "1") {
+      if (
+        element.id.endsWith("t1") &&
+        debugLoggedIds.size < DEBUG_MAX_LOGS &&
+        !debugLoggedIds.has(element.id)
+      ) {
+        debugLoggedIds.add(element.id)
+        const boxW = box.clientWidth
+        const boxH = box.clientHeight
+        const textW = measure.scrollWidth
+        const textH = measure.scrollHeight
+        const fontSizePt = element.style.fontSizePt ?? 18
+        const fontSizePx = ptToPx(fontSizePt)
+        const computedFontSize = window.getComputedStyle(measure).fontSize
+        const computedWidth = window.getComputedStyle(measure).width
+        console.debug("Text layout", {
+          id: element.id,
+          fontSizePt,
+          fontSizePx,
+          computedFontSize,
+          boxW,
+          boxH,
+          textW,
+          textH,
+          computedWidth,
+        })
       }
     }
-
-    visual.style.transform = `scale(${scale})`
-    scaleCache.set(cacheKey, scale)
-
-    if (
-      DEBUG_TEXT &&
-      element.id.endsWith("t1") &&
-      debugLoggedIds.size < DEBUG_MAX_LOGS &&
-      !debugLoggedIds.has(element.id)
-    ) {
-      debugLoggedIds.add(element.id)
-      console.debug("Text fit", {
-        id: element.id,
-        overflowX,
-        overflowY,
-        scale,
-        boxW,
-        boxH,
-        textW,
-        textH,
-      })
-    }
-  }, [cacheKey, element.content, element.id, hasLineBreaks, isEditing])
+  }, [cacheKey, element.content, element.id, hasLineBreaks])
 
   return (
     <div
@@ -140,6 +108,8 @@ export default function TextElementView({
         transform: element.style.rotation ? `rotate(${element.style.rotation}deg)` : undefined,
         border: DEBUG_TEXT_BOX ? "1px solid red" : undefined,
         boxSizing: "border-box",
+        minWidth: 0,
+        minHeight: 0,
         ...containerStyle,
       }}
     >
@@ -165,7 +135,6 @@ export default function TextElementView({
         style={{
           pointerEvents: "none",
           opacity: isEditing ? 0 : 1,
-          transformOrigin: "top left",
           width: "100%",
           height: "100%",
           minWidth: 0,
@@ -186,7 +155,7 @@ export default function TextElementView({
             overflowWrap: "normal",
             wordBreak: "normal",
             hyphens: "none",
-            lineHeight: element.style.lineHeight ?? "normal",
+            lineHeight: element.style.lineHeight !== undefined ? String(element.style.lineHeight) : "normal",
             padding: 0,
             margin: 0,
             fontFamily: element.style.fontFamily,
@@ -194,7 +163,7 @@ export default function TextElementView({
             fontStyle: element.style.fontStyle,
             textDecoration: element.style.textDecoration,
             color: element.style.color,
-            fontSize: `${element.style.fontSize ?? 18}pt`,
+            fontSize: `${ptToPx(element.style.fontSizePt ?? 18)}px`,
             textAlign: element.style.textAlign as React.CSSProperties["textAlign"],
           }}
           dangerouslySetInnerHTML={{ __html: formattedContent }}

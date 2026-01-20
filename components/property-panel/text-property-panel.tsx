@@ -32,20 +32,24 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
     })
   }
 
-  const fontFamilies = ["Arial", "Times New Roman", "Georgia", "Verdana", "Courier New"]
-  const normalizedFontFamily = normalizeFontFamily(element.style.fontFamily) ?? "Arial"
-  const availableFontFamilies = fontFamilies.includes(normalizedFontFamily)
-    ? fontFamilies
-    : [normalizedFontFamily, ...fontFamilies]
+  const fontFamilies = ["Times New Roman", "Arial", "Georgia", "Verdana", "Courier New"]
+  const selectedFontFamily = element.style.fontFamily ?? "Times New Roman"
+  const normalizedFontFamily = normalizeFontFamily(selectedFontFamily)
+  const availableFontFamilies = Array.from(
+    new Set([selectedFontFamily, normalizedFontFamily].filter(Boolean).concat(fontFamilies)),
+  )
+  const selectedFontSizePt = element.style.fontSizePt ?? 18
+
+  const clampFontSize = (value: number) => {
+    const clamped = Math.min(200, Math.max(6, value))
+    return Math.round(clamped * 2) / 2
+  }
 
   return (
     <div className="space-y-4">
       <div>
         <Label htmlFor="fontFamily">Шрифт</Label>
-        <Select
-          value={normalizedFontFamily}
-          onValueChange={(value) => updateStyle("fontFamily", normalizeFontFamily(value) ?? value)}
-        >
+        <Select value={selectedFontFamily} onValueChange={(value) => updateStyle("fontFamily", value)}>
           <SelectTrigger id="fontFamily" className="mt-1">
             <SelectValue />
           </SelectTrigger>
@@ -63,20 +67,21 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
         <div className="flex items-center mt-1 space-x-2">
           <Slider
             id="fontSize"
-            min={1}
-            max={400}
-            step={1}
-            value={[element.style.fontSize ?? 18]}
-            onValueChange={(value) => updateStyle("fontSize", value[0])}
+            min={6}
+            max={200}
+            step={0.5}
+            value={[selectedFontSizePt]}
+            onValueChange={(value) => updateStyle("fontSizePt", clampFontSize(value[0]))}
             className="flex-1"
           />
           <Input
             type="number"
-            value={element.style.fontSize ?? 18}
-            onChange={(e) => updateStyle("fontSize", Number(e.target.value))}
+            value={selectedFontSizePt}
+            onChange={(e) => updateStyle("fontSizePt", clampFontSize(Number(e.target.value)))}
             className="w-16"
-            min={1}
-            max={400}
+            min={6}
+            max={200}
+            step={0.5}
           />
         </div>
       </div>
