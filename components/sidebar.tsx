@@ -31,7 +31,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const thumbnailWidth = 192
   const thumbnailHeight = 108
-  const DEBUG_THUMBNAIL = true
+  const DEBUG_THUMBNAIL = false
 
   const getFitScale = (containerWidth: number, containerHeight: number, slideWidth: number, slideHeight: number) => {
     if (slideWidth <= 0 || slideHeight <= 0) return 1
@@ -122,6 +122,15 @@ export default function Sidebar({
         }}
       />
     )
+  }
+
+  const resolveBackgroundImage = (value: string) => {
+    const trimmed = value.trim()
+    const urlMatch = trimmed.match(/^url\((.*)\)$/i)
+    if (urlMatch) {
+      return urlMatch[1].trim().replace(/^['"]|['"]$/g, "")
+    }
+    return trimmed
   }
   const renderSlidePreview = (slide: Slide, index: number) => {
     const scale = getFitScale(thumbnailWidth, thumbnailHeight, slideSize.width, slideSize.height)
@@ -225,7 +234,6 @@ export default function Sidebar({
               transform: `translate(-50%, -50%) scale(${scale})`,
               transformOrigin: "center center",
               border: DEBUG_THUMBNAIL ? "1px dashed rgba(255,255,255,0.6)" : undefined,
-              background: slide.background.value,
             }}
           >
             <div
@@ -235,6 +243,35 @@ export default function Sidebar({
                 height: "100%",
               }}
             >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  zIndex: 0,
+                  overflow: "hidden",
+                  background:
+                    slide.background.type === "image" ? "transparent" : slide.background.value,
+                }}
+              >
+                {slide.background.type === "image" && (
+                  <img
+                    src={resolveBackgroundImage(slide.background.value)}
+                    alt=""
+                    draggable={false}
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      objectPosition: "center",
+                      display: "block",
+                    }}
+                  />
+                )}
+              </div>
               {slide.elements.map((element) => {
                 if (element.type === "text") {
                   return (
@@ -251,6 +288,7 @@ export default function Sidebar({
                         color: element.style.color,
                         textAlign: element.style.textAlign as CSSProperties["textAlign"],
                         overflow: "hidden",
+                        zIndex: 1,
                       }}
                     >
                       {element.content}
@@ -270,6 +308,7 @@ export default function Sidebar({
                         backgroundImage: `url(${element.content})`,
                         backgroundSize: "cover",
                         backgroundPosition: "center",
+                        zIndex: 1,
                       }}
                     />
                   )
@@ -286,6 +325,7 @@ export default function Sidebar({
                         height: element.size.height,
                         opacity: element.style.opacity,
                         transform: element.style.rotation ? `rotate(${element.style.rotation}deg)` : undefined,
+                        zIndex: 1,
                       }}
                     >
                       {renderShapePreview(element)}
