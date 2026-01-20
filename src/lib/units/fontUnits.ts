@@ -1,23 +1,11 @@
-const PX_PER_PT = 96 / 72
+import { ptToPx, pxToPt } from "@/src/lib/units"
 
-export function ptToPx(value: number): number {
-  return value * PX_PER_PT
-}
+export { ptToPx, pxToPt }
 
-export function pxToPt(value: number): number {
-  return value / PX_PER_PT
-}
-
-export function importerFontSizeToEditor(value: number, unit?: string): number {
-  if (unit === "pt") {
-    return ptToPx(value)
-  }
+export function importerFontSizeToEditor(value: number): number {
   return value
 }
 
-export function editorFontSizeToImporter(value: number, unit?: string): number {
-  if (unit === "pt") {
-    return pxToPt(value)
-  }
+export function editorFontSizeToImporter(value: number): number {
   return value
 }

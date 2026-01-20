@@ -283,7 +283,7 @@ export default function Sidebar({
                         top: element.position.y,
                         width: element.size.width,
                         height: element.size.height,
-                        fontSize: element.style.fontSize || 16,
+                        fontSize: `${element.style.fontSize ?? 18}pt`,
                         fontWeight: element.style.fontWeight,
                         color: element.style.color,
                         textAlign: element.style.textAlign as CSSProperties["textAlign"],

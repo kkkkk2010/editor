@@ -272,13 +272,13 @@ export default function SlideEditor({
     input.style.top = `${element.position.y}px`
     input.style.width = `${element.size.width}px`
     input.style.height = `${element.size.height}px`
-    input.style.fontSize = `${element.style.fontSize || 16}px`
+    input.style.fontSize = `${element.style.fontSize ?? 18}pt`
     input.style.fontWeight = element.style.fontWeight || "normal"
     input.style.fontStyle = element.style.fontStyle || "normal"
     input.style.textDecoration = element.style.textDecoration || "none"
     input.style.color = element.style.color || "#000"
     input.style.textAlign = element.style.textAlign || "left"
-    input.style.lineHeight = element.style.lineHeight ? `${element.style.lineHeight}` : "1.5"
+    input.style.lineHeight = element.style.lineHeight ? `${element.style.lineHeight}` : "normal"
     input.style.border = "none"
     input.style.padding = "0"
     input.style.margin = "0"

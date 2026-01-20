@@ -3,7 +3,7 @@ import { z } from "zod"
 const textStyleSchema = z
   .object({
     fontFamily: z.string().optional(),
-    fontSize: z.number().optional(),
+    fontSize: z.number().min(1).max(400).optional(),
     color: z.string().optional(),
     bold: z.boolean().optional(),
     italic: z.boolean().optional(),

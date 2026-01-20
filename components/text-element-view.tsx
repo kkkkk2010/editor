@@ -170,7 +170,7 @@ export default function TextElementView({
             overflowWrap: "normal",
             wordBreak: "normal",
             hyphens: "none",
-            lineHeight: 1.1,
+            lineHeight: element.style.lineHeight ?? "normal",
             padding: 0,
             margin: 0,
             fontFamily: element.style.fontFamily,
@@ -178,7 +178,7 @@ export default function TextElementView({
             fontStyle: element.style.fontStyle,
             textDecoration: element.style.textDecoration,
             color: element.style.color,
-            fontSize: element.style.fontSize || 16,
+            fontSize: `${element.style.fontSize ?? 18}pt`,
             textAlign: element.style.textAlign as React.CSSProperties["textAlign"],
           }}
           dangerouslySetInnerHTML={{ __html: formattedContent }}

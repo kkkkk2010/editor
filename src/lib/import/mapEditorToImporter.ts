@@ -5,12 +5,7 @@ import type {
   ImporterSlide,
   ImporterShapeType,
 } from "@/src/lib/import/importerDoc"
-import { editorFontSizeToImporter } from "@/src/lib/units/fontUnits"
-
 function mapTextElement(element: import("@/lib/types").Element): ImporterElement {
-  const exportFontSize =
-    typeof element.style.fontSize === "number" ? editorFontSizeToImporter(element.style.fontSize, "px") : undefined
-
   return {
     id: element.id,
     type: "text",
@@ -22,7 +17,7 @@ function mapTextElement(element: import("@/lib/types").Element): ImporterElement
     rotation: element.style.rotation,
     style: {
       ...element.style,
-      fontSize: exportFontSize ?? element.style.fontSize,
+      fontSize: element.style.fontSize,
     },
   }
 }

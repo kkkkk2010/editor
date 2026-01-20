@@ -8,7 +8,6 @@ import type {
   ImporterShapeType,
 } from "@/src/lib/import/importerDoc"
 import { defaultSlideSize } from "@/lib/types"
-import { importerFontSizeToEditor } from "@/src/lib/units/fontUnits"
 
 const DEFAULT_BACKGROUND: Background = {
   type: "color",
@@ -95,7 +94,6 @@ function mapElement(
   element: ImporterElement & { assetPath?: string; runtimeSrc?: string },
   scale: number,
   baseUrl?: string,
-  fontUnit?: string,
 ): Element {
   const position = {
     x: element.x * scale,
@@ -108,9 +106,8 @@ function mapElement(
 
   if (element.type === "text") {
     const style = element.style || {}
-    const fontSize = style.fontSize
-      ? importerFontSizeToEditor(style.fontSize, fontUnit) * scale
-      : undefined
+    const baseFontSize = style.fontSize ?? 18
+    const fontSize = baseFontSize * scale
     const fontWeight =
       style.fontWeight ?? (style.bold === undefined ? undefined : style.bold ? "bold" : "normal")
     const fontStyle =
@@ -210,7 +207,6 @@ function mapSlide(
   },
   scale: number,
   baseUrl?: string,
-  fontUnit?: string,
 ): Slide {
   let background = DEFAULT_BACKGROUND
 
@@ -226,7 +222,7 @@ function mapSlide(
   return {
     id: createId("slide"),
     background,
-    elements: slide.elements.map((element) => mapElement(element, scale, baseUrl, fontUnit)),
+    elements: slide.elements.map((element) => mapElement(element, scale, baseUrl)),
   }
 }
 
@@ -244,8 +240,7 @@ export function mapImporterToEditor(
   const targetSlideSize = options?.allowResize ? canvasSize : options?.slideSize || defaultSlideSize
   const scale = options?.allowResize ? 1 : calculateScale(canvasSize, targetSlideSize)
 
-  const fontUnit = doc.slideSize?.unit
-  const slides = doc.slides.map((slide) => mapSlide(slide, scale, options?.baseUrl, fontUnit))
+  const slides = doc.slides.map((slide) => mapSlide(slide, scale, options?.baseUrl))
 
   const metadata: ImportMetadata = {
     baseUrl: options?.baseUrl,

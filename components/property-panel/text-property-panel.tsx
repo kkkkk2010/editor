@@ -52,24 +52,24 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
         </Select>
       </div>
       <div>
-        <Label htmlFor="fontSize">Размер шрифта</Label>
+        <Label htmlFor="fontSize">Размер шрифта (pt)</Label>
         <div className="flex items-center mt-1 space-x-2">
           <Slider
             id="fontSize"
-            min={8}
-            max={96}
+            min={1}
+            max={400}
             step={1}
-            value={[element.style.fontSize || 16]}
+            value={[element.style.fontSize ?? 18]}
             onValueChange={(value) => updateStyle("fontSize", value[0])}
             className="flex-1"
           />
           <Input
             type="number"
-            value={element.style.fontSize || 16}
+            value={element.style.fontSize ?? 18}
             onChange={(e) => updateStyle("fontSize", Number(e.target.value))}
             className="w-16"
-            min={8}
-            max={96}
+            min={1}
+            max={400}
           />
         </div>
       </div>
@@ -163,13 +163,13 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
             min={1}
             max={3}
             step={0.1}
-            value={[element.style.lineHeight || 1.5]}
+            value={[element.style.lineHeight ?? 1]}
             onValueChange={(value) => updateStyle("lineHeight", value[0])}
             className="flex-1"
           />
           <Input
             type="number"
-            value={element.style.lineHeight || 1.5}
+            value={element.style.lineHeight ?? 1}
             onChange={(e) => updateStyle("lineHeight", Number(e.target.value))}
             className="w-16"
             min={1}
