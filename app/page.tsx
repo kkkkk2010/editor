@@ -1141,12 +1141,13 @@ export default function Home() {
           <div className="flex-1 overflow-hidden">
             <EditorLayout
               sidebar={
-                <Sidebar
-                  slides={slides}
-                  currentSlideIndex={currentSlideIndex}
-                  onSlideSelect={(index) =>
-                    setPresent((state) => ({
-                      ...state,
+                  <Sidebar
+                    slides={slides}
+                    currentSlideIndex={currentSlideIndex}
+                    slideSize={slideSize}
+                    onSlideSelect={(index) =>
+                      setPresent((state) => ({
+                        ...state,
                       currentSlideIndex: index,
                       selectedElementId: null,
                     }))
