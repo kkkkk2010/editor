@@ -31,6 +31,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const thumbnailWidth = 192
   const thumbnailHeight = 108
+  const DEBUG_THUMBNAIL = true
 
   const getFitScale = (containerWidth: number, containerHeight: number, slideWidth: number, slideHeight: number) => {
     if (slideWidth <= 0 || slideHeight <= 0) return 1
@@ -126,6 +127,16 @@ export default function Sidebar({
     const scale = getFitScale(thumbnailWidth, thumbnailHeight, slideSize.width, slideSize.height)
     const isCurrent = index === currentSlideIndex
 
+    if (DEBUG_THUMBNAIL) {
+      console.debug("Thumbnail scale", {
+        containerW: thumbnailWidth,
+        containerH: thumbnailHeight,
+        baseW: slideSize.width,
+        baseH: slideSize.height,
+        scale,
+      })
+    }
+
     return (
       <div
         key={slide.id}
@@ -203,18 +214,18 @@ export default function Sidebar({
         >
           <Trash2 className="h-3 w-3" />
         </button>
-        <div
-          className="absolute inset-0 flex items-center justify-center"
-          style={{
-            background: slide.background.value,
-          }}
-        >
+        <div className="absolute inset-0">
           <div
             style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
               width: slideSize.width,
               height: slideSize.height,
-              transform: `scale(${scale})`,
+              transform: `translate(-50%, -50%) scale(${scale})`,
               transformOrigin: "center center",
+              border: DEBUG_THUMBNAIL ? "1px dashed rgba(255,255,255,0.6)" : undefined,
+              background: slide.background.value,
             }}
           >
             <div
