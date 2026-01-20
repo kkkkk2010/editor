@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Download, Loader2 } from "lucide-react"
 import type { Slide, SlideSize } from "@/lib/types"
-import { exportToPPT } from "@/lib/export-ppt"
 
 interface ExportDialogProps {
   slides: Slide[]
@@ -23,6 +22,7 @@ export default function ExportDialog({ slides, slideSize, title, onTitleChange }
   const handleExport = async () => {
     setIsExporting(true)
     try {
+      const { exportToPPT } = await import("@/lib/export-ppt")
       await exportToPPT(slides, slideSize, title || "")
       setOpen(false)
     } catch (error) {
