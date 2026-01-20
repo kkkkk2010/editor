@@ -970,15 +970,6 @@ export default function Home() {
   const handleSaveProject = async () => {
     try {
       const assetStore = assetStoreRef.current
-      const hasShapes = slides.some((slide) => slide.elements.some((element) => element.type === "shape"))
-      if (hasShapes) {
-        toast({
-          title: "Сохранение невозможно",
-          description: "Фигуры пока не поддерживаются в формате проекта.",
-          variant: "destructive",
-        })
-        return
-      }
       const slidesForExport = await Promise.all(
         slides.map(async (slide, slideIndex) => {
           const existingBackgroundPath =

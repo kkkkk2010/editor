@@ -1,5 +1,12 @@
 import type { Slide, SlideSize, Element, Background } from "@/lib/types"
-import type { ImporterDoc, ImporterSlide, ImporterElement, ImportMetadata, ImportResult } from "@/src/lib/import/importerDoc"
+import type {
+  ImporterDoc,
+  ImporterSlide,
+  ImporterElement,
+  ImportMetadata,
+  ImportResult,
+  ImporterShapeType,
+} from "@/src/lib/import/importerDoc"
 import { defaultSlideSize } from "@/lib/types"
 import { importerFontSizeToEditor } from "@/src/lib/units/fontUnits"
 
@@ -132,6 +139,30 @@ function mapElement(
     }
   }
 
+  if (element.type === "shape") {
+    const shapeStyle = element.style || {}
+    const cornerRadius =
+      typeof shapeStyle.cornerRadius === "number" ? shapeStyle.cornerRadius * scale : undefined
+    const shapeType = mapImporterShapeType(element.shapeType)
+
+    return {
+      id: createId("shape"),
+      type: "shape",
+      content: shapeType,
+      position,
+      size,
+      style: {
+        ...shapeStyle,
+        fill: shapeStyle.fill,
+        stroke: shapeStyle.stroke,
+        strokeWidth: shapeStyle.strokeWidth,
+        opacity: shapeStyle.opacity,
+        borderRadius: cornerRadius,
+        rotation: element.rotation,
+      },
+    }
+  }
+
   return {
     id: createId("image"),
     type: "image",
@@ -143,6 +174,33 @@ function mapElement(
       objectFit: element.objectFit || "cover",
       rotation: element.rotation,
     },
+  }
+}
+
+function mapImporterShapeType(shapeType: ImporterShapeType | undefined): string {
+  switch (shapeType) {
+    case "rect":
+      return "rectangle"
+    case "ellipse":
+      return "circle"
+    case "roundRect":
+      return "rectangle"
+    case "line":
+      return "line"
+    case "arrow":
+      return "arrow"
+    case "triangle":
+      return "triangle"
+    case "star":
+      return "star"
+    case "hexagon":
+      return "hexagon"
+    case "pentagon":
+      return "pentagon"
+    case "cloud":
+      return "cloud"
+    default:
+      return "rectangle"
   }
 }
 

@@ -35,6 +35,33 @@ const imageElementSchema = baseElementSchema.extend({
   objectFit: z.string().optional(),
 })
 
+const shapeStyleSchema = z
+  .object({
+    fill: z.string().optional(),
+    stroke: z.string().optional(),
+    strokeWidth: z.number().optional(),
+    opacity: z.number().optional(),
+    cornerRadius: z.number().optional(),
+  })
+  .passthrough()
+
+const shapeElementSchema = baseElementSchema.extend({
+  type: z.literal("shape"),
+  shapeType: z.enum([
+    "rect",
+    "ellipse",
+    "roundRect",
+    "line",
+    "arrow",
+    "triangle",
+    "star",
+    "hexagon",
+    "pentagon",
+    "cloud",
+  ]),
+  style: shapeStyleSchema.optional(),
+})
+
 const backgroundSchema = z
   .object({
     type: z.literal("image"),
@@ -45,7 +72,7 @@ const backgroundSchema = z
 const slideSchema = z.object({
   id: z.string(),
   background: backgroundSchema.optional(),
-  elements: z.array(z.union([textElementSchema, imageElementSchema])),
+  elements: z.array(z.union([textElementSchema, imageElementSchema, shapeElementSchema])),
 })
 
 const importerDocSchema = z.object({
