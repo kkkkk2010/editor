@@ -30,12 +30,24 @@ type EditorState = {
   selectedElementId: string | null
 }
 
+type HistoryState = {
+  past: EditorState[]
+  present: EditorState
+  future: EditorState[]
+}
+
 type HistoryMeta = {
   type?: string
   reason?: string
 }
 
 const MAX_HISTORY = 100
+
+const initialPresent: EditorState = {
+  slides: defaultSlides,
+  currentSlideIndex: 0,
+  selectedElementId: null,
+}
 
 function createId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -141,14 +153,10 @@ function isSameState(a: EditorState, b: EditorState) {
 }
 
 export default function Home() {
-  const [history, setHistory] = useState(() => ({
-    past: [] as EditorState[],
-    present: {
-      slides: defaultSlides,
-      currentSlideIndex: 0,
-      selectedElementId: null,
-    },
-    future: [] as EditorState[],
+  const [history, setHistory] = useState<HistoryState>(() => ({
+    past: [],
+    present: initialPresent,
+    future: [],
   }))
   const [isPreviewMode, setIsPreviewMode] = useState(false)
   const [slideSize, setSlideSize] = useState<SlideSize>(defaultSlideSize)
