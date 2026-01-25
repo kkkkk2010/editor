@@ -358,10 +358,11 @@ export default function SlideEditor({
 
       // 检查焦点是否在属性面板内的输入元素中
       const activeElement = document.activeElement
+      const isEditable = activeElement instanceof HTMLElement && activeElement.isContentEditable
       const isInputElement =
         activeElement instanceof HTMLInputElement ||
         activeElement instanceof HTMLTextAreaElement ||
-        activeElement?.isContentEditable
+        isEditable
 
       if (isInputElement) {
         return // 如果焦点在输入元素中，不处理快捷键
