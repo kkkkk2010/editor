@@ -415,7 +415,7 @@ export default function SlideEditor({
 
   // 修改整个元素的渲染容器，确保正确的定位
   const renderElement = (element: Element) => {
-    const isSelected = selectedElement && selectedElement.id === element.id
+    const isSelected = selectedElement?.id === element.id
     const isLocked = element.style.locked || false
 
     // 修改文本元素的渲染方式，确保ElementContextMenu只包含一个子元素
