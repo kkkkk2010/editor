@@ -1033,9 +1033,10 @@ export default function Home() {
 
       const importerDoc = mapEditorToImporter(slidesForExport, slideSize)
       const zipBytes = exportProjectZip(importerDoc, assetStore)
-      const bytes = zipBytes instanceof Uint8Array ? zipBytes : new Uint8Array(zipBytes as ArrayBufferLike)
-      const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
-      const blob = new Blob([ab], { type: "application/zip" })
+      const src = zipBytes instanceof Uint8Array ? zipBytes : new Uint8Array(zipBytes as ArrayBufferLike)
+      const bytes = new Uint8Array(src.byteLength)
+      bytes.set(src)
+      const blob = new Blob([bytes], { type: "application/zip" })
       FileSaver.saveAs(blob, "out.zip")
       setHasUnsavedChanges(false)
       toast({
