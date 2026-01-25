@@ -32,12 +32,12 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
     })
   }
 
-  const fontFamilies = ["Times New Roman", "Arial", "Georgia", "Verdana", "Courier New"]
-  const selectedFontFamily = element.style.fontFamily ?? "Times New Roman"
-  const normalizedFontFamily = normalizeFontFamily(selectedFontFamily)
+  const defaultFontFamilies = ["Times New Roman", "Arial", "Georgia", "Verdana", "Courier New"]
+  const currentFont = element.style.fontFamily ?? "Arial"
+  const normalizedFontFamily = normalizeFontFamily(currentFont)
   const availableFontFamilies = Array.from(
-    new Set([selectedFontFamily, normalizedFontFamily].filter(Boolean).concat(fontFamilies)),
-  )
+    new Set([currentFont, normalizedFontFamily, ...defaultFontFamilies]).values(),
+  ).filter((font): font is string => typeof font === "string" && font.trim().length > 0)
   const selectedFontSizePt = element.style.fontSizePt ?? 18
 
   const clampFontSize = (value: number) => {
@@ -49,7 +49,7 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
     <div className="space-y-4">
       <div>
         <Label htmlFor="fontFamily">Шрифт</Label>
-        <Select value={selectedFontFamily} onValueChange={(value) => updateStyle("fontFamily", value)}>
+        <Select value={currentFont} onValueChange={(value) => updateStyle("fontFamily", value)}>
           <SelectTrigger id="fontFamily" className="mt-1">
             <SelectValue />
           </SelectTrigger>
