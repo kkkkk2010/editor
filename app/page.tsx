@@ -292,10 +292,11 @@ export default function Home() {
   useEffect(() => {
     const handleHistoryShortcuts = (event: KeyboardEvent) => {
       const activeElement = document.activeElement
+      const activeHtmlElement = activeElement instanceof HTMLElement ? activeElement : null
       const isInputElement =
         activeElement instanceof HTMLInputElement ||
         activeElement instanceof HTMLTextAreaElement ||
-        activeElement?.isContentEditable
+        !!activeHtmlElement?.isContentEditable
 
       if (isInputElement) {
         return
@@ -506,10 +507,11 @@ export default function Home() {
       if (event.key !== "Delete" && event.key !== "Backspace") return
 
       const activeElement = document.activeElement
+      const activeHtmlElement = activeElement instanceof HTMLElement ? activeElement : null
       const isEditingText =
         activeElement instanceof HTMLInputElement ||
         activeElement instanceof HTMLTextAreaElement ||
-        activeElement?.isContentEditable
+        !!activeHtmlElement?.isContentEditable
 
       if (isEditingText) {
         return
