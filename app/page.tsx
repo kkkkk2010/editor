@@ -1033,7 +1033,10 @@ export default function Home() {
 
       const importerDoc = mapEditorToImporter(slidesForExport, slideSize)
       const zipBytes = exportProjectZip(importerDoc, assetStore)
-      FileSaver.saveAs(new Blob([zipBytes], { type: "application/zip" }), "out.zip")
+      const bytes = zipBytes instanceof Uint8Array ? zipBytes : new Uint8Array(zipBytes as ArrayBufferLike)
+      const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+      const blob = new Blob([ab], { type: "application/zip" })
+      FileSaver.saveAs(blob, "out.zip")
       setHasUnsavedChanges(false)
       toast({
         title: "Проект сохранен",
