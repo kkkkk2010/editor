@@ -8,6 +8,8 @@ export interface Size {
   height: number
 }
 
+export type ObjectFitMode = "cover" | "contain" | "fill" | "none" | "scale-down"
+
 export interface TextStyle {
   fontFamily?: string
   fontSizePt?: number
@@ -29,7 +31,7 @@ export interface TextStyle {
   borderColor?: string
   borderWidth?: number
   borderRadius?: number
-  objectFit?: "cover" | "contain" | "fill" | "none" | "scale-down"
+  objectFit?: ObjectFitMode
   filter?: string
   rotation?: number
   // 动画相关属性
