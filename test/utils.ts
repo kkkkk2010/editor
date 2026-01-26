@@ -13,9 +13,16 @@ export function makeProjectZipBytes(
   }
 
   Object.entries(assets).forEach(([assetName, value]) => {
+    if (assetName === "doc.json" || assetName === "/doc.json" || assetName === "./doc.json") {
+      throw new Error("Assets map must not override doc.json")
+    }
     const assetPath = assetName.startsWith("assets/") ? assetName : `assets/${assetName}`
     files[assetPath] = typeof value === "string" ? encoder.encode(value) : value
   })
+
+  if (!(files["doc.json"] instanceof Uint8Array)) {
+    throw new Error("makeProjectZipBytes expects doc.json to be Uint8Array bytes")
+  }
 
   return zipSync(files)
 }

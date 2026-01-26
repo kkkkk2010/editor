@@ -53,6 +53,9 @@ export function exportProjectZip(doc: ImporterDoc, assetStore: AssetStore): Uint
     "doc.json": encoder.encode(JSON.stringify(doc, null, 2)),
   }
   normalizeDocEntry(files)
+  if (!(files["doc.json"] instanceof Uint8Array)) {
+    throw new Error("Экспорт doc.json должен быть байтовым массивом")
+  }
 
   const assetPaths = collectAssetPaths(doc)
   assetPaths.forEach((path) => {
