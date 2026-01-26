@@ -4,7 +4,7 @@ import { importZipFile } from "@/src/lib/import/zipImport"
 import { exportProjectZip } from "@/src/lib/project/exportProjectZip"
 import { AssetStore } from "@/src/lib/assets/assetStore"
 import type { ImporterDoc } from "@/src/lib/import/importerDoc"
-import { makeZipBytes, makeZipInput } from "./utils"
+import { makeProjectZipBytes } from "./utils"
 
 const INVALID_ASSET_PREFIX = /^(blob:|data:|https?:|file:)/i
 
@@ -49,13 +49,11 @@ describe("zip import/export", () => {
         },
       ],
     }
-    const zipBytes = makeZipBytes({
-      "doc.json": JSON.stringify(importerDoc, null, 2),
-      "assets/images/fixture.png": new Uint8Array([1, 2, 3, 4]),
+    const zipBytes = makeProjectZipBytes(importerDoc, {
+      "images/fixture.png": new Uint8Array([1, 2, 3, 4]),
     })
-    const input = makeZipInput(zipBytes)
     const assetStore = new AssetStore()
-    const result = await importZipFile(input, assetStore)
+    const result = await importZipFile(zipBytes, assetStore)
 
     expect(result.doc.schemaVersion).toBe(1)
     const textElement = result.doc.slides[0].elements[0]

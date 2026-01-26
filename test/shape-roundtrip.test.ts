@@ -5,7 +5,7 @@ import { importZipFile } from "@/src/lib/import/zipImport"
 import { validateImporterDoc } from "@/src/lib/import/validateImporterDoc"
 import { AssetStore } from "@/src/lib/assets/assetStore"
 import { defaultSlideSize, type Slide } from "@/lib/types"
-import { makeZipBytes, makeZipInput } from "./utils"
+import { makeProjectZipBytes } from "./utils"
 
 describe("shape save/load roundtrip", () => {
   it("preserves shape elements across export/import", async () => {
@@ -36,12 +36,9 @@ describe("shape save/load roundtrip", () => {
     const validation = validateImporterDoc(importerDoc)
     expect(validation.ok).toBe(true)
 
-    const zipBytes = makeZipBytes({
-      "doc.json": JSON.stringify(importerDoc, null, 2),
-    })
-    const input = makeZipInput(zipBytes)
+    const zipBytes = makeProjectZipBytes(importerDoc)
 
-    const imported = await importZipFile(input, new AssetStore())
+    const imported = await importZipFile(zipBytes, new AssetStore())
     const mapped = mapImporterToEditor(imported.doc, {
       allowResize: true,
       sourceSlideSize: imported.sourceSlideSize,

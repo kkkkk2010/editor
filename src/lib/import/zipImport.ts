@@ -120,7 +120,7 @@ export async function importZipFile(input: ZipImportInput, assetStore?: AssetSto
   let parsedDoc: unknown
   try {
     parsedDoc = buildDocJson(docBytes)
-  } catch (error) {
+  } catch {
     throw new Error("doc.json содержит невалидный JSON")
   }
 

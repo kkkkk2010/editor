@@ -4,7 +4,7 @@ import { importZipFile } from "@/src/lib/import/zipImport"
 import { AssetStore } from "@/src/lib/assets/assetStore"
 import type { Slide } from "@/lib/types"
 import { defaultSlideSize } from "@/lib/types"
-import { makeZipBytes, makeZipInput } from "./utils"
+import { makeProjectZipBytes } from "./utils"
 
 describe("slide order roundtrip", () => {
   it("preserves order and content after reorder and duplicate", async () => {
@@ -47,12 +47,9 @@ describe("slide order roundtrip", () => {
 
     const reorderedSlides = [slides[1], duplicatedSlide, slides[0]]
     const importerDoc = mapEditorToImporter(reorderedSlides, defaultSlideSize)
-    const zipBytes = makeZipBytes({
-      "doc.json": JSON.stringify(importerDoc, null, 2),
-    })
-    const input = makeZipInput(zipBytes)
+    const zipBytes = makeProjectZipBytes(importerDoc)
 
-    const imported = await importZipFile(input, new AssetStore())
+    const imported = await importZipFile(zipBytes, new AssetStore())
 
     expect(imported.doc.slides.map((slide) => slide.id)).toEqual(["slide-b", "slide-a-copy", "slide-a"])
     const duplicated = imported.doc.slides[1]
