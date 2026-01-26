@@ -43,8 +43,8 @@ export function makeFixtureZipFile(bytes: Uint8Array): File | Uint8Array {
   if (!canUseFile) {
     return bytes
   }
-  const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
-  return new File([ab], "fixture.zip", { type: "application/zip" })
+  const part = bytes.slice()
+  return new File([part], "fixture.zip", { type: "application/zip" })
 }
 
 export function getZipEntryKeys(bytes: Uint8Array, limit = 50): string[] {
