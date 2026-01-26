@@ -49,12 +49,24 @@ function normalizeDocEntry(files: Record<string, Uint8Array>) {
 
 export function exportProjectZip(doc: ImporterDoc, assetStore: AssetStore): Uint8Array {
   const encoder = new TextEncoder()
+  const toBytes = (value: unknown): Uint8Array => {
+    if (value instanceof Uint8Array) {
+      return value
+    }
+    if (ArrayBuffer.isView(value)) {
+      return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+    }
+    if (typeof value === "string") {
+      return encoder.encode(value)
+    }
+    return encoder.encode(JSON.stringify(value, null, 2))
+  }
   const files: Record<string, Uint8Array> = {
-    "doc.json": encoder.encode(JSON.stringify(doc, null, 2)),
+    "doc.json": toBytes(JSON.stringify(doc, null, 2)),
   }
   normalizeDocEntry(files)
   if (!(files["doc.json"] instanceof Uint8Array)) {
-    throw new Error("Экспорт doc.json должен быть байтовым массивом")
+    throw new Error("Экспорт doc.json должен быть сериализован в байты")
   }
 
   const assetPaths = collectAssetPaths(doc)

@@ -8,8 +8,20 @@ export function makeProjectZipBytes(
   assets: Record<string, Uint8Array | string> = {}
 ): Uint8Array {
   const encoder = new TextEncoder()
+  const toBytes = (value: unknown): Uint8Array => {
+    if (value instanceof Uint8Array) {
+      return value
+    }
+    if (ArrayBuffer.isView(value)) {
+      return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+    }
+    if (typeof value === "string") {
+      return encoder.encode(value)
+    }
+    return encoder.encode(JSON.stringify(value, null, 2))
+  }
   const files: Record<string, Uint8Array> = {
-    "doc.json": encoder.encode(JSON.stringify(doc, null, 2)),
+    "doc.json": toBytes(doc),
   }
 
   Object.entries(assets).forEach(([assetName, value]) => {
@@ -17,11 +29,10 @@ export function makeProjectZipBytes(
       throw new Error("Assets map must not override doc.json")
     }
     const assetPath = assetName.startsWith("assets/") ? assetName : `assets/${assetName}`
-    files[assetPath] = typeof value === "string" ? encoder.encode(value) : value
+    files[assetPath] = toBytes(value)
   })
-
   if (!(files["doc.json"] instanceof Uint8Array)) {
-    throw new Error("makeProjectZipBytes expects doc.json to be Uint8Array bytes")
+    throw new Error("makeProjectZipBytes must serialize doc.json into bytes")
   }
 
   return zipSync(files)
