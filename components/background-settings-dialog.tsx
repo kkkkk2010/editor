@@ -75,6 +75,12 @@ export default function BackgroundSettingsDialog({ background, onBackgroundChang
     "https://images.unsplash.com/photo-1501854140801-50d01698950b?w=960&h=540&fit=crop",
   ]
 
+  const handleTabChange = (value: string) => {
+    if (value === "color" || value === "gradient" || value === "image") {
+      setActiveTab(value)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -88,7 +94,7 @@ export default function BackgroundSettingsDialog({ background, onBackgroundChang
           <DialogTitle>Настройка фона слайда</DialogTitle> {/* Перевел: "幻灯片背景设置" */}
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="grid grid-cols-3 w-full">
             <TabsTrigger value="color">Однотонный</TabsTrigger> {/* Перевел: "纯色" */}
             <TabsTrigger value="gradient">Градиент</TabsTrigger> {/* Перевел: "渐变" */}

@@ -14,6 +14,10 @@ interface PropertyPanelProps {
   onReplaceImage?: (imageUrl: string, file?: File) => void
   onClose: () => void
   currentSlide?: Slide
+  onMoveElementForward?: (element: Element) => void
+  onMoveElementBackward?: (element: Element) => void
+  onMoveElementToFront?: (element: Element) => void
+  onMoveElementToBack?: (element: Element) => void
 }
 
 export default function PropertyPanel({

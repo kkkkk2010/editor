@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select"
 import { Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { normalizeFontFamily } from "@/lib/text-style"
 
 interface TextPropertyPanelProps {
   element: Element
@@ -31,19 +32,29 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
     })
   }
 
-  const fontFamilies = ["Arial", "Times New Roman", "Georgia", "Verdana", "Courier New"]
-  const currentFontFamily = element.style.fontFamily || "Arial"
+  const defaultFontFamilies = ["Times New Roman", "Arial", "Georgia", "Verdana", "Courier New"]
+  const currentFont = element.style.fontFamily ?? "Arial"
+  const normalizedFontFamily = normalizeFontFamily(currentFont)
+  const availableFontFamilies = Array.from(
+    new Set([currentFont, normalizedFontFamily, ...defaultFontFamilies]).values(),
+  ).filter((font): font is string => typeof font === "string" && font.trim().length > 0)
+  const selectedFontSizePt = element.style.fontSizePt ?? 18
+
+  const clampFontSize = (value: number) => {
+    const clamped = Math.min(200, Math.max(6, value))
+    return Math.round(clamped * 2) / 2
+  }
 
   return (
     <div className="space-y-4">
       <div>
         <Label htmlFor="fontFamily">Шрифт</Label>
-        <Select value={currentFontFamily} onValueChange={(value) => updateStyle("fontFamily", value)}>
+        <Select value={currentFont} onValueChange={(value) => updateStyle("fontFamily", value)}>
           <SelectTrigger id="fontFamily" className="mt-1">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {fontFamilies.map((fontFamily) => (
+            {availableFontFamilies.map((fontFamily) => (
               <SelectItem key={fontFamily} value={fontFamily}>
                 {fontFamily}
               </SelectItem>
@@ -52,24 +63,25 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
         </Select>
       </div>
       <div>
-        <Label htmlFor="fontSize">Размер шрифта</Label>
+        <Label htmlFor="fontSize">Размер шрифта (pt)</Label>
         <div className="flex items-center mt-1 space-x-2">
           <Slider
             id="fontSize"
-            min={8}
-            max={96}
-            step={1}
-            value={[element.style.fontSize || 16]}
-            onValueChange={(value) => updateStyle("fontSize", value[0])}
+            min={6}
+            max={200}
+            step={0.5}
+            value={[selectedFontSizePt]}
+            onValueChange={(value) => updateStyle("fontSizePt", clampFontSize(value[0]))}
             className="flex-1"
           />
           <Input
             type="number"
-            value={element.style.fontSize || 16}
-            onChange={(e) => updateStyle("fontSize", Number(e.target.value))}
+            value={selectedFontSizePt}
+            onChange={(e) => updateStyle("fontSizePt", clampFontSize(Number(e.target.value)))}
             className="w-16"
-            min={8}
-            max={96}
+            min={6}
+            max={200}
+            step={0.5}
           />
         </div>
       </div>
@@ -163,13 +175,13 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
             min={1}
             max={3}
             step={0.1}
-            value={[element.style.lineHeight || 1.5]}
+            value={[element.style.lineHeight ?? 1]}
             onValueChange={(value) => updateStyle("lineHeight", value[0])}
             className="flex-1"
           />
           <Input
             type="number"
-            value={element.style.lineHeight || 1.5}
+            value={element.style.lineHeight ?? 1}
             onChange={(e) => updateStyle("lineHeight", Number(e.target.value))}
             className="w-16"
             min={1}

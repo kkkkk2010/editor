@@ -2,6 +2,7 @@ import html2canvas from "html2canvas"
 import JSZip from "jszip"
 import FileSaver from "file-saver"
 import type { Slide, SlideSize } from "@/lib/types"
+import { ptToPx } from "@/lib/utils/units"
 
 const INVALID_FILENAME_CHARS = /[<>:"/\\|?*]/g
 
@@ -442,13 +443,13 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
         elementDiv.style.height = `${element.size.height}px`
 
         if (element.type === "text") {
-          elementDiv.style.fontSize = `${element.style.fontSize || 16}px`
+          elementDiv.style.fontSize = `${ptToPx(element.style.fontSizePt ?? 18)}px`
           elementDiv.style.fontWeight = element.style.fontWeight || "normal"
           elementDiv.style.fontStyle = element.style.fontStyle || "normal"
           elementDiv.style.textDecoration = element.style.textDecoration || "none"
           elementDiv.style.color = element.style.color || "#000"
           elementDiv.style.textAlign = element.style.textAlign || "left"
-          elementDiv.style.lineHeight = element.style.lineHeight ? `${element.style.lineHeight}` : "1.5"
+          elementDiv.style.lineHeight = element.style.lineHeight ? `${element.style.lineHeight}` : "normal"
           elementDiv.innerText = element.content
         } else if (element.type === "image") {
           const img = document.createElement("img")

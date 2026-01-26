@@ -8,9 +8,11 @@ export interface Size {
   height: number
 }
 
+export type ObjectFitMode = "cover" | "contain" | "fill" | "none" | "scale-down"
+
 export interface TextStyle {
   fontFamily?: string
-  fontSize?: number
+  fontSizePt?: number
   bold?: boolean
   italic?: boolean
   underline?: boolean
@@ -20,7 +22,7 @@ export interface TextStyle {
   textDecoration?: string
   color?: string
   textAlign?: string
-  lineHeight?: string | number
+  lineHeight?: number
   letterSpacing?: number
   fill?: string
   stroke?: string
@@ -29,7 +31,7 @@ export interface TextStyle {
   borderColor?: string
   borderWidth?: number
   borderRadius?: number
-  objectFit?: string
+  objectFit?: ObjectFitMode
   filter?: string
   rotation?: number
   // 动画相关属性
@@ -89,7 +91,7 @@ export const defaultSlides: Slide[] = [
         position: { x: 200, y: 200 },
         size: { width: 520, height: 80 },
         style: {
-          fontSize: 48,
+          fontSizePt: 48,
           fontWeight: "bold",
           color: "#ffffff",
           textAlign: "center",
@@ -102,7 +104,7 @@ export const defaultSlides: Slide[] = [
         position: { x: 280, y: 300 },
         size: { width: 400, height: 40 },
         style: {
-          fontSize: 24,
+          fontSizePt: 24,
           fontWeight: "normal",
           color: "#ffffff",
           textAlign: "center",
@@ -115,7 +117,7 @@ export const defaultSlides: Slide[] = [
         position: { x: 280, y: 320 },
         size: { width: 400, height: 40 },
         style: {
-          fontSize: 24,
+          fontSizePt: 24,
           fontWeight: "normal",
           color: "#ffffff",
           textAlign: "center",
@@ -137,7 +139,7 @@ export const defaultSlides: Slide[] = [
         position: { x: 50, y: 50 },
         size: { width: 200, height: 60 },
         style: {
-          fontSize: 36,
+          fontSizePt: 36,
           fontWeight: "bold",
           color: "#ffffff",
           textAlign: "left",
@@ -150,7 +152,7 @@ export const defaultSlides: Slide[] = [
         position: { x: 50, y: 130 },
         size: { width: 400, height: 300 },
         style: {
-          fontSize: 24,
+          fontSizePt: 24,
           fontWeight: "normal",
           color: "#ffffff",
           textAlign: "left",
@@ -172,7 +174,7 @@ export const defaultSlides: Slide[] = [
         position: { x: 50, y: 50 },
         size: { width: 400, height: 60 },
         style: {
-          fontSize: 36,
+          fontSizePt: 36,
           fontWeight: "bold",
           color: "#ffffff",
           textAlign: "left",
@@ -185,7 +187,7 @@ export const defaultSlides: Slide[] = [
         position: { x: 50, y: 130 },
         size: { width: 400, height: 300 },
         style: {
-          fontSize: 24,
+          fontSizePt: 24,
           fontWeight: "normal",
           color: "#ffffff",
           textAlign: "left",

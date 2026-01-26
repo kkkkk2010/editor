@@ -19,11 +19,13 @@ export interface ImporterBackground {
   src: string
 }
 
-export type ImporterElement = ImporterTextElement | ImporterImageElement
+export type ImporterElement = ImporterTextElement | ImporterImageElement | ImporterShapeElement
+
+export type ImporterElementType = "text" | "image" | "shape"
 
 export interface ImporterBaseElement {
   id: string
-  type: "text" | "image"
+  type: ImporterElementType
   x: number
   y: number
   width: number
@@ -33,6 +35,7 @@ export interface ImporterBaseElement {
 
 export interface ImporterTextStyle {
   fontFamily?: string
+  fontSizePt?: number
   fontSize?: number
   color?: string
   bold?: boolean
@@ -54,6 +57,33 @@ export interface ImporterImageElement extends ImporterBaseElement {
   type: "image"
   src: string
   objectFit?: string
+}
+
+export type ImporterShapeType =
+  | "rect"
+  | "ellipse"
+  | "roundRect"
+  | "line"
+  | "arrow"
+  | "triangle"
+  | "star"
+  | "hexagon"
+  | "pentagon"
+  | "cloud"
+
+export interface ImporterShapeStyle {
+  fill?: string
+  stroke?: string
+  strokeWidth?: number
+  opacity?: number
+  cornerRadius?: number
+  [key: string]: unknown
+}
+
+export interface ImporterShapeElement extends ImporterBaseElement {
+  type: "shape"
+  shapeType: ImporterShapeType
+  style?: ImporterShapeStyle
 }
 
 export interface ImportMetadata {
