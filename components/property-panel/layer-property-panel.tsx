@@ -25,8 +25,6 @@ export default function LayerPropertyPanel({
   const elementIndex = currentSlide.elements.findIndex((el) => el.id === element.id)
   const isTopElement = elementIndex === currentSlide.elements.length - 1
   const isBottomElement = elementIndex === 0
-  const isLocked = element.style.locked || false
-  const isHidden = element.style.hidden || false
 
   return (
     <div className="space-y-4">

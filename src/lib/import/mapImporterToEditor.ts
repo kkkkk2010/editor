@@ -138,7 +138,9 @@ function mapElement(
     const normalizedStyle = normalizeTextStyle(style)
     const fontSizePt =
       normalizedStyle.fontSizePt ?? (normalizedStyle.fontSize !== undefined ? pxToPt(normalizedStyle.fontSize) : undefined) ?? 18
-    const { fontFamily, fontSize, fontSizePt: _fontSizePt, ...restStyle } = style
+    const { fontFamily, fontSize, fontSizePt: rawFontSizePt, ...restStyle } = style
+    void fontSize
+    void rawFontSizePt
 
     return {
       id: createId("text"),

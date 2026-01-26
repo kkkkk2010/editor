@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest"
 import { mapEditorToImporter } from "@/src/lib/import/mapEditorToImporter"
 import { mapImporterToEditor } from "@/src/lib/import/mapImporterToEditor"
-import { exportProjectZip } from "@/src/lib/project/exportProjectZip"
 import { importZipFile } from "@/src/lib/import/zipImport"
 import { validateImporterDoc } from "@/src/lib/import/validateImporterDoc"
 import { AssetStore } from "@/src/lib/assets/assetStore"
 import { defaultSlideSize, type Slide } from "@/lib/types"
-import { toArrayBuffer } from "./utils"
+import { makeZipBytes, makeZipInput } from "./utils"
 
 describe("shape save/load roundtrip", () => {
   it("preserves shape elements across export/import", async () => {
@@ -37,12 +36,12 @@ describe("shape save/load roundtrip", () => {
     const validation = validateImporterDoc(importerDoc)
     expect(validation.ok).toBe(true)
 
-    const assetStore = new AssetStore()
-    const zipBytes = exportProjectZip(importerDoc, assetStore)
-    const bytes = zipBytes instanceof Uint8Array ? zipBytes : new Uint8Array(zipBytes as ArrayBufferLike)
-    const file = new File([toArrayBuffer(bytes)], "out.zip", { type: "application/zip" })
+    const zipBytes = makeZipBytes({
+      "doc.json": JSON.stringify(importerDoc, null, 2),
+    })
+    const input = makeZipInput(zipBytes)
 
-    const imported = await importZipFile(file, new AssetStore())
+    const imported = await importZipFile(input, new AssetStore())
     const mapped = mapImporterToEditor(imported.doc, {
       allowResize: true,
       sourceSlideSize: imported.sourceSlideSize,

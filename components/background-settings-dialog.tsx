@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,14 +24,6 @@ export default function BackgroundSettingsDialog({ background, onBackgroundChang
   const [imageValue, setImageValue] = useState(
     background.type === "image" ? background.value : "/placeholder.svg?height=540&width=960",
   )
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
-
-  // 当图片URL变化时更新预览
-  useEffect(() => {
-    if (activeTab === "image") {
-      setImagePreview(imageValue)
-    }
-  }, [imageValue, activeTab])
 
   const handleSave = () => {
     const newBackground: Background = {

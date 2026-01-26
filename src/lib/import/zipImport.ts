@@ -87,9 +87,25 @@ async function getImageDimensions(bytes: Uint8Array, mimeType: string): Promise<
   return null
 }
 
-export async function importZipFile(file: File, assetStore?: AssetStore): Promise<ZipImportResult> {
-  const arrayBuffer = await file.arrayBuffer()
-  const zipContents = unzipSync(new Uint8Array(arrayBuffer))
+export type ZipImportInput = File | ArrayBuffer | Uint8Array
+
+async function readZipBytes(input: ZipImportInput): Promise<Uint8Array> {
+  if (input instanceof Uint8Array) {
+    return input
+  }
+  if (input instanceof ArrayBuffer) {
+    return new Uint8Array(input)
+  }
+  if (typeof (input as File).arrayBuffer === "function") {
+    const arrayBuffer = await (input as File).arrayBuffer()
+    return new Uint8Array(arrayBuffer)
+  }
+  throw new Error("Неподдерживаемый тип входных данных для ZIP импорта")
+}
+
+export async function importZipFile(input: ZipImportInput, assetStore?: AssetStore): Promise<ZipImportResult> {
+  const zipBytes = await readZipBytes(input)
+  const zipContents = unzipSync(zipBytes)
   const entries = new Map(Object.entries(zipContents))
 
   if (!entries.has("doc.json")) {

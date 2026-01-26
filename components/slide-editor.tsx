@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import type { Slide, Element, SlideSize } from "@/lib/types"
 import ElementContextMenu from "@/components/context-menu/element-context-menu"
 import { renderAdvancedShape } from "@/components/shapes/advanced-shapes"
@@ -142,7 +142,7 @@ export default function SlideEditor({
     setDraggingElement(element)
   }
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!editorRef.current || (!draggingElement && !resizing)) return
 
     const editorRect = editorRef.current.getBoundingClientRect()
@@ -251,18 +251,28 @@ export default function SlideEditor({
         onElementSelect(updatedElement)
       }
     }
-  }
+  }, [
+    dragOffset,
+    draggingElement,
+    resizing,
+    resizeDirection,
+    selectedElement,
+    slide,
+    slideSize,
+    onUpdateSlide,
+    onElementSelect,
+  ])
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     if (draggingElement || resizing) {
       onTransformEnd?.()
     }
     setDraggingElement(null)
     setResizing(false)
     setResizeDirection("")
-  }
+  }, [draggingElement, resizing, onTransformEnd])
 
-  const handleTextDoubleClick = (element: Element, e: React.MouseEvent) => {
+  const handleTextDoubleClick = (element: Element) => {
     if (element.type !== "text" || element.style.locked) return
 
     const input = document.createElement("textarea")
@@ -411,7 +421,7 @@ export default function SlideEditor({
       window.removeEventListener("mousemove", handleMouseMove)
       window.removeEventListener("mouseup", handleMouseUp)
     }
-  }, [draggingElement, resizing, selectedElement, dragOffset, resizeDirection])
+  }, [handleMouseMove, handleMouseUp])
 
   // 修改整个元素的渲染容器，确保正确的定位
   const renderElement = (element: Element) => {
@@ -477,7 +487,7 @@ export default function SlideEditor({
           onDelete={onDeleteElement}
           onMoveForward={onMoveElementForward}
           onMoveBackward={onMoveElementBackward}
-          onEdit={() => handleTextDoubleClick(element, {} as React.MouseEvent)}
+          onEdit={() => handleTextDoubleClick(element)}
           onLockToggle={onLockToggle}
         >
           <TextElementView
@@ -488,7 +498,7 @@ export default function SlideEditor({
             containerStyle={animationStyle}
             onClick={(e) => handleElementClick(element, e)}
             onMouseDown={(e) => handleElementMouseDown(element, e)}
-            onDoubleClick={(e) => handleTextDoubleClick(element, e)}
+            onDoubleClick={() => handleTextDoubleClick(element)}
             onContextMenu={handleElementContextMenu}
           >
             {isSelected && !isLocked && renderResizeHandles(element)}

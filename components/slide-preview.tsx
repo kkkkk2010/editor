@@ -121,7 +121,12 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
             }
 
             return (
-              <TextElementView element={element} enablePointerEvents={false} containerStyle={animationStyle} />
+              <TextElementView
+                key={element.id}
+                element={element}
+                enablePointerEvents={false}
+                containerStyle={animationStyle}
+              />
             )
           }
           if (element.type === "image") {
