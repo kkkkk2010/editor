@@ -9,16 +9,16 @@ export function makeProjectZipBytes(
 ): Uint8Array {
   const encoder = new TextEncoder()
   const toBytes = (value: unknown): Uint8Array => {
-    if (value instanceof Uint8Array) {
-      return value
-    }
     if (ArrayBuffer.isView(value)) {
-      return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+      return new Uint8Array(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength))
+    }
+    if (value instanceof ArrayBuffer) {
+      return new Uint8Array(value)
     }
     if (typeof value === "string") {
-      return encoder.encode(value)
+      return new Uint8Array(encoder.encode(value))
     }
-    return encoder.encode(JSON.stringify(value, null, 2))
+    return new Uint8Array(encoder.encode(JSON.stringify(value, null, 2)))
   }
   const files: Record<string, Uint8Array> = {
     "doc.json": toBytes(doc),
