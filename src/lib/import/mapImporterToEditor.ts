@@ -3,6 +3,7 @@ import type {
   ImporterDoc,
   ImporterSlide,
   ImporterElement,
+  ImporterTextStyle,
   ImportMetadata,
   ImportResult,
   ImporterShapeType,
@@ -95,6 +96,29 @@ function calculateScale(canvas: { width: number; height: number }, target: Slide
   return Math.min(scaleX, scaleY)
 }
 
+function normalizeTextStyle(style?: ImporterTextStyle) {
+  const fontWeight: string | undefined = style?.bold ? "700" : undefined
+  const fontStyle: string | undefined = style?.italic ? "italic" : undefined
+  const textDecoration: string | undefined = style?.underline ? "underline" : undefined
+  const textAlign: "left" | "center" | "right" | "justify" | undefined =
+    style?.align === "left" || style?.align === "center" || style?.align === "right" || style?.align === "justify"
+      ? style?.align
+      : undefined
+
+  return {
+    fontFamily: style?.fontFamily,
+    fontSizePt: style?.fontSizePt,
+    fontSize: style?.fontSize,
+    color: style?.color,
+    fontWeight,
+    fontStyle,
+    textDecoration,
+    textAlign,
+    lineHeight: style?.lineHeight,
+    letterSpacing: style?.letterSpacing,
+  } as const
+}
+
 function mapElement(
   element: ImporterElement & { assetPath?: string; runtimeSrc?: string },
   scale: number,
@@ -111,14 +135,9 @@ function mapElement(
 
   if (element.type === "text") {
     const style = element.style || {}
-    const fontSizePt = style.fontSizePt ?? (style.fontSize !== undefined ? pxToPt(style.fontSize) : undefined) ?? 18
-    const fontWeight =
-      style.fontWeight ?? (style.bold === undefined ? undefined : style.bold ? "bold" : "normal")
-    const fontStyle =
-      style.fontStyle ?? (style.italic === undefined ? undefined : style.italic ? "italic" : "normal")
-    const textDecoration =
-      style.textDecoration ?? (style.underline === undefined ? undefined : style.underline ? "underline" : "none")
-    const textAlign = style.textAlign ?? style.align
+    const normalizedStyle = normalizeTextStyle(style)
+    const fontSizePt =
+      normalizedStyle.fontSizePt ?? (normalizedStyle.fontSize !== undefined ? pxToPt(normalizedStyle.fontSize) : undefined) ?? 18
     const { fontFamily, fontSize, fontSizePt: _fontSizePt, ...restStyle } = style
 
     return {
@@ -131,11 +150,11 @@ function mapElement(
         ...restStyle,
         fontFamily: normalizeFontFamily(fontFamily),
         fontSizePt,
-        color: style.color,
-        fontWeight,
-        fontStyle,
-        textDecoration,
-        textAlign,
+        color: normalizedStyle.color,
+        fontWeight: normalizedStyle.fontWeight,
+        fontStyle: normalizedStyle.fontStyle,
+        textDecoration: normalizedStyle.textDecoration,
+        textAlign: normalizedStyle.textAlign,
         rotation: element.rotation,
       },
     }
