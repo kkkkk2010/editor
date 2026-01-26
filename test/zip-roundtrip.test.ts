@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { unzipSync } from "fflate"
-import { importZipFile } from "@/src/lib/import/zipImport"
+import { importZipFileWithDebug } from "./utils"
 import { exportProjectZip } from "@/src/lib/project/exportProjectZip"
 import { AssetStore } from "@/src/lib/assets/assetStore"
 import type { ImporterDoc } from "@/src/lib/import/importerDoc"
@@ -53,7 +53,7 @@ describe("zip import/export", () => {
       "images/fixture.png": new Uint8Array([1, 2, 3, 4]),
     })
     const assetStore = new AssetStore()
-    const result = await importZipFile(zipBytes, assetStore)
+    const result = await importZipFileWithDebug(zipBytes, assetStore)
 
     expect(result.doc.schemaVersion).toBe(1)
     const textElement = result.doc.slides[0].elements[0]

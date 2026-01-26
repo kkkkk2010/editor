@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { mapEditorToImporter } from "@/src/lib/import/mapEditorToImporter"
 import { mapImporterToEditor } from "@/src/lib/import/mapImporterToEditor"
-import { importZipFile } from "@/src/lib/import/zipImport"
+import { importZipFileWithDebug } from "./utils"
 import { validateImporterDoc } from "@/src/lib/import/validateImporterDoc"
 import { AssetStore } from "@/src/lib/assets/assetStore"
 import { defaultSlideSize, type Slide } from "@/lib/types"
@@ -38,7 +38,7 @@ describe("shape save/load roundtrip", () => {
 
     const zipBytes = makeProjectZipBytes(importerDoc)
 
-    const imported = await importZipFile(zipBytes, new AssetStore())
+    const imported = await importZipFileWithDebug(zipBytes, new AssetStore())
     const mapped = mapImporterToEditor(imported.doc, {
       allowResize: true,
       sourceSlideSize: imported.sourceSlideSize,
