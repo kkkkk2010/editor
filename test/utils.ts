@@ -31,7 +31,7 @@ export function makeProjectZipBytes(
     const assetPath = assetName.startsWith("assets/") ? assetName : `assets/${assetName}`
     files[assetPath] = toBytes(value)
   })
-  if (!(files["doc.json"] instanceof Uint8Array)) {
+  if (!ArrayBuffer.isView(files["doc.json"])) {
     throw new Error("makeProjectZipBytes must serialize doc.json into bytes")
   }
 

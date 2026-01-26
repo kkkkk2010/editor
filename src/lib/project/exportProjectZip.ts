@@ -65,7 +65,7 @@ export function exportProjectZip(doc: ImporterDoc, assetStore: AssetStore): Uint
     "doc.json": toBytes(JSON.stringify(doc, null, 2)),
   }
   normalizeDocEntry(files)
-  if (!(files["doc.json"] instanceof Uint8Array)) {
+  if (!ArrayBuffer.isView(files["doc.json"])) {
     throw new Error("Экспорт doc.json должен быть сериализован в байты")
   }
 
