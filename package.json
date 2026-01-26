@@ -45,7 +45,11 @@
     "cmdk": "1.0.4",
     "date-fns": "4.1.0",
     "embla-carousel-react": "8.5.1",
+    "fflate": "^0.8.2",
+    "file-saver": "latest",
+    "html2canvas": "latest",
     "input-otp": "1.4.1",
+    "jszip": "latest",
     "lucide-react": "^0.454.0",
     "next": "15.1.0",
     "next-themes": "^0.4.4",
@@ -58,13 +62,10 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
-    "zod": "^3.24.1",
-    "html2canvas": "latest",
-    "jszip": "latest",
-    "file-saver": "latest",
-    "fflate": "^0.8.2"
+    "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/file-saver": "^2.0.7",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
