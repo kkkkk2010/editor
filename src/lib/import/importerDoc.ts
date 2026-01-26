@@ -21,9 +21,11 @@ export interface ImporterBackground {
 
 export type ImporterElement = ImporterTextElement | ImporterImageElement | ImporterShapeElement
 
+export type ImporterElementType = "text" | "image" | "shape"
+
 export interface ImporterBaseElement {
   id: string
-  type: "text" | "image"
+  type: ImporterElementType
   x: number
   y: number
   width: number
