@@ -29,7 +29,7 @@ export interface TextStyle {
   borderColor?: string
   borderWidth?: number
   borderRadius?: number
-  objectFit?: string
+  objectFit?: "cover" | "contain" | "fill" | "none" | "scale-down"
   filter?: string
   rotation?: number
   // 动画相关属性

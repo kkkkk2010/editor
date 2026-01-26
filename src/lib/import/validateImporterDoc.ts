@@ -35,7 +35,7 @@ const textElementSchema = baseElementSchema.extend({
 const imageElementSchema = baseElementSchema.extend({
   type: z.literal("image"),
   src: z.string(),
-  objectFit: z.string().optional(),
+  objectFit: z.enum(["cover", "contain", "fill", "none", "scale-down"]).optional(),
 })
 
 const shapeStyleSchema = z

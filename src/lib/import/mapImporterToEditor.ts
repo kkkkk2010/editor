@@ -11,6 +11,9 @@ import { defaultSlideSize } from "@/lib/types"
 import { normalizeFontFamily } from "@/lib/text-style"
 import { pxToPt } from "@/lib/utils/units"
 
+const allowedObjectFits = new Set(["cover", "contain", "fill", "none", "scale-down"] as const)
+type ObjectFitValue = (typeof allowedObjectFits extends Set<infer T> ? T : never)
+
 const DEFAULT_BACKGROUND: Background = {
   type: "color",
   value: "#ffffff",
@@ -170,7 +173,9 @@ function mapElement(
     position,
     size,
     style: {
-      objectFit: element.objectFit || "cover",
+      objectFit: allowedObjectFits.has(element.objectFit as ObjectFitValue)
+        ? (element.objectFit as ObjectFitValue)
+        : "cover",
       rotation: element.rotation,
     },
   }

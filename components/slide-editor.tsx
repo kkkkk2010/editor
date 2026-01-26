@@ -538,7 +538,7 @@ export default function SlideEditor({
                 style={{
                   width: "100%",
                   height: "100%",
-                  objectFit: element.style.objectFit || "cover",
+                        objectFit: element.style.objectFit ?? "cover",
                   filter: element.style.filter || "none",
                 }}
                 draggable="false"
