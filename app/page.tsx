@@ -30,12 +30,24 @@ type EditorState = {
   selectedElementId: string | null
 }
 
+type HistoryState = {
+  past: EditorState[]
+  present: EditorState
+  future: EditorState[]
+}
+
 type HistoryMeta = {
   type?: string
   reason?: string
 }
 
 const MAX_HISTORY = 100
+
+const initialPresent: EditorState = {
+  slides: defaultSlides,
+  currentSlideIndex: 0,
+  selectedElementId: null,
+}
 
 function createId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -74,6 +86,10 @@ function decodeDataUrl(dataUrl: string): Uint8Array | null {
     bytes[i] = binary.charCodeAt(i)
   }
   return bytes
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
 }
 
 function normalizeBackgroundValue(background: Background) {
@@ -141,19 +157,16 @@ function isSameState(a: EditorState, b: EditorState) {
 }
 
 export default function Home() {
-  const [history, setHistory] = useState(() => ({
-    past: [] as EditorState[],
-    present: {
-      slides: defaultSlides,
-      currentSlideIndex: 0,
-      selectedElementId: null,
-    },
-    future: [] as EditorState[],
+  const [history, setHistory] = useState<HistoryState>(() => ({
+    past: [],
+    present: initialPresent,
+    future: [],
   }))
   const [isPreviewMode, setIsPreviewMode] = useState(false)
   const [slideSize, setSlideSize] = useState<SlideSize>(defaultSlideSize)
   const [showPropertyPanel, setShowPropertyPanel] = useState(false)
   const [presentationTitle, setPresentationTitle] = useState("Презентация") // Перевел: "flowmix多模态产品系列"
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [editorScale, setEditorScale] = useState(1)
   const importedAssetUrlsRef = useRef<string[]>([])
@@ -208,6 +221,7 @@ export default function Home() {
       const trimmedPast = past.length > MAX_HISTORY ? past.slice(past.length - MAX_HISTORY) : past
       return { past: trimmedPast, present: next, future: [] }
     })
+    setHasUnsavedChanges(true)
   }
 
   const commitFromSnapshot = (snapshot: EditorState, _meta?: HistoryMeta) => {
@@ -220,6 +234,7 @@ export default function Home() {
       const trimmedPast = past.length > MAX_HISTORY ? past.slice(past.length - MAX_HISTORY) : past
       return { past: trimmedPast, present: next, future: [] }
     })
+    setHasUnsavedChanges(true)
   }
 
   const resetHistory = (next: EditorState) => {
@@ -281,10 +296,11 @@ export default function Home() {
   useEffect(() => {
     const handleHistoryShortcuts = (event: KeyboardEvent) => {
       const activeElement = document.activeElement
+      const activeHtmlElement = activeElement instanceof HTMLElement ? activeElement : null
       const isInputElement =
         activeElement instanceof HTMLInputElement ||
         activeElement instanceof HTMLTextAreaElement ||
-        activeElement?.isContentEditable
+        !!activeHtmlElement?.isContentEditable
 
       if (isInputElement) {
         return
@@ -381,7 +397,7 @@ export default function Home() {
           position: { x: slideSize.width / 2 - 200, y: slideSize.height / 2 - 40 },
           size: { width: 400, height: 80 },
           style: {
-            fontSize: 48,
+            fontSizePt: 48,
             fontWeight: "bold",
             color: "#ffffff",
             textAlign: "center",
@@ -495,10 +511,11 @@ export default function Home() {
       if (event.key !== "Delete" && event.key !== "Backspace") return
 
       const activeElement = document.activeElement
+      const activeHtmlElement = activeElement instanceof HTMLElement ? activeElement : null
       const isEditingText =
         activeElement instanceof HTMLInputElement ||
         activeElement instanceof HTMLTextAreaElement ||
-        activeElement?.isContentEditable
+        !!activeHtmlElement?.isContentEditable
 
       if (isEditingText) {
         return
@@ -561,6 +578,7 @@ export default function Home() {
 
   const handleSizeChange = (width: number, height: number) => {
     setSlideSize({ width, height })
+    setHasUnsavedChanges(true)
   }
 
   const handleAddShape = (shapeType: string) => {
@@ -811,7 +829,7 @@ export default function Home() {
       position: { x: slideSize.width / 2 - 100, y: slideSize.height / 2 - 20 },
       size: { width: 200, height: 40 },
       style: {
-        fontSize: 24,
+        fontSizePt: 24,
         fontWeight: "normal",
         color: "#000000",
         textAlign: "center",
@@ -917,6 +935,7 @@ export default function Home() {
       selectedElementId: null,
     })
     setShowPropertyPanel(false)
+    setHasUnsavedChanges(false)
   }
 
   const handleImportZip = (result: ImportResult, createdUrls: string[]) => {
@@ -965,15 +984,6 @@ export default function Home() {
   const handleSaveProject = async () => {
     try {
       const assetStore = assetStoreRef.current
-      const hasShapes = slides.some((slide) => slide.elements.some((element) => element.type === "shape"))
-      if (hasShapes) {
-        toast({
-          title: "Сохранение невозможно",
-          description: "Фигуры пока не поддерживаются в формате проекта.",
-          variant: "destructive",
-        })
-        return
-      }
       const slidesForExport = await Promise.all(
         slides.map(async (slide, slideIndex) => {
           const existingBackgroundPath =
@@ -1027,7 +1037,12 @@ export default function Home() {
 
       const importerDoc = mapEditorToImporter(slidesForExport, slideSize)
       const zipBytes = exportProjectZip(importerDoc, assetStore)
-      FileSaver.saveAs(new Blob([zipBytes], { type: "application/zip" }), "out.zip")
+      const src = zipBytes instanceof Uint8Array ? zipBytes : new Uint8Array(zipBytes as ArrayBufferLike)
+      const bytes = new Uint8Array(src.byteLength)
+      bytes.set(src)
+      const blob = new Blob([toArrayBuffer(bytes)], { type: "application/zip" })
+      FileSaver.saveAs(blob, "out.zip")
+      setHasUnsavedChanges(false)
       toast({
         title: "Проект сохранен",
         description: "Файл out.zip скачан на устройство.",
@@ -1138,17 +1153,19 @@ export default function Home() {
             canUndo={canUndo}
             canRedo={canRedo}
             onSaveProject={handleSaveProject}
+            hasUnsavedChanges={hasUnsavedChanges}
           />
 
           <div className="flex-1 overflow-hidden">
             <EditorLayout
               sidebar={
-                <Sidebar
-                  slides={slides}
-                  currentSlideIndex={currentSlideIndex}
-                  onSlideSelect={(index) =>
-                    setPresent((state) => ({
-                      ...state,
+                  <Sidebar
+                    slides={slides}
+                    currentSlideIndex={currentSlideIndex}
+                    slideSize={slideSize}
+                    onSlideSelect={(index) =>
+                      setPresent((state) => ({
+                        ...state,
                       currentSlideIndex: index,
                       selectedElementId: null,
                     }))

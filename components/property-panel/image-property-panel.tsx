@@ -1,6 +1,6 @@
 "use client"
 
-import type { Element } from "@/lib/types"
+import type { Element, ObjectFitMode } from "@/lib/types"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
@@ -15,7 +15,12 @@ interface ImagePropertyPanelProps {
 }
 
 export default function ImagePropertyPanel({ element, onUpdateElement, onReplaceImage }: ImagePropertyPanelProps) {
-  const updateStyle = (property: string, value: any) => {
+  const FITS = ["cover", "contain", "fill", "none", "scale-down"] as const
+  type Fit = (typeof FITS)[number]
+  const isFit = (value: string): value is Fit =>
+    (FITS as readonly string[]).includes(value)
+
+  const updateStyle = <K extends keyof Element["style"]>(property: K, value: Element["style"][K]) => {
     onUpdateElement({
       ...element,
       style: {
@@ -96,14 +101,26 @@ export default function ImagePropertyPanel({ element, onUpdateElement, onReplace
 
       <div>
         <Label htmlFor="objectFit">Способ заполнения</Label>
-        <Select value={element.style.objectFit || "cover"} onValueChange={(value) => updateStyle("objectFit", value)}>
+        <Select
+          value={(element.style.objectFit ?? "cover") as Fit}
+          onValueChange={(value) => {
+            const next: ObjectFitMode = isFit(value) ? value : "cover"
+            updateStyle("objectFit", next)
+          }}
+        >
           <SelectTrigger id="objectFit">
             <SelectValue placeholder="Выберите способ заполнения" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="cover">Обрезать (Cover)</SelectItem>
-            <SelectItem value="contain">Вместить (Contain)</SelectItem>
-            <SelectItem value="fill">Заполнить (Fill)</SelectItem>
+            {FITS.map((fit) => (
+              <SelectItem key={fit} value={fit}>
+                {fit === "cover" && "Обрезать (Cover)"}
+                {fit === "contain" && "Вместить (Contain)"}
+                {fit === "fill" && "Заполнить (Fill)"}
+                {fit === "none" && "Без масштабирования (None)"}
+                {fit === "scale-down" && "Уменьшить (Scale-down)"}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

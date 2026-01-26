@@ -7,6 +7,7 @@ import ElementContextMenu from "@/components/context-menu/element-context-menu"
 import { renderAdvancedShape } from "@/components/shapes/advanced-shapes"
 import TextElementView from "@/components/text-element-view"
 import { cn } from "@/lib/utils"
+import { ptToPx } from "@/lib/utils/units"
 
 interface SlideEditorProps {
   slide: Slide
@@ -258,6 +259,7 @@ export default function SlideEditor({
     }
     setDraggingElement(null)
     setResizing(false)
+    setResizeDirection("")
   }
 
   const handleTextDoubleClick = (element: Element, e: React.MouseEvent) => {
@@ -271,13 +273,14 @@ export default function SlideEditor({
     input.style.top = `${element.position.y}px`
     input.style.width = `${element.size.width}px`
     input.style.height = `${element.size.height}px`
-    input.style.fontSize = `${element.style.fontSize || 16}px`
+    input.style.fontSize = `${ptToPx(element.style.fontSizePt ?? 18)}px`
+    input.style.fontFamily = element.style.fontFamily || "Times New Roman"
     input.style.fontWeight = element.style.fontWeight || "normal"
     input.style.fontStyle = element.style.fontStyle || "normal"
     input.style.textDecoration = element.style.textDecoration || "none"
     input.style.color = element.style.color || "#000"
     input.style.textAlign = element.style.textAlign || "left"
-    input.style.lineHeight = element.style.lineHeight ? `${element.style.lineHeight}` : "1.5"
+    input.style.lineHeight = element.style.lineHeight ? `${element.style.lineHeight}` : "normal"
     input.style.border = "none"
     input.style.padding = "0"
     input.style.margin = "0"
@@ -286,6 +289,13 @@ export default function SlideEditor({
     input.style.resize = "none"
     input.style.outline = "2px solid #3b82f6"
     input.style.whiteSpace = "pre-wrap" // 保留换行和空格
+    input.style.overflowWrap = "normal"
+    input.style.wordBreak = "normal"
+    input.style.hyphens = "none"
+    input.style.boxSizing = "border-box"
+    input.style.display = "block"
+    input.style.minWidth = "0"
+    input.style.minHeight = "0"
 
     // 设置编辑元素的ID，用于在渲染时隐藏原始元素
     const editingId = element.id
@@ -348,10 +358,11 @@ export default function SlideEditor({
 
       // 检查焦点是否在属性面板内的输入元素中
       const activeElement = document.activeElement
+      const isEditable = activeElement instanceof HTMLElement && activeElement.isContentEditable
       const isInputElement =
         activeElement instanceof HTMLInputElement ||
         activeElement instanceof HTMLTextAreaElement ||
-        activeElement?.isContentEditable
+        isEditable
 
       if (isInputElement) {
         return // 如果焦点在输入元素中，不处理快捷键
@@ -404,7 +415,7 @@ export default function SlideEditor({
 
   // 修改整个元素的渲染容器，确保正确的定位
   const renderElement = (element: Element) => {
-    const isSelected = selectedElement && selectedElement.id === element.id
+    const isSelected = selectedElement?.id === element.id
     const isLocked = element.style.locked || false
 
     // 修改文本元素的渲染方式，确保ElementContextMenu只包含一个子元素
@@ -527,7 +538,7 @@ export default function SlideEditor({
                 style={{
                   width: "100%",
                   height: "100%",
-                  objectFit: element.style.objectFit || "cover",
+                        objectFit: element.style.objectFit ?? "cover",
                   filter: element.style.filter || "none",
                 }}
                 draggable="false"

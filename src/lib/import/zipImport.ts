@@ -11,6 +11,10 @@ const MIME_TYPES: Record<string, string> = {
   svg: "image/svg+xml",
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+}
+
 export interface ZipImportResult {
   doc: ImporterDoc
   createdUrls: string[]
@@ -70,7 +74,7 @@ async function getImageDimensions(bytes: Uint8Array, mimeType: string): Promise<
     }
 
     if (typeof createImageBitmap === "function") {
-      const blob = new Blob([bytes], { type: mimeType })
+      const blob = new Blob([toArrayBuffer(bytes)], { type: mimeType })
       const bitmap = await createImageBitmap(blob)
       const size = { width: bitmap.width, height: bitmap.height }
       bitmap.close()
@@ -122,7 +126,7 @@ export async function importZipFile(file: File, assetStore?: AssetStore): Promis
     const extension = getExtension(path)
     const mimeType = MIME_TYPES[extension] || "application/octet-stream"
     assetStore?.setAsset(path, assetBytes, mimeType)
-    const url = URL.createObjectURL(new Blob([assetBytes], { type: mimeType }))
+    const url = URL.createObjectURL(new Blob([toArrayBuffer(assetBytes)], { type: mimeType }))
     createdUrls.push(url)
     return { url, mimeType }
   }

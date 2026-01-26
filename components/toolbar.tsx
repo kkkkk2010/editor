@@ -36,6 +36,7 @@ interface ToolbarProps {
   canRedo: boolean
   onSaveProject: () => void
   assetStore?: AssetStore
+  hasUnsavedChanges?: boolean
 }
 
 export default function Toolbar({
@@ -52,6 +53,7 @@ export default function Toolbar({
   canRedo,
   onSaveProject,
   assetStore,
+  hasUnsavedChanges,
 }: ToolbarProps) {
   const [activeTab, setActiveTab] = useState("text")
 
@@ -77,13 +79,13 @@ export default function Toolbar({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="w-24">
-              {selectedElement.style.fontSize || 16}px
+              {selectedElement.style.fontSizePt ?? 18}pt
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            {[12, 14, 16, 20, 24, 32, 40, 48, 56, 64, 72].map((size) => (
-              <DropdownMenuItem key={size} onClick={() => updateTextStyle("fontSize", size)}>
-                {size}px
+            {[8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48, 56, 64, 72].map((size) => (
+              <DropdownMenuItem key={size} onClick={() => updateTextStyle("fontSizePt", size)}>
+                {size}pt
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -153,7 +155,7 @@ export default function Toolbar({
             Сохранить
           </Button>
         </div>
-        <ImportZipDialog onImport={onImportZip} assetStore={assetStore} />
+        <ImportZipDialog onImport={onImportZip} assetStore={assetStore} hasUnsavedChanges={hasUnsavedChanges} />
       </div>
 
       <div className="flex items-center space-x-2">

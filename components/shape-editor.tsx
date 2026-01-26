@@ -19,7 +19,7 @@ export default function ShapeEditor({ onAddShape, selectedElement, onUpdateEleme
 
   const isShapeSelected = selectedElement?.type === "shape"
 
-  const updateShapeStyle = (property: string, value: any) => {
+  const updateShapeStyle = <K extends keyof Element["style"]>(property: K, value: Element["style"][K]) => {
     if (!isShapeSelected) return
 
     onUpdateElement({
