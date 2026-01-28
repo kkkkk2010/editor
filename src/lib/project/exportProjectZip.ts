@@ -1,6 +1,7 @@
 import { zipSync } from "fflate"
 import type { ImporterDoc } from "@/src/lib/import/importerDoc"
 import type { AssetStore } from "@/src/lib/assets/assetStore"
+import { logStructuredError, reportError } from "@/src/lib/monitoring"
 
 const INVALID_ASSET_PREFIX = /^(blob:|data:|https?:|file:)/i
 
@@ -48,39 +49,50 @@ function normalizeDocEntry(files: Record<string, Uint8Array>) {
 }
 
 export function exportProjectZip(doc: ImporterDoc, assetStore: AssetStore): Uint8Array {
-  const encoder = new TextEncoder()
-  const toBytes = (value: unknown): Uint8Array => {
-    if (ArrayBuffer.isView(value)) {
-      return new Uint8Array(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength))
+  const startTime = Date.now()
+  try {
+    const encoder = new TextEncoder()
+    const toBytes = (value: unknown): Uint8Array => {
+      if (ArrayBuffer.isView(value)) {
+        return new Uint8Array(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength))
+      }
+      if (value instanceof ArrayBuffer) {
+        return new Uint8Array(value)
+      }
+      if (typeof value === "string") {
+        return new Uint8Array(encoder.encode(value))
+      }
+      return new Uint8Array(encoder.encode(JSON.stringify(value, null, 2)))
     }
-    if (value instanceof ArrayBuffer) {
-      return new Uint8Array(value)
+    const files: Record<string, Uint8Array> = {
+      "doc.json": toBytes(JSON.stringify(doc, null, 2)),
     }
-    if (typeof value === "string") {
-      return new Uint8Array(encoder.encode(value))
+    normalizeDocEntry(files)
+    if (!ArrayBuffer.isView(files["doc.json"])) {
+      throw new Error("Экспорт doc.json должен быть сериализован в байты")
     }
-    return new Uint8Array(encoder.encode(JSON.stringify(value, null, 2)))
-  }
-  const files: Record<string, Uint8Array> = {
-    "doc.json": toBytes(JSON.stringify(doc, null, 2)),
-  }
-  normalizeDocEntry(files)
-  if (!ArrayBuffer.isView(files["doc.json"])) {
-    throw new Error("Экспорт doc.json должен быть сериализован в байты")
-  }
 
-  const assetPaths = collectAssetPaths(doc)
-  assetPaths.forEach((path) => {
-    const asset = assetStore.getAsset(path)
-    if (!asset) {
-      throw new Error(`Не найден ассет для экспорта: ${path}`)
-    }
-    files[path] = asset.bytes
-  })
+    const assetPaths = collectAssetPaths(doc)
+    assetPaths.forEach((path) => {
+      const asset = assetStore.getAsset(path)
+      if (!asset) {
+        throw new Error(`Не найден ассет для экспорта: ${path}`)
+      }
+      files[path] = asset.bytes
+    })
 
-  const zipped = zipSync(files, { level: 6 })
-  const src = zipped instanceof Uint8Array ? zipped : new Uint8Array(zipped)
-  const bytes = new Uint8Array(src.byteLength)
-  bytes.set(src)
-  return bytes
+    const zipped = zipSync(files, { level: 6 })
+    const src = zipped instanceof Uint8Array ? zipped : new Uint8Array(zipped)
+    const bytes = new Uint8Array(src.byteLength)
+    bytes.set(src)
+    return bytes
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown export error"
+    logStructuredError("zip_export_failed", {
+      message,
+      durationMs: Date.now() - startTime,
+    })
+    reportError(error, { scope: "zip_export" })
+    throw error
+  }
 }
