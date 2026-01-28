@@ -3,8 +3,14 @@ export function normalizeFontFamily(value?: string | null): string | undefined {
   const trimmed = value.trim()
   if (!trimmed) return undefined
 
-  const firstFamily = trimmed.split(",")[0]?.trim()
-  if (!firstFamily) return undefined
+  const families = trimmed
+    .split(",")
+    .map((family) => family.trim())
+    .filter(Boolean)
+    .map((family) => family.replace(/^["'](.+(?=["']$))["']$/, "$1"))
+    .filter(Boolean)
+  if (families.length === 0) return undefined
 
-  return firstFamily.replace(/^["'](.+(?=["']$))["']$/, "$1")
+  const preferred = families.find((family) => family.toLowerCase() === "times new roman")
+  return preferred ?? families[0]
 }
