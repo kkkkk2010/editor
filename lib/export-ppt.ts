@@ -456,7 +456,7 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
           img.src = element.content
           img.style.width = "100%"
           img.style.height = "100%"
-          img.style.objectFit = element.style.objectFit || "cover"
+          img.style.objectFit = element.style.objectFit || "contain"
           img.style.borderRadius = `${element.style.borderRadius || 0}px`
           img.style.opacity = `${element.style.opacity || 1}`
           elementDiv.appendChild(img)

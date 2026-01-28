@@ -1,14 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { readFileSync } from "node:fs"
 import { unzipSync } from "fflate"
-import { importZipFile } from "@/src/lib/import/zipImport"
+import { importZipFileWithDebug } from "./utils"
 import { exportProjectZip } from "@/src/lib/project/exportProjectZip"
 import { AssetStore } from "@/src/lib/assets/assetStore"
 import type { ImporterDoc } from "@/src/lib/import/importerDoc"
-import { toArrayBuffer } from "./utils"
-
-const fixtureBase64 = readFileSync("test/fixtures/out.zip.base64", "utf8").trim()
-const fixtureBytes = new Uint8Array(Buffer.from(fixtureBase64, "base64"))
+import { makeProjectZipBytes } from "./utils"
 
 const INVALID_ASSET_PREFIX = /^(blob:|data:|https?:|file:)/i
 
@@ -23,10 +19,41 @@ function getDocFromZip(bytes: Uint8Array): ImporterDoc {
 
 describe("zip import/export", () => {
   it("imports fixture zip and keeps custom style fields", async () => {
-    const bytes = fixtureBytes instanceof Uint8Array ? fixtureBytes : new Uint8Array(fixtureBytes as ArrayBufferLike)
-    const file = new File([toArrayBuffer(bytes)], "out.zip", { type: "application/zip" })
+    const importerDoc: ImporterDoc = {
+      schemaVersion: 1,
+      slideSize: { width: 960, height: 540, unit: "px" },
+      slides: [
+        {
+          id: "slide-1",
+          elements: [
+            {
+              id: "text-1",
+              type: "text",
+              text: "Fixture",
+              x: 10,
+              y: 10,
+              width: 200,
+              height: 50,
+              style: { lineHeight: 1.3, customStyleField: "fixture" },
+            },
+            {
+              id: "image-1",
+              type: "image",
+              src: "assets/images/fixture.png",
+              x: 20,
+              y: 20,
+              width: 100,
+              height: 100,
+            },
+          ],
+        },
+      ],
+    }
+    const zipBytes = makeProjectZipBytes(importerDoc, {
+      "images/fixture.png": new Uint8Array([1, 2, 3, 4]),
+    })
     const assetStore = new AssetStore()
-    const result = await importZipFile(file, assetStore)
+    const result = await importZipFileWithDebug(zipBytes, assetStore)
 
     expect(result.doc.schemaVersion).toBe(1)
     const textElement = result.doc.slides[0].elements[0]
@@ -40,18 +67,42 @@ describe("zip import/export", () => {
   })
 
   it("exports zip with doc.json + used assets and without blob urls", () => {
-    const entries = unzipSync(fixtureBytes)
     const assetStore = new AssetStore()
 
-    Object.entries(entries).forEach(([path, bytes]) => {
-      if (path !== "doc.json") {
-        assetStore.setAsset(path, bytes)
-      }
-    })
+    const doc: ImporterDoc = {
+      schemaVersion: 1,
+      slideSize: { width: 960, height: 540, unit: "px" },
+      slides: [
+        {
+          id: "slide-1",
+          elements: [
+            {
+              id: "text-1",
+              type: "text",
+              text: "Fixture",
+              x: 10,
+              y: 10,
+              width: 200,
+              height: 50,
+              style: { lineHeight: 1.3, customStyleField: "fixture" },
+            },
+            {
+              id: "image-1",
+              type: "image",
+              src: "assets/images/fixture.png",
+              x: 20,
+              y: 20,
+              width: 100,
+              height: 100,
+            },
+          ],
+        },
+      ],
+    }
 
+    assetStore.setAsset("assets/images/fixture.png", new Uint8Array([9, 8, 7]), "image/png")
     assetStore.setAsset("assets/unused.png", new Uint8Array([1, 2, 3]), "image/png")
 
-    const doc = getDocFromZip(fixtureBytes)
     const exported = exportProjectZip(doc, assetStore)
     const exportedEntries = unzipSync(exported)
 
@@ -83,5 +134,26 @@ describe("zip import/export", () => {
       throw new Error("Expected text element")
     }
     expect(textElement.style?.customStyleField).toBe("fixture")
+  })
+
+  it("exports minimal doc with doc.json at archive root", () => {
+    const assetStore = new AssetStore()
+    const doc: ImporterDoc = {
+      schemaVersion: 1,
+      slideSize: { width: 960, height: 540, unit: "px" },
+      slides: [
+        {
+          id: "slide-1",
+          elements: [],
+        },
+      ],
+    }
+
+    const exported = exportProjectZip(doc, assetStore)
+    const exportedEntries = unzipSync(exported)
+
+    expect(exportedEntries["doc.json"]).toBeDefined()
+    const parsed = getDocFromZip(exported)
+    expect(parsed.schemaVersion).toBe(1)
   })
 })

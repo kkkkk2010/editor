@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { mapEditorToImporter } from "@/src/lib/import/mapEditorToImporter"
-import { importZipFile } from "@/src/lib/import/zipImport"
-import { exportProjectZip } from "@/src/lib/project/exportProjectZip"
+import { importZipFileWithDebug } from "./utils"
 import { AssetStore } from "@/src/lib/assets/assetStore"
 import type { Slide } from "@/lib/types"
 import { defaultSlideSize } from "@/lib/types"
-import { toArrayBuffer } from "./utils"
+import { makeProjectZipBytes } from "./utils"
 
 describe("slide order roundtrip", () => {
   it("preserves order and content after reorder and duplicate", async () => {
@@ -48,12 +47,9 @@ describe("slide order roundtrip", () => {
 
     const reorderedSlides = [slides[1], duplicatedSlide, slides[0]]
     const importerDoc = mapEditorToImporter(reorderedSlides, defaultSlideSize)
-    const assetStore = new AssetStore()
-    const zipBytes = exportProjectZip(importerDoc, assetStore)
-    const bytes = zipBytes instanceof Uint8Array ? zipBytes : new Uint8Array(zipBytes as ArrayBufferLike)
-    const file = new File([toArrayBuffer(bytes)], "out.zip", { type: "application/zip" })
+    const zipBytes = makeProjectZipBytes(importerDoc)
 
-    const imported = await importZipFile(file, new AssetStore())
+    const imported = await importZipFileWithDebug(zipBytes, new AssetStore())
 
     expect(imported.doc.slides.map((slide) => slide.id)).toEqual(["slide-b", "slide-a-copy", "slide-a"])
     const duplicated = imported.doc.slides[1]

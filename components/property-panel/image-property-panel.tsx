@@ -102,9 +102,9 @@ export default function ImagePropertyPanel({ element, onUpdateElement, onReplace
       <div>
         <Label htmlFor="objectFit">Способ заполнения</Label>
         <Select
-          value={(element.style.objectFit ?? "cover") as Fit}
+          value={(element.style.objectFit ?? "contain") as Fit}
           onValueChange={(value) => {
-            const next: ObjectFitMode = isFit(value) ? value : "cover"
+            const next: ObjectFitMode = isFit(value) ? value : "contain"
             updateStyle("objectFit", next)
           }}
         >

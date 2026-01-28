@@ -21,6 +21,9 @@ interface TextPropertyPanelProps {
   onUpdateElement: (element: Element) => void
 }
 
+const baseFontFamilies = ["Times New Roman", "Arial", "Georgia", "Verdana", "Courier New"]
+const seenFontFamilies = new Set(baseFontFamilies)
+
 export default function TextPropertyPanel({ element, onUpdateElement }: TextPropertyPanelProps) {
   const updateStyle = <K extends keyof Element["style"]>(property: K, value: Element["style"][K]) => {
     onUpdateElement({
@@ -32,12 +35,17 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
     })
   }
 
-  const defaultFontFamilies = ["Times New Roman", "Arial", "Georgia", "Verdana", "Courier New"]
   const currentFont = element.style.fontFamily ?? "Arial"
   const normalizedFontFamily = normalizeFontFamily(currentFont)
-  const availableFontFamilies = Array.from(
-    new Set([currentFont, normalizedFontFamily, ...defaultFontFamilies]).values(),
-  ).filter((font): font is string => typeof font === "string" && font.trim().length > 0)
+  if (currentFont.trim()) {
+    seenFontFamilies.add(currentFont)
+  }
+  if (normalizedFontFamily?.trim()) {
+    seenFontFamilies.add(normalizedFontFamily)
+  }
+  const availableFontFamilies = Array.from(seenFontFamilies).filter(
+    (font): font is string => typeof font === "string" && font.trim().length > 0
+  )
   const selectedFontSizePt = element.style.fontSizePt ?? 18
 
   const clampFontSize = (value: number) => {

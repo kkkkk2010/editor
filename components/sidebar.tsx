@@ -266,7 +266,7 @@ export default function Sidebar({
                       inset: 0,
                       width: "100%",
                       height: "100%",
-                      objectFit: "cover",
+                      objectFit: element.style.objectFit ?? "contain",
                       objectPosition: "center",
                       display: "block",
                     }}

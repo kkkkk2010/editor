@@ -138,7 +138,9 @@ function mapElement(
     const normalizedStyle = normalizeTextStyle(style)
     const fontSizePt =
       normalizedStyle.fontSizePt ?? (normalizedStyle.fontSize !== undefined ? pxToPt(normalizedStyle.fontSize) : undefined) ?? 18
-    const { fontFamily, fontSize, fontSizePt: _fontSizePt, ...restStyle } = style
+    const { fontFamily, fontSize, fontSizePt: rawFontSizePt, ...restStyle } = style
+    void fontSize
+    void rawFontSizePt
 
     return {
       id: createId("text"),
@@ -194,7 +196,7 @@ function mapElement(
     style: {
       objectFit: allowedObjectFits.has(element.objectFit as ObjectFitValue)
         ? (element.objectFit as ObjectFitValue)
-        : "cover",
+        : "contain",
       rotation: element.rotation,
     },
   }

@@ -1,6 +1,4 @@
 "use client"
-
-import { useState } from "react"
 import type { Element } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import {
@@ -55,8 +53,6 @@ export default function Toolbar({
   assetStore,
   hasUnsavedChanges,
 }: ToolbarProps) {
-  const [activeTab, setActiveTab] = useState("text")
-
   const updateTextStyle = <K extends keyof Element["style"]>(property: K, value: Element["style"][K]) => {
     if (!selectedElement || selectedElement.type !== "text") return
 

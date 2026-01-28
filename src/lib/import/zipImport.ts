@@ -3,6 +3,7 @@ import type { ImporterDoc } from "@/src/lib/import/importerDoc"
 import { validateImporterDoc } from "@/src/lib/import/validateImporterDoc"
 import { computeSourceSlideSize } from "@/src/lib/import/mapImporterToEditor"
 import type { AssetStore } from "@/src/lib/assets/assetStore"
+import { logStructuredError, reportError } from "@/src/lib/monitoring"
 
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -10,6 +11,8 @@ const MIME_TYPES: Record<string, string> = {
   jpeg: "image/jpeg",
   svg: "image/svg+xml",
 }
+const ALLOWED_ASSET_EXTENSIONS = new Set(Object.keys(MIME_TYPES))
+const MAX_ZIP_BYTES = 50 * 1024 * 1024
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
@@ -29,6 +32,25 @@ function getExtension(path: string): string {
   const parts = path.split(".")
   if (parts.length < 2) return ""
   return parts[parts.length - 1].toLowerCase()
+}
+
+function assertSafeAssetPath(path: string) {
+  if (!path || !path.trim()) {
+    throw new Error("Пустой путь ассета в импорте")
+  }
+  if (path.startsWith("/") || path.startsWith("\\")) {
+    throw new Error(`Абсолютные пути ассетов не поддерживаются: ${path}`)
+  }
+  if (path.includes("..")) {
+    throw new Error(`Небезопасный путь ассета в импорте: ${path}`)
+  }
+}
+
+function assertAllowedAssetType(path: string) {
+  const extension = getExtension(path)
+  if (!ALLOWED_ASSET_EXTENSIONS.has(extension)) {
+    throw new Error(`Недопустимый тип ассета для импорта: ${path}`)
+  }
 }
 
 function buildDocJson(bytes: Uint8Array): unknown {
@@ -87,96 +109,130 @@ async function getImageDimensions(bytes: Uint8Array, mimeType: string): Promise<
   return null
 }
 
-export async function importZipFile(file: File, assetStore?: AssetStore): Promise<ZipImportResult> {
-  const arrayBuffer = await file.arrayBuffer()
-  const zipContents = unzipSync(new Uint8Array(arrayBuffer))
-  const entries = new Map(Object.entries(zipContents))
+export type ZipImportInput = File | ArrayBuffer | Uint8Array
 
-  if (!entries.has("doc.json")) {
-    throw new Error("В архиве отсутствует doc.json в корне")
+async function readZipBytes(input: ZipImportInput): Promise<Uint8Array> {
+  if (input instanceof Uint8Array) {
+    return input
   }
-
-  const docBytes = entries.get("doc.json")
-  if (!docBytes) {
-    throw new Error("Не удалось прочитать doc.json")
+  if (input instanceof ArrayBuffer) {
+    return new Uint8Array(input)
   }
+  if (typeof (input as File).arrayBuffer === "function") {
+    const arrayBuffer = await (input as File).arrayBuffer()
+    return new Uint8Array(arrayBuffer)
+  }
+  throw new Error("Неподдерживаемый тип входных данных для ZIP импорта")
+}
 
-  let parsedDoc: unknown
+export async function importZipFile(input: ZipImportInput, assetStore?: AssetStore): Promise<ZipImportResult> {
+  const startTime = Date.now()
   try {
-    parsedDoc = buildDocJson(docBytes)
-  } catch (error) {
-    throw new Error("doc.json содержит невалидный JSON")
-  }
-
-  const validation = validateImporterDoc(parsedDoc)
-  if (!validation.ok) {
-    throw new Error(`Ошибка валидации doc.json: ${validation.error}`)
-  }
-
-  const createdUrls: string[] = []
-  const doc: ImporterDoc = JSON.parse(JSON.stringify(validation.data))
-  const elementBounds = computeSourceSlideSize(doc)
-  let sourceSlideSize = elementBounds
-
-  const resolveAsset = (path: string): { url: string; mimeType: string } => {
-    const assetBytes = entries.get(path)
-    if (!assetBytes) {
-      throw new Error(`Файл ассета не найден: ${path}`)
+    const zipBytes = await readZipBytes(input)
+    if (zipBytes.byteLength > MAX_ZIP_BYTES) {
+      throw new Error(`ZIP архив превышает лимит размера: ${zipBytes.byteLength} байт`)
     }
-    const extension = getExtension(path)
-    const mimeType = MIME_TYPES[extension] || "application/octet-stream"
-    assetStore?.setAsset(path, assetBytes, mimeType)
-    const url = URL.createObjectURL(new Blob([toArrayBuffer(assetBytes)], { type: mimeType }))
-    createdUrls.push(url)
-    return { url, mimeType }
-  }
+    const zipContents = unzipSync(zipBytes)
+    const entries = new Map(Object.entries(zipContents))
 
-  try {
-    for (const slide of doc.slides) {
-      if (slide.background?.type === "image") {
-        const backgroundBytes = entries.get(slide.background.src)
-        if (backgroundBytes) {
-          const extension = getExtension(slide.background.src)
-          const mimeType = MIME_TYPES[extension] || "application/octet-stream"
-          const dimensions = await getImageDimensions(backgroundBytes, mimeType)
-          if (
-            dimensions &&
-            isCloseTo(dimensions.width, elementBounds.width) &&
-            isCloseTo(dimensions.height, elementBounds.height)
-          ) {
-            sourceSlideSize = dimensions
-            break
+    if (!entries.has("doc.json")) {
+      throw new Error("В архиве отсутствует doc.json в корне")
+    }
+
+    const docBytes = entries.get("doc.json")
+    if (!docBytes) {
+      throw new Error("Не удалось прочитать doc.json")
+    }
+
+    let parsedDoc: unknown
+    try {
+      parsedDoc = buildDocJson(docBytes)
+    } catch {
+      throw new Error("doc.json содержит невалидный JSON")
+    }
+
+    const validation = validateImporterDoc(parsedDoc)
+    if (!validation.ok) {
+      throw new Error(`Ошибка валидации doc.json: ${validation.error}`)
+    }
+
+    const createdUrls: string[] = []
+    const doc: ImporterDoc = JSON.parse(JSON.stringify(validation.data))
+    const elementBounds = computeSourceSlideSize(doc)
+    let sourceSlideSize = elementBounds
+
+    const resolveAsset = (path: string): { url: string; mimeType: string } => {
+      assertSafeAssetPath(path)
+      assertAllowedAssetType(path)
+      const assetBytes = entries.get(path)
+      if (!assetBytes) {
+        throw new Error(`Файл ассета не найден: ${path}`)
+      }
+      const extension = getExtension(path)
+      const mimeType = MIME_TYPES[extension] || "application/octet-stream"
+      assetStore?.setAsset(path, assetBytes, mimeType)
+      const url = URL.createObjectURL(new Blob([toArrayBuffer(assetBytes)], { type: mimeType }))
+      createdUrls.push(url)
+      return { url, mimeType }
+    }
+
+    try {
+      for (const slide of doc.slides) {
+        if (slide.background?.type === "image") {
+          assertSafeAssetPath(slide.background.src)
+          assertAllowedAssetType(slide.background.src)
+          const backgroundBytes = entries.get(slide.background.src)
+          if (backgroundBytes) {
+            const extension = getExtension(slide.background.src)
+            const mimeType = MIME_TYPES[extension] || "application/octet-stream"
+            const dimensions = await getImageDimensions(backgroundBytes, mimeType)
+            if (
+              dimensions &&
+              isCloseTo(dimensions.width, elementBounds.width) &&
+              isCloseTo(dimensions.height, elementBounds.height)
+            ) {
+              sourceSlideSize = dimensions
+              break
+            }
           }
         }
       }
+
+      doc.slides.forEach((slide) => {
+        if (slide.background?.type === "image") {
+          const assetPath = slide.background.src
+          const resolved = resolveAsset(assetPath)
+          slide.background = {
+            ...slide.background,
+            runtimeSrc: resolved.url,
+            src: assetPath,
+            assetPath,
+          } as typeof slide.background & { assetPath?: string }
+        }
+
+        slide.elements.forEach((element) => {
+          if (element.type === "image") {
+            const assetPath = element.src
+            const resolved = resolveAsset(assetPath)
+            element.src = assetPath
+            ;(element as typeof element & { assetPath?: string; runtimeSrc?: string }).assetPath = assetPath
+            ;(element as typeof element & { assetPath?: string; runtimeSrc?: string }).runtimeSrc = resolved.url
+          }
+        })
+      })
+    } catch (error) {
+      revokeImportObjectUrls(createdUrls)
+      throw error
     }
 
-    doc.slides.forEach((slide) => {
-      if (slide.background?.type === "image") {
-        const assetPath = slide.background.src
-        const resolved = resolveAsset(assetPath)
-        slide.background = {
-          ...slide.background,
-          runtimeSrc: resolved.url,
-          src: assetPath,
-          assetPath,
-        } as typeof slide.background & { assetPath?: string }
-      }
-
-      slide.elements.forEach((element) => {
-        if (element.type === "image") {
-          const assetPath = element.src
-          const resolved = resolveAsset(assetPath)
-          element.src = assetPath
-          ;(element as typeof element & { assetPath?: string; runtimeSrc?: string }).assetPath = assetPath
-          ;(element as typeof element & { assetPath?: string; runtimeSrc?: string }).runtimeSrc = resolved.url
-        }
-      })
-    })
+    return { doc, createdUrls, sourceSlideSize }
   } catch (error) {
-    revokeImportObjectUrls(createdUrls)
+    const message = error instanceof Error ? error.message : "Unknown import error"
+    logStructuredError("zip_import_failed", {
+      message,
+      durationMs: Date.now() - startTime,
+    })
+    reportError(error, { scope: "zip_import" })
     throw error
   }
-
-  return { doc, createdUrls, sourceSlideSize }
 }

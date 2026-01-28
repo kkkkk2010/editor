@@ -78,7 +78,7 @@ function decodeDataUrl(dataUrl: string): Uint8Array | null {
   if (!dataUrl.startsWith("data:")) {
     return null
   }
-  const [meta, base64] = dataUrl.split(",")
+  const [, base64] = dataUrl.split(",")
   if (!base64) return null
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
@@ -212,7 +212,8 @@ export default function Home() {
     })
   }
 
-  const commit = (next: EditorState, _meta?: HistoryMeta) => {
+  const commit = (next: EditorState, meta?: HistoryMeta) => {
+    void meta
     setHistory((state) => {
       if (isSameState(state.present, next)) {
         return state
@@ -224,7 +225,8 @@ export default function Home() {
     setHasUnsavedChanges(true)
   }
 
-  const commitFromSnapshot = (snapshot: EditorState, _meta?: HistoryMeta) => {
+  const commitFromSnapshot = (snapshot: EditorState, meta?: HistoryMeta) => {
+    void meta
     setHistory((state) => {
       const next = state.present
       if (isSameState(snapshot, next)) {
@@ -424,36 +426,39 @@ export default function Home() {
     }
   }
 
-  const removeSlide = (index: number) => {
-    if (index < 0 || index >= slides.length) {
-      return
-    }
+  const removeSlide = useCallback(
+    (index: number) => {
+      if (index < 0 || index >= slides.length) {
+        return
+      }
 
-    if (slides.length === 1) {
-      toast({
-        title: "Нельзя удалить единственный слайд",
-      })
-      return
-    }
+      if (slides.length === 1) {
+        toast({
+          title: "Нельзя удалить единственный слайд",
+        })
+        return
+      }
 
-    const confirmed = window.confirm("Удалить слайд? Это действие нельзя отменить")
-    if (!confirmed) {
-      return
-    }
+      const confirmed = window.confirm("Удалить слайд? Это действие нельзя отменить")
+      if (!confirmed) {
+        return
+      }
 
-    const nextSlides = slides.filter((_, slideIndex) => slideIndex !== index)
-    const nextIndex = index >= nextSlides.length ? Math.max(0, nextSlides.length - 1) : index
+      const nextSlides = slides.filter((_, slideIndex) => slideIndex !== index)
+      const nextIndex = index >= nextSlides.length ? Math.max(0, nextSlides.length - 1) : index
 
-    commit(
-      {
-        slides: nextSlides,
-        currentSlideIndex: nextIndex,
-        selectedElementId: null,
-      },
-      { type: "slide", reason: "remove" },
-    )
-    setIsPreviewMode(false)
-  }
+      commit(
+        {
+          slides: nextSlides,
+          currentSlideIndex: nextIndex,
+          selectedElementId: null,
+        },
+        { type: "slide", reason: "remove" },
+      )
+      setIsPreviewMode(false)
+    },
+    [slides, toast, commit],
+  )
 
   const duplicateSlide = (index: number) => {
     if (index < 0 || index >= slides.length) return
@@ -673,7 +678,7 @@ export default function Home() {
       style: {
         borderRadius: 0,
         opacity: 1,
-        objectFit: "cover",
+        objectFit: "contain",
       },
     }
 
@@ -985,7 +990,7 @@ export default function Home() {
     try {
       const assetStore = assetStoreRef.current
       const slidesForExport = await Promise.all(
-        slides.map(async (slide, slideIndex) => {
+        slides.map(async (slide) => {
           const existingBackgroundPath =
             slide.background.type === "image" ? slide.background.assetPath : undefined
           const backgroundAssetPath = existingBackgroundPath || `backgrounds/bg-${slide.id}.png`
