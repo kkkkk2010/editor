@@ -402,6 +402,22 @@ function decodeSvgDataUrl(source: string) {
   return decodeURIComponent(data)
 }
 
+function ensureSvgDimensions(svgText: string, width: number, height: number) {
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(svgText, "image/svg+xml")
+  const svg = doc.documentElement
+  if (!svg || svg.nodeName.toLowerCase() !== "svg") {
+    return svgText
+  }
+  if (!svg.getAttribute("width")) {
+    svg.setAttribute("width", `${Math.max(1, Math.round(width))}`)
+  }
+  if (!svg.getAttribute("height")) {
+    svg.setAttribute("height", `${Math.max(1, Math.round(height))}`)
+  }
+  return new XMLSerializer().serializeToString(svg)
+}
+
 async function loadSvgText(source: string) {
   if (source.trim().toLowerCase().startsWith("data:image/svg+xml")) {
     const decoded = decodeSvgDataUrl(source)
@@ -418,16 +434,26 @@ async function loadSvgText(source: string) {
 
   logSvgDebug("fetching svg", { source: resolvedSource })
   const response = await fetch(resolvedSource)
-  logSvgDebug("fetched svg", { source: resolvedSource, status: response.status })
+  logSvgDebug("fetched svg", {
+    source: resolvedSource,
+    status: response.status,
+    contentType: response.headers.get("content-type"),
+  })
   if (!response.ok) {
     throw new Error(`Не удалось загрузить SVG: ${resolvedSource}`)
   }
   const svgText = await response.text()
   logSvgDebug("loaded svg text", { length: svgText.length })
+  logSvgDebug("svg snippet", {
+    hasOpenTag: svgText.includes("<svg"),
+    hasCloseTag: svgText.includes("</svg"),
+    preview: svgText.slice(0, 120),
+  })
   return svgText
 }
 
 async function rasterizeSvgToPng(svgText: string, width: number, height: number) {
+  logSvgDebug("rasterize svg", { width, height })
   const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`
   const img = new Image()
   img.decoding = "async"
@@ -442,7 +468,9 @@ async function rasterizeSvgToPng(svgText: string, width: number, height: number)
     throw new Error("Не удалось создать контекст canvas для SVG")
   }
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-  return canvas.toDataURL("image/png")
+  const dataUrl = canvas.toDataURL("image/png")
+  logSvgDebug("rasterized png", { prefixOk: dataUrl.startsWith("data:image/png"), length: dataUrl.length })
+  return dataUrl
 }
 
 function waitForImageLoad(image: HTMLImageElement) {
@@ -555,8 +583,22 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
           if (isSvgSource(element.content)) {
             try {
               logSvgDebug("svg element detected", { source: element.content })
-              const svgText = await loadSvgText(element.content)
-              img.src = await rasterizeSvgToPng(svgText, element.size.width, element.size.height)
+              logSvgDebug("svg element raw source", { source: element.content })
+              const resolvedUrl = (() => {
+                try {
+                  return new URL(element.content, window.location.href).toString()
+                } catch {
+                  return element.content
+                }
+              })()
+              logSvgDebug("svg source resolved", { resolvedUrl })
+              logSvgDebug("svg element size", {
+                width: element.size.width,
+                height: element.size.height,
+              })
+              const svgText = await loadSvgText(resolvedUrl)
+              const normalizedSvg = ensureSvgDimensions(svgText, element.size.width, element.size.height)
+              img.src = await rasterizeSvgToPng(normalizedSvg, element.size.width, element.size.height)
             } catch (error) {
               console.warn("Не удалось обработать SVG, используется исходный источник", error)
               img.src = element.content
@@ -589,6 +631,37 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
         }
 
         slideElement.appendChild(elementDiv)
+
+        if (isSvgDebugEnabled() && element.type === "image" && isSvgSource(element.content)) {
+          const rect = elementDiv.getBoundingClientRect()
+          logSvgDebug("svg element rect", {
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height,
+          })
+          const debugMarker = document.createElement("div")
+          debugMarker.style.position = "absolute"
+          debugMarker.style.left = `${element.position.x}px`
+          debugMarker.style.top = `${element.position.y}px`
+          debugMarker.style.width = "10px"
+          debugMarker.style.height = "10px"
+          debugMarker.style.backgroundColor = "red"
+          debugMarker.style.opacity = "0.8"
+          debugMarker.style.pointerEvents = "none"
+          slideElement.appendChild(debugMarker)
+
+          const debugImg = document.createElement("img")
+          debugImg.src =
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAHklEQVQoU2NkYGD4z0ABYBxVSFUBCkY1AgB1vQK6h6Jv6AAAAABJRU5ErkJggg=="
+          debugImg.style.position = "absolute"
+          debugImg.style.left = `${element.position.x + 12}px`
+          debugImg.style.top = `${element.position.y}px`
+          debugImg.style.width = "10px"
+          debugImg.style.height = "10px"
+          debugImg.style.pointerEvents = "none"
+          slideElement.appendChild(debugImg)
+        }
       }
 
       if (isSvgDebugEnabled()) {
