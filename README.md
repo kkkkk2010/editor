@@ -28,13 +28,13 @@ A PPT online editor based on the web terminal ｜ 一款基于web端的ppt在线
 1. Скопируйте выходные данные импортёра в `public/imports/test1`:
    - `public/imports/test1/doc.json`
    - папки `public/imports/test1/backgrounds` и `public/imports/test1/assets` (если нужны).
-2. Запустите проект (`pnpm dev`).
+2. Запустите проект (`npm run dev`).
 3. В редакторе нажмите кнопку **Импорт** в верхней панели.
 4. Во вкладке **URL** введите `/imports/test1/doc.json` и подтвердите импорт.
 
 ## Проверка round-trip ZIP (PPTX→out.zip→out.zip)
 
-1. Запустите проект (`pnpm dev`).
+1. Запустите проект (`npm run dev`).
 2. В редакторе нажмите кнопку **Импорт** и выберите `out.zip`, полученный из конвертора PPTX→out.zip.
 3. Проверьте, что текстовые стили совпадают с исходником (цвет, bold/italic/underline, выравнивание, lineHeight/letterSpacing).
 4. Нажмите **Сохранить** → скачайте новый `out.zip`.
