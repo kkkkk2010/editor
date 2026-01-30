@@ -368,6 +368,35 @@ async function renderSlideToImage(slide: HTMLElement): Promise<Blob> {
   })
 }
 
+function isSvgSource(source: string) {
+  const normalized = source.trim().toLowerCase()
+  return normalized.startsWith("data:image/svg+xml") || normalized.includes(".svg")
+}
+
+async function resolveSvgSource(source: string) {
+  if (source.trim().toLowerCase().startsWith("data:image/svg+xml")) {
+    return source
+  }
+
+  const response = await fetch(source)
+  if (!response.ok) {
+    throw new Error(`Не удалось загрузить SVG: ${source}`)
+  }
+  const svgText = await response.text()
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`
+}
+
+function waitForImageLoad(image: HTMLImageElement) {
+  if (image.complete && image.naturalWidth > 0) {
+    return Promise.resolve()
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve()
+    image.onerror = () => reject(new Error(`Не удалось загрузить изображение: ${image.src}`))
+  })
+}
+
 // 导出PPT
 export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title = "Presentation") {
   try {
@@ -443,7 +472,9 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
       container.appendChild(slideElement)
 
       // 渲染幻灯片元素
-      slide.elements.forEach((element) => {
+      const imageLoadPromises: Promise<void>[] = []
+
+      for (const element of slide.elements) {
         const elementDiv = document.createElement("div")
         elementDiv.style.position = "absolute"
         elementDiv.style.left = `${element.position.x}px`
@@ -462,13 +493,23 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
           elementDiv.innerText = element.content
         } else if (element.type === "image") {
           const img = document.createElement("img")
-          img.src = element.content
+          if (isSvgSource(element.content)) {
+            try {
+              img.src = await resolveSvgSource(element.content)
+            } catch (error) {
+              console.warn("Не удалось обработать SVG, используется исходный источник", error)
+              img.src = element.content
+            }
+          } else {
+            img.src = element.content
+          }
           img.style.width = "100%"
           img.style.height = "100%"
           img.style.objectFit = element.style.objectFit || "cover"
           img.style.borderRadius = `${element.style.borderRadius || 0}px`
           img.style.opacity = `${element.style.opacity || 1}`
           elementDiv.appendChild(img)
+          imageLoadPromises.push(waitForImageLoad(img))
         } else if (element.type === "shape") {
           // 简单渲染形状
           elementDiv.style.backgroundColor = element.style.fill || "#ffffff"
@@ -479,7 +520,9 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
         }
 
         slideElement.appendChild(elementDiv)
-      })
+      }
+
+      await Promise.allSettled(imageLoadPromises)
 
       // 将幻灯片渲染为图片
       const imageBlob = await renderSlideToImage(slideElement)
