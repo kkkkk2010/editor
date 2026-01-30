@@ -428,7 +428,16 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
       slideElement.style.width = `${slideSize.width}px`
       slideElement.style.height = `${slideSize.height}px`
       slideElement.style.position = "relative"
-      slideElement.style.background = slide.background.value
+      if (slide.background.type === "image") {
+        slideElement.style.backgroundImage = slide.background.value.startsWith("url(")
+          ? slide.background.value
+          : `url(${slide.background.value})`
+        slideElement.style.backgroundSize = "100% 100%"
+        slideElement.style.backgroundRepeat = "no-repeat"
+        slideElement.style.backgroundPosition = "center"
+      } else {
+        slideElement.style.background = slide.background.value
+      }
 
       // 添加幻灯片元素
       container.appendChild(slideElement)
