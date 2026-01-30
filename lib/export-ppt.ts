@@ -352,13 +352,33 @@ function createThemeXml() {
 }
 
 // 将幻灯片渲染为图片
+function isSvgDebugEnabled() {
+  if (typeof window === "undefined") return false
+  const flag = (window as Window & { __PPTX_SVG_DEBUG__?: boolean }).__PPTX_SVG_DEBUG__
+  if (flag) return true
+  try {
+    return window.localStorage.getItem("pptxSvgDebug") === "1"
+  } catch {
+    return false
+  }
+}
+
+function logSvgDebug(message: string, data?: Record<string, unknown>) {
+  if (!isSvgDebugEnabled()) return
+  if (data) {
+    console.info(`[pptx-svg] ${message}`, data)
+  } else {
+    console.info(`[pptx-svg] ${message}`)
+  }
+}
+
 async function renderSlideToImage(slide: HTMLElement): Promise<Blob> {
   const canvas = await html2canvas(slide, {
     scale: 2, // 提高导出质量
     useCORS: true,
     allowTaint: true,
     backgroundColor: null,
-    logging: false,
+    logging: isSvgDebugEnabled(),
   })
 
   return new Promise((resolve) => {
@@ -373,17 +393,56 @@ function isSvgSource(source: string) {
   return normalized.startsWith("data:image/svg+xml") || normalized.includes(".svg")
 }
 
-async function resolveSvgSource(source: string) {
+function decodeSvgDataUrl(source: string) {
+  const [, data] = source.split(",", 2)
+  if (!data) return ""
+  if (source.includes(";base64,")) {
+    return atob(data)
+  }
+  return decodeURIComponent(data)
+}
+
+async function loadSvgText(source: string) {
   if (source.trim().toLowerCase().startsWith("data:image/svg+xml")) {
-    return source
+    const decoded = decodeSvgDataUrl(source)
+    logSvgDebug("decoded svg data url", { length: decoded.length })
+    return decoded
   }
 
-  const response = await fetch(source)
+  let resolvedSource = source
+  try {
+    resolvedSource = new URL(source, window.location.href).toString()
+  } catch {
+    resolvedSource = source
+  }
+
+  logSvgDebug("fetching svg", { source: resolvedSource })
+  const response = await fetch(resolvedSource)
+  logSvgDebug("fetched svg", { source: resolvedSource, status: response.status })
   if (!response.ok) {
-    throw new Error(`Не удалось загрузить SVG: ${source}`)
+    throw new Error(`Не удалось загрузить SVG: ${resolvedSource}`)
   }
   const svgText = await response.text()
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`
+  logSvgDebug("loaded svg text", { length: svgText.length })
+  return svgText
+}
+
+async function rasterizeSvgToPng(svgText: string, width: number, height: number) {
+  const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`
+  const img = new Image()
+  img.decoding = "async"
+  img.src = svgDataUrl
+  await waitForImageLoad(img)
+
+  const canvas = document.createElement("canvas")
+  canvas.width = Math.max(1, Math.round(width))
+  canvas.height = Math.max(1, Math.round(height))
+  const ctx = canvas.getContext("2d")
+  if (!ctx) {
+    throw new Error("Не удалось создать контекст canvas для SVG")
+  }
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+  return canvas.toDataURL("image/png")
 }
 
 function waitForImageLoad(image: HTMLImageElement) {
@@ -495,7 +554,9 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
           const img = document.createElement("img")
           if (isSvgSource(element.content)) {
             try {
-              img.src = await resolveSvgSource(element.content)
+              logSvgDebug("svg element detected", { source: element.content })
+              const svgText = await loadSvgText(element.content)
+              img.src = await rasterizeSvgToPng(svgText, element.size.width, element.size.height)
             } catch (error) {
               console.warn("Не удалось обработать SVG, используется исходный источник", error)
               img.src = element.content
@@ -509,7 +570,15 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
           img.style.borderRadius = `${element.style.borderRadius || 0}px`
           img.style.opacity = `${element.style.opacity || 1}`
           elementDiv.appendChild(img)
-          imageLoadPromises.push(waitForImageLoad(img))
+          imageLoadPromises.push(
+            waitForImageLoad(img).then(() => {
+              logSvgDebug("image loaded", {
+                source: img.src,
+                naturalWidth: img.naturalWidth,
+                naturalHeight: img.naturalHeight,
+              })
+            }),
+          )
         } else if (element.type === "shape") {
           // 简单渲染形状
           elementDiv.style.backgroundColor = element.style.fill || "#ffffff"
@@ -520,6 +589,11 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
         }
 
         slideElement.appendChild(elementDiv)
+      }
+
+      if (isSvgDebugEnabled()) {
+        const rect = slideElement.getBoundingClientRect()
+        logSvgDebug("slide element rect", { width: rect.width, height: rect.height })
       }
 
       await Promise.allSettled(imageLoadPromises)
