@@ -393,6 +393,14 @@ function isSvgSource(source: string) {
   return normalized.startsWith("data:image/svg+xml") || normalized.includes(".svg")
 }
 
+function isSvgElement(element: Slide["elements"][number]) {
+  if (isSvgSource(element.content)) {
+    return true
+  }
+  const assetPath = element.assetPath?.toLowerCase()
+  return Boolean(assetPath && assetPath.endsWith(".svg"))
+}
+
 function decodeSvgDataUrl(source: string) {
   const [, data] = source.split(",", 2)
   if (!data) return ""
@@ -560,8 +568,10 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
 
       // 渲染幻灯片元素
       const imageLoadPromises: Promise<void>[] = []
+      const debugSvgTargets: Array<{ index: number; elementDiv: HTMLDivElement }> = []
 
-      for (const element of slide.elements) {
+      for (let elementIndex = 0; elementIndex < slide.elements.length; elementIndex += 1) {
+        const element = slide.elements[elementIndex]
         const elementDiv = document.createElement("div")
         elementDiv.style.position = "absolute"
         elementDiv.style.left = `${element.position.x}px`
@@ -580,9 +590,16 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
           elementDiv.innerText = element.content
         } else if (element.type === "image") {
           const img = document.createElement("img")
-          if (isSvgSource(element.content)) {
+          if (isSvgElement(element)) {
             try {
-              logSvgDebug("svg element detected", { source: element.content })
+              logSvgDebug("svg element detected", {
+                slideIndex: i,
+                elementIndex,
+                source: element.content,
+                position: element.position,
+                size: element.size,
+                assetPath: element.assetPath,
+              })
               logSvgDebug("svg element raw source", { source: element.content })
               const resolvedUrl = (() => {
                 try {
@@ -612,6 +629,16 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
           img.style.borderRadius = `${element.style.borderRadius || 0}px`
           img.style.opacity = `${element.style.opacity || 1}`
           elementDiv.appendChild(img)
+          if (isSvgDebugEnabled()) {
+            logSvgDebug("image element state", {
+              slideIndex: i,
+              elementIndex,
+              src: img.src,
+              complete: img.complete,
+              naturalWidth: img.naturalWidth,
+              naturalHeight: img.naturalHeight,
+            })
+          }
           imageLoadPromises.push(
             waitForImageLoad(img).then(() => {
               logSvgDebug("image loaded", {
@@ -632,35 +659,21 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
 
         slideElement.appendChild(elementDiv)
 
-        if (isSvgDebugEnabled() && element.type === "image" && isSvgSource(element.content)) {
+        if (isSvgDebugEnabled() && element.type === "image" && isSvgElement(element)) {
           const rect = elementDiv.getBoundingClientRect()
+          const computed = window.getComputedStyle(elementDiv)
           logSvgDebug("svg element rect", {
+            slideIndex: i,
+            elementIndex,
             top: rect.top,
             left: rect.left,
             width: rect.width,
             height: rect.height,
+            display: computed.display,
+            opacity: computed.opacity,
+            visibility: computed.visibility,
           })
-          const debugMarker = document.createElement("div")
-          debugMarker.style.position = "absolute"
-          debugMarker.style.left = `${element.position.x}px`
-          debugMarker.style.top = `${element.position.y}px`
-          debugMarker.style.width = "10px"
-          debugMarker.style.height = "10px"
-          debugMarker.style.backgroundColor = "red"
-          debugMarker.style.opacity = "0.8"
-          debugMarker.style.pointerEvents = "none"
-          slideElement.appendChild(debugMarker)
-
-          const debugImg = document.createElement("img")
-          debugImg.src =
-            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAHklEQVQoU2NkYGD4z0ABYBxVSFUBCkY1AgB1vQK6h6Jv6AAAAABJRU5ErkJggg=="
-          debugImg.style.position = "absolute"
-          debugImg.style.left = `${element.position.x + 12}px`
-          debugImg.style.top = `${element.position.y}px`
-          debugImg.style.width = "10px"
-          debugImg.style.height = "10px"
-          debugImg.style.pointerEvents = "none"
-          slideElement.appendChild(debugImg)
+          debugSvgTargets.push({ index: elementIndex, elementDiv })
         }
       }
 
@@ -671,8 +684,52 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
 
       await Promise.allSettled(imageLoadPromises)
 
+      if (isSvgDebugEnabled()) {
+        debugSvgTargets.forEach(({ index, elementDiv }) => {
+          elementDiv.style.outline = "2px solid rgba(255,0,0,0.8)"
+          const marker = document.createElement("div")
+          marker.style.position = "absolute"
+          marker.style.left = "0"
+          marker.style.top = "0"
+          marker.style.width = "8px"
+          marker.style.height = "8px"
+          marker.style.backgroundColor = "red"
+          marker.style.opacity = "0.8"
+          marker.style.pointerEvents = "none"
+          elementDiv.appendChild(marker)
+          const testImg = document.createElement("img")
+          testImg.src =
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAHklEQVQoU2NkYGD4z0ABYBxVSFUBCkY1AgB1vQK6h6Jv6AAAAABJRU5ErkJggg=="
+          testImg.style.position = "absolute"
+          testImg.style.left = "10px"
+          testImg.style.top = "0"
+          testImg.style.width = "10px"
+          testImg.style.height = "10px"
+          testImg.style.pointerEvents = "none"
+          elementDiv.appendChild(testImg)
+          logSvgDebug("debug marker applied", { slideIndex: i, elementIndex: index })
+        })
+      }
+
       // 将幻灯片渲染为图片
       const imageBlob = await renderSlideToImage(slideElement)
+
+      if (isSvgDebugEnabled()) {
+        const blobUrl = URL.createObjectURL(imageBlob)
+        logSvgDebug("debug bitmap ready", { slideIndex: i, blobUrl })
+        const preview = document.createElement("img")
+        preview.src = blobUrl
+        preview.style.position = "fixed"
+        preview.style.right = "16px"
+        preview.style.bottom = "16px"
+        preview.style.width = "240px"
+        preview.style.height = "auto"
+        preview.style.border = "2px solid #f00"
+        preview.style.zIndex = "9999"
+        preview.style.background = "#fff"
+        preview.style.pointerEvents = "none"
+        document.body.appendChild(preview)
+      }
 
       // 添加图片到ZIP
       pptFolder?.file(`media/image${i + 1}.png`, imageBlob)
