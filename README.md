@@ -45,6 +45,11 @@ A PPT online editor based on the web terminal ｜ 一款基于web端的ppt在线
    - SVG-иконки остаются SVG (не ломаются и не превращаются в PNG),
    - элементы не смещаются из-за потери lineHeight/letterSpacing.
 
+## Переменные окружения (PPTX)
+
+- `CONVERTER_URL` (server-only): базовый URL конвертора, который использует `/api/convert-pptx` (по умолчанию `http://127.0.0.1:3001`).
+- `NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT=1`: показывает админскую кнопку **Импорт PPTX** в верхней панели.
+
 
 关注【趣谈前端】公众号，获取更多技术干货，项目最新进展，和开源实践。
 
