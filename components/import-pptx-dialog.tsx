@@ -49,10 +49,11 @@ export default function ImportPptxDialog({ importOutZipFromArrayBuffer, hasUnsav
     } catch (error) {
       if (isConverterClientError(error)) {
         console.error("PPTX convert error:", {
+          message: error.message,
           code: error.code,
           requestId: error.requestId,
           httpStatus: error.httpStatus,
-          message: error.message,
+          targetUrl: error.targetUrl,
         })
         toast({
           title: "Ошибка конвертации",
@@ -60,7 +61,15 @@ export default function ImportPptxDialog({ importOutZipFromArrayBuffer, hasUnsav
           variant: "destructive",
         })
       } else {
-        console.error("PPTX import error:", error)
+        if (error instanceof Error) {
+          console.error("PPTX import error:", {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+          })
+        } else {
+          console.error("PPTX import error:", { error })
+        }
         toast({
           title: "Ошибка импорта",
           description: error instanceof Error ? error.message : "Не удалось импортировать PPTX файл.",

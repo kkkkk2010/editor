@@ -22,11 +22,42 @@ export class ConverterClientError extends Error {
 
   constructor(payload: ConverterErrorPayload, httpStatus?: number, targetUrl?: string) {
     super(payload.message)
-    this.name = "ConverterClientError"
-    this.code = payload.code
-    this.requestId = payload.requestId
-    this.httpStatus = httpStatus
-    this.targetUrl = targetUrl
+    Object.defineProperty(this, "name", {
+      value: "ConverterClientError",
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    })
+    Object.defineProperty(this, "message", {
+      value: payload.message,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    })
+    Object.defineProperty(this, "code", {
+      value: payload.code,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    })
+    Object.defineProperty(this, "requestId", {
+      value: payload.requestId,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    })
+    Object.defineProperty(this, "httpStatus", {
+      value: httpStatus,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    })
+    Object.defineProperty(this, "targetUrl", {
+      value: targetUrl,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    })
   }
 }
 
@@ -57,16 +88,17 @@ function getConverterBaseUrl(): string {
   return ""
 }
 
-async function parseJsonError(response: Response): Promise<ConverterClientError> {
+async function parseJsonError(response: Response, targetUrl: string): Promise<ConverterClientError> {
   try {
     const payload = (await response.json()) as Partial<ConverterErrorPayload>
     const code = payload.code && CONVERTER_ERROR_CODES.has(payload.code) ? payload.code : "INTERNAL"
     const message = payload.message ?? "Converter request failed."
-    return new ConverterClientError({ code, message, requestId: payload.requestId }, response.status)
+    return new ConverterClientError({ code, message, requestId: payload.requestId }, response.status, targetUrl)
   } catch {
     return new ConverterClientError(
       { code: "INTERNAL", message: "Failed to parse converter error response." },
       response.status,
+      targetUrl,
     )
   }
 }
@@ -84,10 +116,13 @@ async function requestConversion(bytes: ArrayBuffer): Promise<ArrayBuffer> {
       body: bytes,
     })
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : undefined
     throw new ConverterClientError(
       {
         code: "INTERNAL",
-        message: "Network error: converter unreachable.",
+        message: errorMessage
+          ? `Network error: converter unreachable (${errorMessage}).`
+          : "Network error: converter unreachable.",
         requestId: undefined,
       },
       undefined,
@@ -97,8 +132,7 @@ async function requestConversion(bytes: ArrayBuffer): Promise<ArrayBuffer> {
 
   const contentType = response.headers.get("content-type") ?? ""
   if (contentType.includes("application/json")) {
-    const parsedError = await parseJsonError(response)
-    parsedError.targetUrl = targetUrl
+    const parsedError = await parseJsonError(response, targetUrl)
     throw parsedError
   }
 
