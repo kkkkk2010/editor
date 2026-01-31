@@ -59,20 +59,6 @@ const CONVERTER_ERROR_CODES = new Set<ConverterErrorCode>([
   "INTERNAL",
 ])
 
-function getConverterBaseUrl(): string {
-  const baseUrl = process.env.NEXT_PUBLIC_CONVERTER_URL?.trim()
-  if (baseUrl) {
-    if (!/^https?:\/\//i.test(baseUrl)) {
-      throw new ConverterClientError({
-        code: "INTERNAL",
-        message: "Converter URL must start with http or https.",
-      })
-    }
-    return baseUrl.replace(/\/$/, "")
-  }
-  return ""
-}
-
 async function parseJsonError(response: Response, targetUrl: string): Promise<ConverterClientError> {
   const contentType = response.headers.get("content-type") ?? ""
   try {
@@ -110,8 +96,7 @@ async function readResponseSnippet(response: Response, limit = 4096): Promise<st
 }
 
 async function requestConversion(bytes: ArrayBuffer): Promise<ArrayBuffer> {
-  const baseUrl = getConverterBaseUrl()
-  const targetUrl = baseUrl ? `${baseUrl}/convert` : "/api/convert-pptx"
+  const targetUrl = "/api/convert-pptx"
   let response: Response
   try {
     response = await fetch(targetUrl, {
