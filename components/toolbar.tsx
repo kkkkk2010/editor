@@ -17,8 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from "@/lib/utils"
 import TitleEditor from "./title-editor"
 import ImportZipDialog from "@/components/import-zip-dialog"
-import type { ImportResult } from "@/src/lib/import/importerDoc"
-import type { AssetStore } from "@/src/lib/assets/assetStore"
+import ImportPptxDialog from "@/components/import-pptx-dialog"
 
 interface ToolbarProps {
   selectedElement: Element | null
@@ -27,13 +26,13 @@ interface ToolbarProps {
   onAddText: () => void
   title: string
   onTitleChange: (title: string) => void
-  onImportZip: (result: ImportResult, createdUrls: string[]) => void
+  importOutZipFromArrayBuffer: (outZip: ArrayBuffer) => Promise<void>
+  showAdminPptxImport?: boolean
   onUndo: () => void
   onRedo: () => void
   canUndo: boolean
   canRedo: boolean
   onSaveProject: () => void
-  assetStore?: AssetStore
   hasUnsavedChanges?: boolean
 }
 
@@ -44,13 +43,13 @@ export default function Toolbar({
   onAddText,
   title,
   onTitleChange,
-  onImportZip,
+  importOutZipFromArrayBuffer,
+  showAdminPptxImport,
   onUndo,
   onRedo,
   canUndo,
   canRedo,
   onSaveProject,
-  assetStore,
   hasUnsavedChanges,
 }: ToolbarProps) {
   const updateTextStyle = <K extends keyof Element["style"]>(property: K, value: Element["style"][K]) => {
@@ -151,7 +150,12 @@ export default function Toolbar({
             Сохранить
           </Button>
         </div>
-        <ImportZipDialog onImport={onImportZip} assetStore={assetStore} hasUnsavedChanges={hasUnsavedChanges} />
+        <div className="flex items-center gap-2">
+          <ImportZipDialog importOutZipFromArrayBuffer={importOutZipFromArrayBuffer} hasUnsavedChanges={hasUnsavedChanges} />
+          {showAdminPptxImport ? (
+            <ImportPptxDialog importOutZipFromArrayBuffer={importOutZipFromArrayBuffer} hasUnsavedChanges={hasUnsavedChanges} />
+          ) : null}
+        </div>
       </div>
 
       <div className="flex items-center space-x-2">

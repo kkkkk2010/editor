@@ -45,6 +45,22 @@ A PPT online editor based on the web terminal ｜ 一款基于web端的ppt在线
    - SVG-иконки остаются SVG (не ломаются и не превращаются в PNG),
    - элементы не смещаются из-за потери lineHeight/letterSpacing.
 
+## Переменные окружения (PPTX)
+
+- `CONVERTER_URL` (server-only): базовый URL конвертора, который использует `/api/convert-pptx` (по умолчанию `http://127.0.0.1:3001`).
+- `CONVERTER_MAX_PPTX_BYTES` (server-only): максимальный размер PPTX для прокси `/api/convert-pptx` (по умолчанию 30MB).
+- `ADMIN_IMPORT_TOKEN` (server-only): токен, который требуется для включения доступа к `/api/convert-pptx` (см. ниже).
+- `NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT=1`: показывает админскую кнопку **Импорт PPTX** в верхней панели.
+
+### Как включить админ-импорт PPTX
+
+1. Задайте `ADMIN_IMPORT_TOKEN` на сервере (например `ADMIN_IMPORT_TOKEN=dev-secret`).
+2. Выполните запрос на `/api/admin/enable-import?token=dev-secret` (POST). Это установит httpOnly cookie `admin_import`.
+3. После этого `/api/convert-pptx` будет доступен в браузере. Без cookie эндпоинт вернёт 401/403.
+
+> В проде дополнительно настройте `client_max_body_size` в nginx (или аналогичный лимит) как второй уровень защиты.
+> Для проверки лимита можно отправить PPTX больше `CONVERTER_MAX_PPTX_BYTES` и ожидать ответ 413.
+
 
 关注【趣谈前端】公众号，获取更多技术干货，项目最新进展，和开源实践。
 

@@ -20,6 +20,7 @@ import type { ImportResult } from "@/src/lib/import/importerDoc"
 import { revokeImportObjectUrls } from "@/src/lib/import/zipImport"
 import { AssetStore } from "@/src/lib/assets/assetStore"
 import { mapEditorToImporter } from "@/src/lib/import/mapEditorToImporter"
+import { mapImporterToEditor } from "@/src/lib/import/mapImporterToEditor"
 import { exportProjectZip } from "@/src/lib/project/exportProjectZip"
 import FileSaver from "file-saver"
 import html2canvas from "html2canvas"
@@ -949,6 +950,17 @@ export default function Home() {
     handleImport(result)
   }
 
+  const importOutZipFromArrayBuffer = useCallback(
+    async (outZip: ArrayBuffer) => {
+      assetStoreRef.current.clear()
+      const { importZipFile } = await import("@/src/lib/import/zipImport")
+      const { doc, createdUrls, sourceSlideSize } = await importZipFile(outZip, assetStoreRef.current)
+      const mapped = mapImporterToEditor(doc, { sourceSlideSize, allowResize: true })
+      handleImportZip(mapped, createdUrls)
+    },
+    [handleImportZip],
+  )
+
   const renderBackgroundBytes = async (background: Background) => {
     const container = document.createElement("div")
     container.style.width = `${slideSize.width}px`
@@ -1151,8 +1163,8 @@ export default function Home() {
             onAddText={handleAddText}
             title={presentationTitle}
             onTitleChange={setPresentationTitle}
-            onImportZip={handleImportZip}
-            assetStore={assetStoreRef.current}
+            importOutZipFromArrayBuffer={importOutZipFromArrayBuffer}
+            showAdminPptxImport={process.env.NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT === "1"}
             onUndo={undo}
             onRedo={redo}
             canUndo={canUndo}
