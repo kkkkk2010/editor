@@ -14,50 +14,35 @@ export type ConverterErrorPayload = {
   requestId?: string
 }
 
+export type ConverterErrorDetails = {
+  contentType?: string
+  responseTextSnippet?: string
+  originalErrorName?: string
+  originalErrorMessage?: string
+}
+
 export class ConverterClientError extends Error {
   code: ConverterErrorCode
   requestId?: string
   httpStatus?: number
   targetUrl?: string
+  details?: ConverterErrorDetails
 
-  constructor(payload: ConverterErrorPayload, httpStatus?: number, targetUrl?: string) {
+  constructor(
+    payload: ConverterErrorPayload,
+    options?: {
+      httpStatus?: number
+      targetUrl?: string
+      details?: ConverterErrorDetails
+    },
+  ) {
     super(payload.message)
-    Object.defineProperty(this, "name", {
-      value: "ConverterClientError",
-      enumerable: true,
-      configurable: true,
-      writable: true,
-    })
-    Object.defineProperty(this, "message", {
-      value: payload.message,
-      enumerable: true,
-      configurable: true,
-      writable: true,
-    })
-    Object.defineProperty(this, "code", {
-      value: payload.code,
-      enumerable: true,
-      configurable: true,
-      writable: true,
-    })
-    Object.defineProperty(this, "requestId", {
-      value: payload.requestId,
-      enumerable: true,
-      configurable: true,
-      writable: true,
-    })
-    Object.defineProperty(this, "httpStatus", {
-      value: httpStatus,
-      enumerable: true,
-      configurable: true,
-      writable: true,
-    })
-    Object.defineProperty(this, "targetUrl", {
-      value: targetUrl,
-      enumerable: true,
-      configurable: true,
-      writable: true,
-    })
+    this.name = "ConverterClientError"
+    this.code = payload.code ?? "INTERNAL"
+    this.requestId = payload.requestId
+    this.httpStatus = options?.httpStatus
+    this.targetUrl = options?.targetUrl
+    this.details = options?.details
   }
 }
 
@@ -89,17 +74,38 @@ function getConverterBaseUrl(): string {
 }
 
 async function parseJsonError(response: Response, targetUrl: string): Promise<ConverterClientError> {
+  const contentType = response.headers.get("content-type") ?? ""
   try {
     const payload = (await response.json()) as Partial<ConverterErrorPayload>
     const code = payload.code && CONVERTER_ERROR_CODES.has(payload.code) ? payload.code : "INTERNAL"
     const message = payload.message ?? "Converter request failed."
-    return new ConverterClientError({ code, message, requestId: payload.requestId }, response.status, targetUrl)
+    return new ConverterClientError(
+      { code, message, requestId: payload.requestId },
+      {
+        httpStatus: response.status,
+        targetUrl,
+        details: { contentType },
+      },
+    )
   } catch {
     return new ConverterClientError(
       { code: "INTERNAL", message: "Failed to parse converter error response." },
-      response.status,
-      targetUrl,
+      {
+        httpStatus: response.status,
+        targetUrl,
+        details: { contentType },
+      },
     )
+  }
+}
+
+async function readResponseSnippet(response: Response, limit = 4096): Promise<string | undefined> {
+  try {
+    const text = await response.text()
+    if (!text) return undefined
+    return text.length > limit ? `${text.slice(0, limit)}…` : text
+  } catch {
+    return undefined
   }
 }
 
@@ -116,35 +122,47 @@ async function requestConversion(bytes: ArrayBuffer): Promise<ArrayBuffer> {
       body: bytes,
     })
   } catch (error) {
+    const errorName = error instanceof Error ? error.name : undefined
     const errorMessage = error instanceof Error ? error.message : undefined
     throw new ConverterClientError(
       {
         code: "INTERNAL",
-        message: errorMessage
-          ? `Network error: converter unreachable (${errorMessage}).`
-          : "Network error: converter unreachable.",
+        message: "Network error while calling converter.",
         requestId: undefined,
       },
-      undefined,
-      targetUrl,
+      {
+        targetUrl,
+        details: {
+          originalErrorName: errorName,
+          originalErrorMessage: errorMessage,
+        },
+      },
     )
   }
 
   const contentType = response.headers.get("content-type") ?? ""
+  const requestId = response.headers.get("x-request-id") ?? undefined
   if (contentType.includes("application/json")) {
     const parsedError = await parseJsonError(response, targetUrl)
     throw parsedError
   }
 
   if (!response.ok) {
+    const responseTextSnippet = await readResponseSnippet(response)
     throw new ConverterClientError(
       {
         code: "INTERNAL",
-        message: "Converter returned a non-JSON error response.",
-        requestId: response.headers.get("x-request-id") ?? undefined,
+        message: "Unexpected converter error response.",
+        requestId,
       },
-      response.status,
-      targetUrl,
+      {
+        httpStatus: response.status,
+        targetUrl,
+        details: {
+          contentType,
+          responseTextSnippet,
+        },
+      },
     )
   }
 
@@ -161,5 +179,14 @@ export async function convertPptxFile(file: File): Promise<ArrayBuffer> {
 }
 
 export function isConverterClientError(error: unknown): error is ConverterClientError {
-  return error instanceof ConverterClientError
+  if (error instanceof ConverterClientError) {
+    return true
+  }
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: string }).name === "ConverterClientError" &&
+    "code" in error
+  )
 }

@@ -48,28 +48,30 @@ export default function ImportPptxDialog({ importOutZipFromArrayBuffer, hasUnsav
       })
     } catch (error) {
       if (isConverterClientError(error)) {
-        console.error("PPTX convert error:", {
-          message: error.message,
-          code: error.code,
-          requestId: error.requestId,
-          httpStatus: error.httpStatus,
-          targetUrl: error.targetUrl,
-        })
+        console.error(
+          "PPTX convert error:",
+          JSON.stringify(
+            {
+              message: error.message,
+              code: error.code,
+              requestId: error.requestId,
+              httpStatus: error.httpStatus,
+              targetUrl: error.targetUrl,
+              details: error.details,
+            },
+            null,
+            2,
+          ),
+        )
         toast({
           title: "Ошибка конвертации",
-          description: `Код: ${error.code}${error.requestId ? `, Request ID: ${error.requestId}` : ""}.`,
+          description: `${error.message} (код: ${error.code}${
+            error.requestId ? `, Request ID: ${error.requestId}` : ""
+          }${error.httpStatus ? `, HTTP: ${error.httpStatus}` : ""}).`,
           variant: "destructive",
         })
       } else {
-        if (error instanceof Error) {
-          console.error("PPTX import error:", {
-            name: error.name,
-            message: error.message,
-            stack: error.stack,
-          })
-        } else {
-          console.error("PPTX import error:", { error })
-        }
+        console.error("PPTX convert unknown error:", error)
         toast({
           title: "Ошибка импорта",
           description: error instanceof Error ? error.message : "Не удалось импортировать PPTX файл.",
