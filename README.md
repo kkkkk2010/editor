@@ -83,6 +83,9 @@ CONVERTER_IMAGE=your-registry/your-converter:latest docker compose up -d --build
 
 > `converter` использует только `expose: 3001`, поэтому наружу порт не публикуется.
 
+
+> Если в runtime-контейнере пропадают API routes (например `/api/bridge/*` даёт HTML 404), проверьте `.dockerignore`: он не должен исключать `app/**`, `src/**`, `components/**`, `public/**`, `middleware.ts`, `next.config.*` и конфиги сборки.
+
 ### 3) Переменные окружения для Docker
 
 Для `editor`:
