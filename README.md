@@ -45,9 +45,88 @@ A PPT online editor based on the web terminal ｜ 一款基于web端的ppt在线
    - SVG-иконки остаются SVG (не ломаются и не превращаются в PNG),
    - элементы не смещаются из-за потери lineHeight/letterSpacing.
 
+
+## Docker (production)
+
+### 1) Сборка production-образа Editor
+
+```bash
+docker build -t editor:latest .
+```
+
+Запуск только editor-контейнера (когда конвертор уже доступен отдельно):
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e CONVERTER_URL=http://127.0.0.1:3001 \
+  -e ADMIN_IMPORT_TOKEN=devtoken \
+  -e CONVERTER_MAX_PPTX_BYTES=31457280 \
+  -e NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT=1 \
+  editor:latest
+```
+
+### 2) Запуск Editor + Converter через Docker Compose
+
+В репозитории есть `docker-compose.yml` с двумя сервисами:
+- `editor` (Next.js production, порт `3000` наружу),
+- `converter` (по умолчанию `pptx-importer:latest`, доступен editor по внутреннему DNS `http://converter:3001`).
+
+```bash
+docker compose up -d --build
+```
+
+Если образ конвертора называется иначе, задайте переменную:
+
+```bash
+CONVERTER_IMAGE=your-registry/your-converter:latest docker compose up -d --build
+```
+
+> `converter` использует только `expose: 3001`, поэтому наружу порт не публикуется.
+
+### 3) Переменные окружения для Docker
+
+Для `editor`:
+- `CONVERTER_URL` (server-only, для compose по умолчанию `http://converter:3001`)
+- `ADMIN_IMPORT_TOKEN` (server-only; если задан, нужен для `POST /api/admin/enable-import?token=...`)
+- `CONVERTER_MAX_PPTX_BYTES` (server-only, лимит размера PPTX в байтах)
+- `NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT=1` (client-side, показывает кнопку импорта PPTX в UI)
+
+Для `converter` (минимум):
+- `PPTX_IMPORTER_PORT=3001`
+
+### 4) Проверка после запуска
+
+1. Откройте `http://localhost:3000`.
+2. Включите cookie для админ-импорта:
+
+   ```bash
+   curl -i -X POST "http://localhost:3000/api/admin/enable-import?token=devtoken"
+   ```
+
+3. Проверьте, что без cookie прокси закрыт (при заданном `ADMIN_IMPORT_TOKEN`):
+
+   ```bash
+   curl -i -X POST http://localhost:3000/api/convert-pptx
+   ```
+
+   Ожидается `401 UNAUTHORIZED`.
+
+4. В UI нажмите **Импорт PPTX** и проверьте, что браузер отправляет запрос на same-origin `/api/convert-pptx`, а editor проксирует его в `CONVERTER_URL` (`http://converter:3001` внутри compose-сети).
+
+### Быстрый сценарий для VPS
+
+```bash
+# в каталоге editor
+export ADMIN_IMPORT_TOKEN='strong-secret'
+export CONVERTER_IMAGE='your-registry/pptx-importer:latest'
+docker compose pull || true
+docker compose up -d --build
+curl -I http://localhost:3000
+```
+
 ## Переменные окружения (PPTX)
 
-- `CONVERTER_URL` (server-only): базовый URL конвертора, который использует `/api/convert-pptx` (по умолчанию `http://127.0.0.1:3001`).
+- `CONVERTER_URL` (server-only): базовый URL конвертора, который использует `/api/convert-pptx` (локально обычно `http://127.0.0.1:3001`, в Docker Compose — `http://converter:3001`).
 - `CONVERTER_MAX_PPTX_BYTES` (server-only): максимальный размер PPTX для прокси `/api/convert-pptx` (по умолчанию 30MB).
 - `ADMIN_IMPORT_TOKEN` (server-only): токен, который требуется для включения доступа к `/api/convert-pptx` (см. ниже).
 - `NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT=1`: показывает админскую кнопку **Импорт PPTX** в верхней панели.

@@ -1,0 +1,24 @@
+services:
+  editor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      CONVERTER_URL: ${CONVERTER_URL:-http://converter:3001}
+      ADMIN_IMPORT_TOKEN: ${ADMIN_IMPORT_TOKEN:-devtoken}
+      CONVERTER_MAX_PPTX_BYTES: ${CONVERTER_MAX_PPTX_BYTES:-31457280}
+      NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT: ${NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT:-1}
+      NODE_ENV: production
+    depends_on:
+      - converter
+    restart: unless-stopped
+
+  converter:
+    image: ${CONVERTER_IMAGE:-pptx-importer:latest}
+    expose:
+      - "3001"
+    environment:
+      PPTX_IMPORTER_PORT: ${PPTX_IMPORTER_PORT:-3001}
+    restart: unless-stopped

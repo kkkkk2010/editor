@@ -2,6 +2,7 @@
 const isWindows = process.platform === "win32"
 
 const nextConfig = {
+  output: "standalone",
   images: {
     unoptimized: true,
   },
