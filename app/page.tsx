@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useMemo, useRef, useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Sidebar from "@/components/sidebar"
 import Toolbar from "@/components/toolbar"
 import SlideEditor from "@/components/slide-editor"
@@ -179,6 +180,9 @@ export default function Home() {
   const textEditSnapshotRef = useRef<EditorState | null>(null)
   const textEditElementIdRef = useRef<string | null>(null)
   const textEditOriginalTextRef = useRef<string | null>(null)
+  const [isBridgeImporting, setIsBridgeImporting] = useState(false)
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
   const present = history.present
   const slides = present.slides
@@ -998,6 +1002,64 @@ export default function Home() {
     }
   }
 
+  useEffect(() => {
+    const importOutZip = searchParams.get("importOutZip")
+    const token = searchParams.get("t")
+    if (!importOutZip || !token) {
+      return
+    }
+
+    let cancelled = false
+    const run = async () => {
+      setIsBridgeImporting(true)
+      try {
+        const importUrl = new URL(importOutZip, window.location.origin)
+        importUrl.searchParams.set("t", token)
+
+        const response = await fetch(importUrl.toString(), {
+          method: "GET",
+          cache: "no-store",
+        })
+
+        if (!response.ok) {
+          throw new Error(`Bridge import failed with status ${response.status}`)
+        }
+
+        const outZip = await response.arrayBuffer()
+        if (cancelled) {
+          return
+        }
+
+        await importOutZipFromArrayBuffer(outZip)
+        if (!cancelled) {
+          const cleanUrl = `${window.location.pathname}${window.location.hash}`
+          router.replace(cleanUrl)
+          toast({
+            title: "Импорт завершен",
+            description: "Файл out.zip успешно загружен через bridge.",
+          })
+        }
+      } catch (error) {
+        if (!cancelled) {
+          toast({
+            title: "Не удалось импортировать out.zip",
+            description: error instanceof Error ? error.message : "Попробуйте снова.",
+            variant: "destructive",
+          })
+        }
+      } finally {
+        if (!cancelled) {
+          setIsBridgeImporting(false)
+        }
+      }
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [importOutZipFromArrayBuffer, router, searchParams, toast])
+
   const handleSaveProject = async () => {
     try {
       const assetStore = assetStoreRef.current
@@ -1147,6 +1209,9 @@ export default function Home() {
 
   return (
     <main className="flex flex-col h-screen bg-background">
+      {isBridgeImporting ? (
+        <div className="px-4 py-2 text-sm border-b bg-muted/40 text-muted-foreground">Importing out.zip…</div>
+      ) : null}
       {isPreviewMode ? (
         <SlidePreview
           slides={slides}

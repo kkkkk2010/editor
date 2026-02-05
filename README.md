@@ -148,3 +148,49 @@ curl -I http://localhost:3000
 1. [flowmix/docx多模态文档编辑器](https://flowmix.turntip.cn)
 2. [灵语AI文档](https://mindlink.turntip.cn)
 3. [H5-Dooring智能零代码平台](https://github.com/MrXujiang/h5-Dooring)
+
+## Bridge (WP→Converter→Editor) для демо
+
+Bridge добавляет same-origin поток:
+
+1. WordPress вызывает `POST /api/bridge/convert-from-url` с `pptxUrl`.
+2. Editor на сервере скачивает PPTX по URL, отправляет его в `${CONVERTER_URL}/convert`, получает `out.zip`.
+3. `out.zip` временно сохраняется на диске контейнера, а в ответ возвращается одноразовая ссылка на скачивание.
+4. Editor UI открывается с query и автоматически импортирует ZIP через существующую точку `importOutZipFromArrayBuffer`.
+
+### Переменные окружения Bridge
+
+- `BRIDGE_TOKEN` (server-only, обязательно): токен для авторизации bridge-запросов (`Authorization: Bearer <token>`).
+  - Если не задан, `POST /api/bridge/convert-from-url` отключен и возвращает `503 SERVICE_DISABLED`.
+- `BRIDGE_MAX_PPTX_BYTES` (server-only, по умолчанию `62914560` = 60MB): лимит размера PPTX при скачивании по URL.
+- `BRIDGE_TTL_SECONDS` (server-only, по умолчанию `1800`): TTL для временного хранения `out.zip` и метаданных job.
+- `BRIDGE_TMP_DIR` (server-only, опционально, по умолчанию `/tmp/outzips`): каталог для временных `out.zip`.
+- `BRIDGE_DOWNLOAD_TIMEOUT_MS` (server-only, опционально, по умолчанию `90000`): таймаут скачивания PPTX по URL.
+
+### Пример запроса от WP
+
+```bash
+curl -X POST http://141.105.68.164:3000/api/bridge/convert-from-url \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"pptxUrl":"https://example.com/path/file.pptx"}'
+```
+
+Успешный ответ:
+
+```json
+{
+  "ok": true,
+  "jobId": "...",
+  "outZipUrl": "/api/bridge/outzip/<jobId>?t=<downloadToken>",
+  "expiresAt": "2026-01-01T12:00:00.000Z"
+}
+```
+
+### Открытие Editor с авто-импортом
+
+```text
+http://141.105.68.164:3000/?importOutZip=%2Fapi%2Fbridge%2Foutzip%2F<jobId>&t=<downloadToken>
+```
+
+После успешного импорта query-параметры очищаются из URL, чтобы повторный `F5` не запускал импорт снова.
