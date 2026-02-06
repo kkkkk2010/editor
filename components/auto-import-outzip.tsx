@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 
@@ -16,6 +16,7 @@ export default function AutoImportOutZip({
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
+  const hasAutoImportedRef = useRef(false)
 
   useEffect(() => {
     const importOutZip = searchParams.get("importOutZip")
@@ -23,10 +24,16 @@ export default function AutoImportOutZip({
       return
     }
 
+    if (hasAutoImportedRef.current) {
+      return
+    }
+
     const token = searchParams.get("t") ?? ""
+    const controller = new AbortController()
 
     let cancelled = false
     const run = async () => {
+      hasAutoImportedRef.current = true
       onImportStateChange?.(true)
       try {
         const importUrl = new URL(importOutZip, window.location.origin)
@@ -35,6 +42,7 @@ export default function AutoImportOutZip({
         const response = await fetch(importUrl.toString(), {
           method: "GET",
           cache: "no-store",
+          signal: controller.signal,
         })
 
         if (!response.ok) {
@@ -73,6 +81,7 @@ export default function AutoImportOutZip({
     void run()
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [importOutZipFromArrayBuffer, onImportStateChange, router, searchParams, toast])
 
