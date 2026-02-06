@@ -167,7 +167,7 @@ Bridge добавляет same-origin поток:
   - Если не задан, `POST /api/bridge/convert-from-url` отключен и возвращает `503 SERVICE_DISABLED`.
 - `BRIDGE_MAX_PPTX_BYTES` (server-only, по умолчанию `62914560` = 60MB): лимит размера PPTX при скачивании по URL.
 - `BRIDGE_TTL_SECONDS` (server-only, по умолчанию `1800`): TTL для временного хранения `out.zip` и метаданных job.
-- `BRIDGE_MAX_DOWNLOADS` (server-only, по умолчанию `3`): сколько успешных скачиваний разрешено для одного `outZipUrl` до ответа `410 ALREADY_USED`.
+- `BRIDGE_MAX_DOWNLOADS` (server-only, по умолчанию `5`): сколько успешных скачиваний разрешено для одного `outZipUrl` до ответа `410 ALREADY_USED`.
 - `BRIDGE_TMP_DIR` (server-only, опционально, по умолчанию `/tmp/outzips`): каталог для временных `out.zip`.
 - `BRIDGE_DOWNLOAD_TIMEOUT_MS` (server-only, опционально, по умолчанию `90000`): таймаут скачивания PPTX по URL.
 

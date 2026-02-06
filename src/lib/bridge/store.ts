@@ -6,8 +6,10 @@ export type BridgeJob = {
   id: string
   token: string
   filePath: string
+  createdAt: number
   expiresAt: number
-  downloadsRemaining: number
+  maxDownloads: number
+  downloadsUsed: number
   requestId?: string
 }
 
@@ -28,11 +30,10 @@ function getMaxDownloads() {
   const raw = process.env.BRIDGE_MAX_DOWNLOADS
   const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
   if (Number.isNaN(parsed) || parsed <= 0) {
-    return 3
+    return 5
   }
   return parsed
 }
-
 
 function getExpiredRetentionSeconds() {
   const raw = process.env.BRIDGE_EXPIRED_RETENTION_SECONDS
@@ -42,6 +43,7 @@ function getExpiredRetentionSeconds() {
   }
   return parsed
 }
+
 async function ensureDir() {
   await mkdir(BRIDGE_TMP_DIR, { recursive: true })
 }
@@ -112,7 +114,8 @@ export async function createBridgeJob(zipBytes: ArrayBuffer, requestId?: string)
   const id = makeId()
   const token = makeToken()
   const filePath = path.join(BRIDGE_TMP_DIR, `${id}.zip`)
-  const expiresAt = Date.now() + getTtlSeconds() * 1000
+  const createdAt = Date.now()
+  const expiresAt = createdAt + getTtlSeconds() * 1000
 
   await writeFile(filePath, Buffer.from(zipBytes))
 
@@ -120,8 +123,10 @@ export async function createBridgeJob(zipBytes: ArrayBuffer, requestId?: string)
     id,
     token,
     filePath,
+    createdAt,
     expiresAt,
-    downloadsRemaining: getMaxDownloads(),
+    maxDownloads: getMaxDownloads(),
+    downloadsUsed: 0,
     requestId,
   }
   jobs.set(id, job)
@@ -141,17 +146,9 @@ export async function readBridgeZip(job: BridgeJob) {
   return readFile(job.filePath)
 }
 
-export async function markBridgeJobDownloaded(job: BridgeJob) {
-  if (job.downloadsRemaining <= 0) {
-    return 0
-  }
-
-  job.downloadsRemaining -= 1
-  if (job.downloadsRemaining <= 0) {
-    await rm(job.filePath, { force: true }).catch(() => undefined)
-  }
-
-  return job.downloadsRemaining
+export function incrementBridgeDownloads(job: BridgeJob) {
+  job.downloadsUsed += 1
+  return job.downloadsUsed
 }
 
 export async function removeBridgeJob(job: BridgeJob) {

@@ -1,15 +1,18 @@
-import {
-  getBridgeJob,
-  markBridgeJobDownloaded,
-  pruneBridgeJobs,
-  readBridgeZip,
-  removeBridgeJob,
-} from "@/src/lib/bridge/store"
+import { getBridgeJob, incrementBridgeDownloads, pruneBridgeJobs, readBridgeZip, removeBridgeJob } from "@/src/lib/bridge/store"
 
 export const runtime = "nodejs"
 
 function errorBody(code: string, message: string, requestId?: string) {
   return { code, message, requestId, httpStatus: undefined, targetUrl: undefined, details: undefined }
+}
+
+function shouldDebug() {
+  return process.env.BRIDGE_DEBUG === "1" || process.env.NODE_ENV !== "production"
+}
+
+function logDebug(action: string, job?: { id: string; downloadsUsed: number; maxDownloads: number }) {
+  if (!shouldDebug() || !job) return
+  console.log("[bridge/outzip]", { action, jobId: job.id, downloadsUsed: job.downloadsUsed, maxDownloads: job.maxDownloads })
 }
 
 export async function GET(request: Request, context: { params: Promise<{ jobId: string }> }) {
@@ -23,29 +26,28 @@ export async function GET(request: Request, context: { params: Promise<{ jobId: 
 
   const job = getBridgeJob(jobId)
   if (!job) {
-    console.info("[bridge/outzip] not_found", { jobId })
     return Response.json(errorBody("NOT_FOUND", "Job not found."), { status: 404 })
   }
 
-  if (token !== job.token) {
-    console.warn("[bridge/outzip] unauthorized", { jobId })
-    return Response.json(errorBody("UNAUTHORIZED", "Invalid download token.", job.requestId), { status: 401 })
-  }
-
   if (job.expiresAt <= Date.now()) {
-    console.info("[bridge/outzip] expired", { jobId })
+    logDebug("expired", job)
     return Response.json(errorBody("EXPIRED", "Download link expired.", job.requestId), { status: 410 })
   }
 
-  if (job.downloadsRemaining <= 0) {
-    console.info("[bridge/outzip] already_used", { jobId })
+  if (token !== job.token) {
+    logDebug("unauthorized", job)
+    return Response.json(errorBody("UNAUTHORIZED", "Invalid download token.", job.requestId), { status: 401 })
+  }
+
+  if (job.downloadsUsed >= job.maxDownloads) {
+    logDebug("already_used", job)
     return Response.json(errorBody("ALREADY_USED", "Download limit reached.", job.requestId), { status: 410 })
   }
 
   try {
+    incrementBridgeDownloads(job)
+    logDebug("served", job)
     const bytes = await readBridgeZip(job)
-    const remaining = await markBridgeJobDownloaded(job)
-    console.info("[bridge/outzip] served", { jobId, remaining })
 
     return new Response(bytes, {
       status: 200,
@@ -58,7 +60,7 @@ export async function GET(request: Request, context: { params: Promise<{ jobId: 
     })
   } catch {
     await removeBridgeJob(job)
-    console.info("[bridge/outzip] missing_file", { jobId })
+    logDebug("missing_file", job)
     return Response.json(errorBody("NOT_FOUND", "Job file not found.", job.requestId), { status: 404 })
   }
 }
