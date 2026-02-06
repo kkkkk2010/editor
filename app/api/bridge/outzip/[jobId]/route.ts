@@ -1,4 +1,10 @@
-import { consumeBridgeJob, getBridgeJob, pruneBridgeJobs, readBridgeZip } from "@/src/lib/bridge/store"
+import {
+  getBridgeJob,
+  markBridgeJobDownloaded,
+  pruneBridgeJobs,
+  readBridgeZip,
+  removeBridgeJob,
+} from "@/src/lib/bridge/store"
 
 export const runtime = "nodejs"
 
@@ -17,21 +23,29 @@ export async function GET(request: Request, context: { params: Promise<{ jobId: 
 
   const job = getBridgeJob(jobId)
   if (!job) {
+    console.info("[bridge/outzip] not_found", { jobId })
     return Response.json(errorBody("NOT_FOUND", "Job not found."), { status: 404 })
   }
 
-  if (job.used || job.expiresAt <= Date.now()) {
-    await consumeBridgeJob(job)
-    return Response.json(errorBody("GONE", "Job expired.", job.requestId), { status: 410 })
+  if (token !== job.token) {
+    console.warn("[bridge/outzip] unauthorized", { jobId })
+    return Response.json(errorBody("UNAUTHORIZED", "Invalid download token.", job.requestId), { status: 401 })
   }
 
-  if (token !== job.token) {
-    return Response.json(errorBody("UNAUTHORIZED", "Invalid download token.", job.requestId), { status: 401 })
+  if (job.expiresAt <= Date.now()) {
+    console.info("[bridge/outzip] expired", { jobId })
+    return Response.json(errorBody("EXPIRED", "Download link expired.", job.requestId), { status: 410 })
+  }
+
+  if (job.downloadsRemaining <= 0) {
+    console.info("[bridge/outzip] already_used", { jobId })
+    return Response.json(errorBody("ALREADY_USED", "Download limit reached.", job.requestId), { status: 410 })
   }
 
   try {
     const bytes = await readBridgeZip(job)
-    await consumeBridgeJob(job)
+    const remaining = await markBridgeJobDownloaded(job)
+    console.info("[bridge/outzip] served", { jobId, remaining })
 
     return new Response(bytes, {
       status: 200,
@@ -43,7 +57,8 @@ export async function GET(request: Request, context: { params: Promise<{ jobId: 
       },
     })
   } catch {
-    await consumeBridgeJob(job)
+    await removeBridgeJob(job)
+    console.info("[bridge/outzip] missing_file", { jobId })
     return Response.json(errorBody("NOT_FOUND", "Job file not found.", job.requestId), { status: 404 })
   }
 }

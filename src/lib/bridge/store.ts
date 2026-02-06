@@ -7,7 +7,7 @@ export type BridgeJob = {
   token: string
   filePath: string
   expiresAt: number
-  used: boolean
+  downloadsRemaining: number
   requestId?: string
 }
 
@@ -24,6 +24,24 @@ function getTtlSeconds() {
   return parsed
 }
 
+function getMaxDownloads() {
+  const raw = process.env.BRIDGE_MAX_DOWNLOADS
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return 3
+  }
+  return parsed
+}
+
+
+function getExpiredRetentionSeconds() {
+  const raw = process.env.BRIDGE_EXPIRED_RETENTION_SECONDS
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return getTtlSeconds()
+  }
+  return parsed
+}
 async function ensureDir() {
   await mkdir(BRIDGE_TMP_DIR, { recursive: true })
 }
@@ -43,10 +61,17 @@ async function removeJob(job: BridgeJob) {
 
 async function cleanupExpiredJobs() {
   const now = Date.now()
+  const retentionMs = getExpiredRetentionSeconds() * 1000
   const jobsToDelete: BridgeJob[] = []
+
   for (const job of jobs.values()) {
-    if (job.expiresAt <= now || job.used) {
+    if (job.expiresAt + retentionMs <= now) {
       jobsToDelete.push(job)
+      continue
+    }
+
+    if (job.expiresAt <= now) {
+      await rm(job.filePath, { force: true }).catch(() => undefined)
     }
   }
 
@@ -96,7 +121,7 @@ export async function createBridgeJob(zipBytes: ArrayBuffer, requestId?: string)
     token,
     filePath,
     expiresAt,
-    used: false,
+    downloadsRemaining: getMaxDownloads(),
     requestId,
   }
   jobs.set(id, job)
@@ -116,8 +141,20 @@ export async function readBridgeZip(job: BridgeJob) {
   return readFile(job.filePath)
 }
 
-export async function consumeBridgeJob(job: BridgeJob) {
-  job.used = true
+export async function markBridgeJobDownloaded(job: BridgeJob) {
+  if (job.downloadsRemaining <= 0) {
+    return 0
+  }
+
+  job.downloadsRemaining -= 1
+  if (job.downloadsRemaining <= 0) {
+    await rm(job.filePath, { force: true }).catch(() => undefined)
+  }
+
+  return job.downloadsRemaining
+}
+
+export async function removeBridgeJob(job: BridgeJob) {
   await removeJob(job)
 }
 

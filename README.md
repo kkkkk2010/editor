@@ -158,7 +158,7 @@ Bridge добавляет same-origin поток:
 
 1. WordPress вызывает `POST /api/bridge/convert-from-url` с `pptxUrl`.
 2. Editor на сервере скачивает PPTX по URL, отправляет его в `${CONVERTER_URL}/convert`, получает `out.zip`.
-3. `out.zip` временно сохраняется на диске контейнера, а в ответ возвращается одноразовая ссылка на скачивание.
+3. `out.zip` временно сохраняется на диске контейнера, а в ответ возвращается ссылка на скачивание с токеном и ограничением по числу загрузок.
 4. Editor UI открывается с query и автоматически импортирует ZIP через существующую точку `importOutZipFromArrayBuffer`.
 
 ### Переменные окружения Bridge
@@ -167,6 +167,7 @@ Bridge добавляет same-origin поток:
   - Если не задан, `POST /api/bridge/convert-from-url` отключен и возвращает `503 SERVICE_DISABLED`.
 - `BRIDGE_MAX_PPTX_BYTES` (server-only, по умолчанию `62914560` = 60MB): лимит размера PPTX при скачивании по URL.
 - `BRIDGE_TTL_SECONDS` (server-only, по умолчанию `1800`): TTL для временного хранения `out.zip` и метаданных job.
+- `BRIDGE_MAX_DOWNLOADS` (server-only, по умолчанию `3`): сколько успешных скачиваний разрешено для одного `outZipUrl` до ответа `410 ALREADY_USED`.
 - `BRIDGE_TMP_DIR` (server-only, опционально, по умолчанию `/tmp/outzips`): каталог для временных `out.zip`.
 - `BRIDGE_DOWNLOAD_TIMEOUT_MS` (server-only, опционально, по умолчанию `90000`): таймаут скачивания PPTX по URL.
 
@@ -197,3 +198,10 @@ http://141.105.68.164:3000/?importOutZip=%2Fapi%2Fbridge%2Foutzip%2F<jobId>&t=<d
 ```
 
 После успешного импорта query-параметры очищаются из URL, чтобы повторный `F5` не запускал импорт снова.
+
+
+Коды ответа `GET /api/bridge/outzip/:jobId?t=...`:
+- `404 NOT_FOUND` — jobId не найден.
+- `401 UNAUTHORIZED` — отсутствует или неверный токен `t`.
+- `410 EXPIRED` — job истёк по TTL.
+- `410 ALREADY_USED` — исчерпан лимит скачиваний (`BRIDGE_MAX_DOWNLOADS`).
