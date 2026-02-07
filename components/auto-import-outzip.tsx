@@ -9,6 +9,11 @@ type AutoImportOutZipProps = {
   onImportStateChange?: (isImporting: boolean) => void
 }
 
+type CallbackRefs = {
+  importOutZipFromArrayBuffer: (outZip: ArrayBuffer) => Promise<void>
+  onImportStateChange?: (isImporting: boolean) => void
+}
+
 export default function AutoImportOutZip({
   importOutZipFromArrayBuffer,
   onImportStateChange,
@@ -17,10 +22,34 @@ export default function AutoImportOutZip({
   const searchParams = useSearchParams()
   const { toast } = useToast()
   const hasAutoImportedRef = useRef(false)
+  const initialUrlRef = useRef<string | null>(null)
+  const routerRef = useRef(router)
+  const toastRef = useRef(toast)
+  const callbackRefs = useRef<CallbackRefs>({
+    importOutZipFromArrayBuffer,
+    onImportStateChange,
+  })
+
+  callbackRefs.current = {
+    importOutZipFromArrayBuffer,
+    onImportStateChange,
+  }
+  routerRef.current = router
+  toastRef.current = toast
+
+  if (!initialUrlRef.current) {
+    const importOutZip = searchParams.get("importOutZip")
+    if (importOutZip) {
+      const token = searchParams.get("t") ?? ""
+      const importUrl = new URL(importOutZip, window.location.origin)
+      importUrl.searchParams.set("t", token)
+      initialUrlRef.current = importUrl.toString()
+      console.log("[auto-import] downloadUrl", initialUrlRef.current)
+    }
+  }
 
   useEffect(() => {
-    const importOutZip = searchParams.get("importOutZip")
-    if (!importOutZip) {
+    if (!initialUrlRef.current) {
       return
     }
 
@@ -28,62 +57,80 @@ export default function AutoImportOutZip({
       return
     }
 
-    const token = searchParams.get("t") ?? ""
     const controller = new AbortController()
+    const mountedRef = { current: true }
 
-    let cancelled = false
     const run = async () => {
       hasAutoImportedRef.current = true
-      onImportStateChange?.(true)
+      callbackRefs.current.onImportStateChange?.(true)
       try {
-        const importUrl = new URL(importOutZip, window.location.origin)
-        importUrl.searchParams.set("t", token)
-
-        const response = await fetch(importUrl.toString(), {
+        console.log("[auto-import] fetch start")
+        const response = await fetch(initialUrlRef.current!, {
           method: "GET",
           cache: "no-store",
           signal: controller.signal,
         })
 
         if (!response.ok) {
-          throw new Error(`Bridge import failed with status ${response.status}`)
+          const contentType = response.headers.get("content-type") ?? ""
+          let detail = ""
+          if (contentType.includes("application/json")) {
+            try {
+              const payload = (await response.json()) as { message?: string }
+              detail = payload?.message ? ` ${payload.message}` : ""
+            } catch {
+              detail = ""
+            }
+          } else {
+            try {
+              detail = ` ${await response.text()}`
+            } catch {
+              detail = ""
+            }
+          }
+          throw new Error(`Bridge import failed with status ${response.status}.${detail}`.trim())
         }
 
         const outZip = await response.arrayBuffer()
-        if (cancelled) {
+        console.log("[auto-import] fetch ok", response.status, outZip.byteLength)
+        if (!mountedRef.current) {
           return
         }
 
-        await importOutZipFromArrayBuffer(outZip)
-        if (!cancelled) {
+        await callbackRefs.current.importOutZipFromArrayBuffer(outZip)
+        console.log("[auto-import] import done")
+        if (mountedRef.current) {
           const cleanUrl = `${window.location.pathname}${window.location.hash}`
-          router.replace(cleanUrl)
-          toast({
+          routerRef.current.replace(cleanUrl)
+          console.log("[auto-import] router clean done")
+          toastRef.current({
             title: "Импорт завершен",
             description: "Файл out.zip успешно загружен через bridge.",
           })
         }
       } catch (error) {
-        if (!cancelled) {
-          toast({
-            title: "Не удалось импортировать out.zip",
-            description: error instanceof Error ? error.message : "Попробуйте снова.",
+        if (mountedRef.current) {
+          const err = error as { name?: string; message?: string }
+          console.log("[auto-import] error", err?.name, err?.message)
+          toastRef.current({
+            title: err?.name === "AbortError" ? "Импорт отменен" : "Не удалось импортировать out.zip",
+            description: err?.message ?? "Попробуйте снова.",
             variant: "destructive",
           })
         }
       } finally {
-        if (!cancelled) {
-          onImportStateChange?.(false)
+        if (mountedRef.current) {
+          callbackRefs.current.onImportStateChange?.(false)
         }
       }
     }
 
     void run()
     return () => {
-      cancelled = true
+      mountedRef.current = false
       controller.abort()
     }
-  }, [importOutZipFromArrayBuffer, onImportStateChange, router, searchParams, toast])
+  }, [])
 
   return null
 }
