@@ -1,5 +1,4 @@
-import dns from "node:dns/promises"
-import net from "node:net"
+import { assertPublicUrl } from "@/src/lib/bridge/network"
 import { createBridgeJob } from "@/src/lib/bridge/store"
 
 export const runtime = "nodejs"
@@ -43,64 +42,6 @@ function errorBody(
     targetUrl: options?.targetUrl,
     details: options?.details,
   }
-}
-
-function isPrivateIp(ip: string) {
-  if (net.isIPv4(ip)) {
-    const parts = ip.split(".").map((part) => Number.parseInt(part, 10))
-    if (parts[0] === 10) return true
-    if (parts[0] === 127) return true
-    if (parts[0] === 169 && parts[1] === 254) return true
-    if (parts[0] === 192 && parts[1] === 168) return true
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true
-    if (parts[0] === 0) return true
-    return false
-  }
-
-  if (net.isIPv6(ip)) {
-    const normalized = ip.toLowerCase()
-    if (normalized === "::1") return true
-    if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true
-    if (normalized.startsWith("fe80")) return true
-    return false
-  }
-
-  return true
-}
-
-async function assertPublicUrl(rawUrl: string) {
-  let parsed: URL
-  try {
-    parsed = new URL(rawUrl)
-  } catch {
-    throw new Response(JSON.stringify(errorBody("INVALID_URL", "Invalid pptxUrl.")), { status: 400 })
-  }
-
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Response(JSON.stringify(errorBody("INVALID_URL", "Only http/https URLs are allowed.")), {
-      status: 400,
-    })
-  }
-
-  const hostname = parsed.hostname.toLowerCase()
-  if (hostname === "localhost") {
-    throw new Response(JSON.stringify(errorBody("INVALID_URL", "Blocked host.")), { status: 400 })
-  }
-
-  if (net.isIP(hostname) && isPrivateIp(hostname)) {
-    throw new Response(JSON.stringify(errorBody("INVALID_URL", "Blocked host.")), { status: 400 })
-  }
-
-  try {
-    const resolved = await dns.lookup(hostname, { all: true })
-    if (!resolved.length || resolved.some((item) => isPrivateIp(item.address))) {
-      throw new Error("Blocked host")
-    }
-  } catch {
-    throw new Response(JSON.stringify(errorBody("INVALID_URL", "Blocked host.")), { status: 400 })
-  }
-
-  return parsed
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
@@ -238,7 +179,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const parsedUrl = await assertPublicUrl(body.pptxUrl)
+    const parsedUrl = await assertPublicUrl(body.pptxUrl, "Invalid pptxUrl.")
     const pptxBytes = await downloadPptx(parsedUrl.toString(), getMaxPptxBytes())
     const { zipBytes, requestId } = await convertPptx(pptxBytes)
     const job = await createBridgeJob(zipBytes, requestId)

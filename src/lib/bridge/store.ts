@@ -107,7 +107,11 @@ function startCleanup() {
   }, intervalMs).unref()
 }
 
-export async function createBridgeJob(zipBytes: ArrayBuffer, requestId?: string) {
+
+export async function createJobFromZipBytes(
+  zipBytes: Uint8Array | Buffer,
+  meta?: { requestId?: string },
+) {
   await ensureDir()
   startCleanup()
 
@@ -117,7 +121,7 @@ export async function createBridgeJob(zipBytes: ArrayBuffer, requestId?: string)
   const createdAt = Date.now()
   const expiresAt = createdAt + getTtlSeconds() * 1000
 
-  await writeFile(filePath, Buffer.from(zipBytes))
+  await writeFile(filePath, zipBytes)
 
   const job: BridgeJob = {
     id,
@@ -127,7 +131,7 @@ export async function createBridgeJob(zipBytes: ArrayBuffer, requestId?: string)
     expiresAt,
     maxDownloads: getMaxDownloads(),
     downloadsUsed: 0,
-    requestId,
+    requestId: meta?.requestId,
   }
   jobs.set(id, job)
 
@@ -136,6 +140,10 @@ export async function createBridgeJob(zipBytes: ArrayBuffer, requestId?: string)
     token,
     expiresAt: new Date(expiresAt).toISOString(),
   }
+}
+
+export async function createBridgeJob(zipBytes: ArrayBuffer, requestId?: string) {
+  return createJobFromZipBytes(Buffer.from(zipBytes), { requestId })
 }
 
 export function getBridgeJob(jobId: string) {
