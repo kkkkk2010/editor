@@ -1006,7 +1006,7 @@ export default function Home() {
     }
 
     setIsSavingProject(true)
-    console.info("SAVE_HANDLER_VERSION-2026-02-11b remote-only")
+    console.info("SAVE_HANDLER_VERSION-2026-02-11c remote-only")
     toast({
       title: "Saving to WP…",
       description: "Подождите, выполняется удаленное сохранение.",
@@ -1127,41 +1127,51 @@ export default function Home() {
       bytes.set(src)
       const blob = new Blob([toArrayBuffer(bytes)], { type: "application/zip" })
 
-      const formData = new FormData()
-      formData.append("presentationId", presentationId)
-      formData.append("saveToken", saveToken)
-      formData.append("file", new File([blob], "latest.out.zip", { type: "application/zip" }))
+      const fd = new FormData()
+      fd.append("presentationId", String(presentationId))
+      fd.append("saveToken", String(saveToken))
+      fd.append("file", blob, "latest.out.zip")
+
+      console.log("[wp-save] endpoint", saveEndpoint)
+      for (const [k, v] of fd.entries()) {
+        if (k === "saveToken") {
+          const masked = `${String(v).slice(0, 6)}...`
+          console.log("[wp-save] fd", k, masked)
+        } else {
+          console.log("[wp-save] fd", k, v instanceof Blob ? `Blob(${v.size})` : v)
+        }
+      }
 
       let response: Response
+      let responseText = ""
+      let responseJson: { ok?: boolean; message?: string } | null = null
       try {
         response = await fetch(saveEndpoint, {
           method: "POST",
-          body: formData,
+          body: fd,
           credentials: "omit",
         })
+        responseText = await response.text()
       } catch {
         throw new Error("Не удалось отправить out.zip в WordPress.")
       }
 
-      let payload: unknown = null
       try {
-        payload = await response.json()
+        responseJson = JSON.parse(responseText) as { ok?: boolean; message?: string }
       } catch {
-        payload = null
+        responseJson = null
       }
 
-      if (!response.ok || !payload || typeof payload !== "object" || !("ok" in payload) || payload.ok !== true) {
-        const message =
-          payload && typeof payload === "object" && "message" in payload && typeof payload.message === "string"
-            ? payload.message
-            : `Не удалось сохранить в WordPress (HTTP ${response.status}).`
+      if (!response.ok) {
+        const message = responseJson?.message || `HTTP ${response.status}: ${responseText.slice(0, 200)}`
         const isInvalidToken = /token\s*(expired|invalid)|expired\s*token|invalid\s*token/i.test(message)
-        toast({
-          title: "Не удалось сохранить проект",
-          description: isInvalidToken ? "Token expired/invalid: открой презентацию заново из кабинета" : message,
-          variant: "destructive",
-        })
-        return
+        throw new Error(isInvalidToken ? "Token expired/invalid: открой презентацию заново из кабинета" : message)
+      }
+
+      if (!responseJson?.ok) {
+        const message = responseJson?.message || "Save failed"
+        const isInvalidToken = /token\s*(expired|invalid)|expired\s*token|invalid\s*token/i.test(message)
+        throw new Error(isInvalidToken ? "Token expired/invalid: открой презентацию заново из кабинета" : message)
       }
 
       toast({
