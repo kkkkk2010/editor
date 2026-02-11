@@ -72,13 +72,15 @@ docker run --rm -p 3000:3000 \
 - `converter` (по умолчанию `pptx-importer:latest`, доступен editor по внутреннему DNS `http://converter:3001`).
 
 ```bash
-docker compose up -d --build
+docker compose build --no-cache editor
+docker compose up -d --force-recreate editor
 ```
 
 Если образ конвертора называется иначе, задайте переменную:
 
 ```bash
-CONVERTER_IMAGE=your-registry/your-converter:latest docker compose up -d --build
+CONVERTER_IMAGE=your-registry/your-converter:latest docker compose build --no-cache editor
+CONVERTER_IMAGE=your-registry/your-converter:latest docker compose up -d --force-recreate editor
 ```
 
 > `converter` использует только `expose: 3001`, поэтому наружу порт не публикуется.
@@ -123,8 +125,11 @@ CONVERTER_IMAGE=your-registry/your-converter:latest docker compose up -d --build
 export ADMIN_IMPORT_TOKEN='strong-secret'
 export CONVERTER_IMAGE='your-registry/pptx-importer:latest'
 docker compose pull || true
-docker compose up -d --build
+docker compose build --no-cache editor
+docker compose up -d --force-recreate editor
 curl -I http://localhost:3000
+# после открытия редактора и клика Save проверьте в консоли браузера:
+# SAVE_HANDLER_VERSION=2026-02-11 remote-only
 ```
 
 ## Переменные окружения (PPTX)

@@ -23,7 +23,6 @@ import { AssetStore } from "@/src/lib/assets/assetStore"
 import { mapEditorToImporter } from "@/src/lib/import/mapEditorToImporter"
 import { mapImporterToEditor } from "@/src/lib/import/mapImporterToEditor"
 import { exportProjectZip } from "@/src/lib/project/exportProjectZip"
-import FileSaver from "file-saver"
 import html2canvas from "html2canvas"
 
 type EditorState = {
@@ -1007,8 +1006,28 @@ export default function Home() {
     }
 
     setIsSavingProject(true)
+    console.info("SAVE_HANDLER_VERSION=2026-02-11 remote-only")
+    toast({
+      title: "Saving to WP…",
+      description: "Подождите, выполняется удаленное сохранение.",
+    })
 
     try {
+      const params = new URLSearchParams(window.location.search)
+      const saveEndpoint = params.get("saveEndpoint")
+      const saveToken = params.get("saveToken")
+      const presentationId = params.get("presentationId")
+      console.info({ presentationId, hasSaveToken: Boolean(saveToken), saveEndpoint })
+
+      if (!saveEndpoint || !saveToken || !presentationId) {
+        toast({
+          title: "Save unavailable",
+          description: "Save unavailable: open from cabinet",
+          variant: "destructive",
+        })
+        return
+      }
+
       const assetStore = assetStoreRef.current
       const slidesForExport = await Promise.all(
         slides.map(async (slide) => {
@@ -1067,71 +1086,48 @@ export default function Home() {
       const bytes = new Uint8Array(src.byteLength)
       bytes.set(src)
       const blob = new Blob([toArrayBuffer(bytes)], { type: "application/zip" })
-      FileSaver.saveAs(blob, "out.zip")
 
-      const params = new URLSearchParams(window.location.search)
-      const saveEndpoint = params.get("saveEndpoint")
-      const saveToken = params.get("saveToken")
-      const presentationId = params.get("presentationId")
-      const hasWpSaveParams = Boolean(saveEndpoint || saveToken || presentationId)
+      const formData = new FormData()
+      formData.append("presentationId", presentationId)
+      formData.append("saveToken", saveToken)
+      formData.append("file", new File([blob], "latest.out.zip", { type: "application/zip" }))
 
-      if (hasWpSaveParams) {
-        if (!saveEndpoint || !saveToken || !presentationId) {
-          toast({
-            title: "Save unavailable",
-            description: "Save unavailable (missing params)",
-            variant: "destructive",
-          })
-          return
-        }
-
-        const formData = new FormData()
-        formData.append("presentationId", presentationId)
-        formData.append("saveToken", saveToken)
-        formData.append("file", new File([blob], "latest.out.zip", { type: "application/zip" }))
-
-        let response: Response
-        try {
-          response = await fetch(saveEndpoint, {
-            method: "POST",
-            body: formData,
-            credentials: "omit",
-          })
-        } catch {
-          throw new Error("Не удалось отправить out.zip в WordPress.")
-        }
-
-        let payload: unknown = null
-        try {
-          payload = await response.json()
-        } catch {
-          payload = null
-        }
-
-        if (!response.ok || !payload || typeof payload !== "object" || !("ok" in payload) || payload.ok !== true) {
-          const message =
-            payload && typeof payload === "object" && "message" in payload && typeof payload.message === "string"
-              ? payload.message
-              : "Не удалось сохранить в WordPress."
-          const isInvalidToken = /token\s*(expired|invalid)|expired\s*token|invalid\s*token/i.test(message)
-          toast({
-            title: "Не удалось сохранить проект",
-            description: isInvalidToken ? "Открой презентацию заново из кабинета" : message,
-            variant: "destructive",
-          })
-          return
-        }
-
-        toast({
-          title: "Saved",
-          description: "Проект сохранен в WordPress.",
+      let response: Response
+      try {
+        response = await fetch(saveEndpoint, {
+          method: "POST",
+          body: formData,
+          credentials: "omit",
         })
-      } else {
-        toast({
-          title: "Проект сохранен",
-          description: "Файл out.zip скачан на устройство.",
-        })
+      } catch {
+        throw new Error("Не удалось отправить out.zip в WordPress.")
       }
+
+      let payload: unknown = null
+      try {
+        payload = await response.json()
+      } catch {
+        payload = null
+      }
+
+      if (!response.ok || !payload || typeof payload !== "object" || !("ok" in payload) || payload.ok !== true) {
+        const message =
+          payload && typeof payload === "object" && "message" in payload && typeof payload.message === "string"
+            ? payload.message
+            : "Не удалось сохранить в WordPress."
+        const isInvalidToken = /token\s*(expired|invalid)|expired\s*token|invalid\s*token/i.test(message)
+        toast({
+          title: "Не удалось сохранить проект",
+          description: isInvalidToken ? "Token expired/invalid: открой презентацию заново из кабинета" : message,
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({
+        title: "Saved",
+        description: "Проект сохранен в WordPress.",
+      })
 
       setHasUnsavedChanges(false)
     } catch (error) {
