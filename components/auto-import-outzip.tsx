@@ -100,6 +100,26 @@ export default function AutoImportOutZip({
         await callbackRefs.current.importOutZipFromArrayBuffer(outZip)
         console.log("[auto-import] import done")
         if (mountedRef.current) {
+          // WP save ctx persisted because router clean removes query params
+          const qs = new URLSearchParams(window.location.search)
+          const saveToken = qs.get("saveToken")
+          const saveEndpoint = qs.get("saveEndpoint")
+          const presentationId = qs.get("presentationId")
+          if (saveToken && saveEndpoint && presentationId) {
+            const wpSaveCtx = {
+              saveToken,
+              saveEndpoint,
+              presentationId,
+              ts: Date.now(),
+            }
+            sessionStorage.setItem("wpSaveCtx", JSON.stringify(wpSaveCtx))
+            console.log("wpSaveCtx stored", {
+              presentationId,
+              saveEndpoint,
+              saveTokenPrefix: `${saveToken.slice(0, 6)}***`,
+            })
+          }
+
           const cleanUrl = `${window.location.pathname}${window.location.hash}`
           routerRef.current.replace(cleanUrl)
           console.log("[auto-import] router clean done")

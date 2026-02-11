@@ -1006,20 +1006,59 @@ export default function Home() {
     }
 
     setIsSavingProject(true)
-    console.info("SAVE_HANDLER_VERSION=2026-02-11 remote-only")
+    console.info("SAVE_HANDLER_VERSION-2026-02-11b remote-only")
     toast({
       title: "Saving to WP…",
       description: "Подождите, выполняется удаленное сохранение.",
     })
 
     try {
-      const params = new URLSearchParams(window.location.search)
-      const saveEndpoint = params.get("saveEndpoint")
-      const saveToken = params.get("saveToken")
-      const presentationId = params.get("presentationId")
-      console.info({ presentationId, hasSaveToken: Boolean(saveToken), saveEndpoint })
+      // WP save ctx persisted because router clean removes query params
+      const savedCtxRaw = sessionStorage.getItem("wpSaveCtx")
+      let ctx: { saveEndpoint: string; saveToken: string; presentationId: string; ts?: number } | null = null
+      if (savedCtxRaw) {
+        try {
+          const parsed = JSON.parse(savedCtxRaw) as {
+            saveEndpoint?: string
+            saveToken?: string
+            presentationId?: string
+            ts?: number
+          }
+          if (parsed.saveEndpoint && parsed.saveToken && parsed.presentationId) {
+            if (typeof parsed.ts === "number" && Date.now() - parsed.ts > 30 * 60 * 1000) {
+              sessionStorage.removeItem("wpSaveCtx")
+              toast({
+                title: "Save unavailable",
+                description: "Token expired, reopen from cabinet",
+                variant: "destructive",
+              })
+              return
+            }
+            ctx = {
+              saveEndpoint: parsed.saveEndpoint,
+              saveToken: parsed.saveToken,
+              presentationId: parsed.presentationId,
+              ts: parsed.ts,
+            }
+          }
+        } catch {
+          sessionStorage.removeItem("wpSaveCtx")
+        }
+      }
 
-      if (!saveEndpoint || !saveToken || !presentationId) {
+      if (!ctx) {
+        const params = new URLSearchParams(window.location.search)
+        const saveEndpoint = params.get("saveEndpoint")
+        const saveToken = params.get("saveToken")
+        const presentationId = params.get("presentationId")
+        if (saveEndpoint && saveToken && presentationId) {
+          ctx = { saveEndpoint, saveToken, presentationId }
+        }
+      }
+
+      console.info({ presentationId: ctx?.presentationId ?? null, hasSaveToken: Boolean(ctx?.saveToken), saveEndpoint: ctx?.saveEndpoint ?? null })
+
+      if (!ctx) {
         toast({
           title: "Save unavailable",
           description: "Save unavailable: open from cabinet",
@@ -1028,6 +1067,7 @@ export default function Home() {
         return
       }
 
+      const { saveEndpoint, saveToken, presentationId } = ctx
       const assetStore = assetStoreRef.current
       const slidesForExport = await Promise.all(
         slides.map(async (slide) => {
@@ -1114,7 +1154,7 @@ export default function Home() {
         const message =
           payload && typeof payload === "object" && "message" in payload && typeof payload.message === "string"
             ? payload.message
-            : "Не удалось сохранить в WordPress."
+            : `Не удалось сохранить в WordPress (HTTP ${response.status}).`
         const isInvalidToken = /token\s*(expired|invalid)|expired\s*token|invalid\s*token/i.test(message)
         toast({
           title: "Не удалось сохранить проект",
