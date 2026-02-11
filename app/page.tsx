@@ -181,6 +181,7 @@ export default function Home() {
   const textEditElementIdRef = useRef<string | null>(null)
   const textEditOriginalTextRef = useRef<string | null>(null)
   const [isBridgeImporting, setIsBridgeImporting] = useState(false)
+  const [isSavingProject, setIsSavingProject] = useState(false)
 
   const present = history.present
   const slides = present.slides
@@ -1001,6 +1002,12 @@ export default function Home() {
   }
 
   const handleSaveProject = async () => {
+    if (isSavingProject) {
+      return
+    }
+
+    setIsSavingProject(true)
+
     try {
       const assetStore = assetStoreRef.current
       const slidesForExport = await Promise.all(
@@ -1061,11 +1068,72 @@ export default function Home() {
       bytes.set(src)
       const blob = new Blob([toArrayBuffer(bytes)], { type: "application/zip" })
       FileSaver.saveAs(blob, "out.zip")
+
+      const params = new URLSearchParams(window.location.search)
+      const saveEndpoint = params.get("saveEndpoint")
+      const saveToken = params.get("saveToken")
+      const presentationId = params.get("presentationId")
+      const hasWpSaveParams = Boolean(saveEndpoint || saveToken || presentationId)
+
+      if (hasWpSaveParams) {
+        if (!saveEndpoint || !saveToken || !presentationId) {
+          toast({
+            title: "Save unavailable",
+            description: "Save unavailable (missing params)",
+            variant: "destructive",
+          })
+          return
+        }
+
+        const formData = new FormData()
+        formData.append("presentationId", presentationId)
+        formData.append("saveToken", saveToken)
+        formData.append("file", new File([blob], "latest.out.zip", { type: "application/zip" }))
+
+        let response: Response
+        try {
+          response = await fetch(saveEndpoint, {
+            method: "POST",
+            body: formData,
+            credentials: "omit",
+          })
+        } catch {
+          throw new Error("Не удалось отправить out.zip в WordPress.")
+        }
+
+        let payload: unknown = null
+        try {
+          payload = await response.json()
+        } catch {
+          payload = null
+        }
+
+        if (!response.ok || !payload || typeof payload !== "object" || !("ok" in payload) || payload.ok !== true) {
+          const message =
+            payload && typeof payload === "object" && "message" in payload && typeof payload.message === "string"
+              ? payload.message
+              : "Не удалось сохранить в WordPress."
+          const isInvalidToken = /token\s*(expired|invalid)|expired\s*token|invalid\s*token/i.test(message)
+          toast({
+            title: "Не удалось сохранить проект",
+            description: isInvalidToken ? "Открой презентацию заново из кабинета" : message,
+            variant: "destructive",
+          })
+          return
+        }
+
+        toast({
+          title: "Saved",
+          description: "Проект сохранен в WordPress.",
+        })
+      } else {
+        toast({
+          title: "Проект сохранен",
+          description: "Файл out.zip скачан на устройство.",
+        })
+      }
+
       setHasUnsavedChanges(false)
-      toast({
-        title: "Проект сохранен",
-        description: "Файл out.zip скачан на устройство.",
-      })
     } catch (error) {
       console.error("Save project failed:", error)
       toast({
@@ -1073,6 +1141,8 @@ export default function Home() {
         description: error instanceof Error ? error.message : "Попробуйте снова.",
         variant: "destructive",
       })
+    } finally {
+      setIsSavingProject(false)
     }
   }
 
@@ -1182,6 +1252,7 @@ export default function Home() {
             canRedo={canRedo}
             onSaveProject={handleSaveProject}
             hasUnsavedChanges={hasUnsavedChanges}
+            isSavingProject={isSavingProject}
           />
 
           <div className="flex-1 overflow-hidden">

@@ -34,6 +34,7 @@ interface ToolbarProps {
   canRedo: boolean
   onSaveProject: () => void
   hasUnsavedChanges?: boolean
+  isSavingProject?: boolean
 }
 
 export default function Toolbar({
@@ -51,6 +52,7 @@ export default function Toolbar({
   canRedo,
   onSaveProject,
   hasUnsavedChanges,
+  isSavingProject,
 }: ToolbarProps) {
   const updateTextStyle = <K extends keyof Element["style"]>(property: K, value: Element["style"][K]) => {
     if (!selectedElement || selectedElement.type !== "text") return
@@ -145,9 +147,9 @@ export default function Toolbar({
             </Button>
           </div>
           <TitleEditor title={title} onTitleChange={onTitleChange} />
-          <Button variant="ghost" size="sm" onClick={onSaveProject}>
+          <Button variant="ghost" size="sm" onClick={onSaveProject} disabled={isSavingProject}>
             <Save className="h-4 w-4 mr-2" />
-            Сохранить
+            {isSavingProject ? "Saving…" : "Сохранить"}
           </Button>
         </div>
         <div className="flex items-center gap-2">
