@@ -13,6 +13,26 @@ function getBridgeToken() {
   return process.env.PRESENTONIKA_BRIDGE_TOKEN?.trim() || process.env.BRIDGE_TOKEN?.trim() || ""
 }
 
+function getBridgeAuthToken(request: Request) {
+  const authHeader = request.headers.get("authorization")
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : ""
+
+  const cookieHeader = request.headers.get("cookie") ?? ""
+  const cookieToken =
+    cookieHeader
+      .split(";")
+      .map((chunk) => chunk.trim())
+      .find((chunk) => chunk.startsWith("admin_import="))
+      ?.slice("admin_import=".length) ?? ""
+
+  return {
+    authHeader,
+    authScheme: authHeader?.split(" ")[0] ?? null,
+    bearerToken,
+    cookieToken,
+  }
+}
+
 function getMaxStageBytes() {
   const raw = process.env.BRIDGE_MAX_STAGE_OUTZIP_BYTES
   const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
@@ -23,14 +43,14 @@ function getMaxStageBytes() {
 function isAuthorized(request: Request) {
   const token = getBridgeToken()
   if (!token) return { enabled: false, authorized: false }
-
-  const authorization = request.headers.get("authorization")
-  if (authorization?.startsWith("Bearer ")) {
-    return { enabled: true, authorized: authorization.slice(7).trim() === token }
+  const auth = getBridgeAuthToken(request)
+  if (auth.bearerToken === token) {
+    return { enabled: true, authorized: true }
   }
-
-  const fallback = request.headers.get("x-bridge-token")
-  return { enabled: true, authorized: fallback === token }
+  if (auth.cookieToken === token) {
+    return { enabled: true, authorized: true }
+  }
+  return { enabled: true, authorized: false }
 }
 
 export async function POST(request: Request) {
@@ -40,15 +60,14 @@ export async function POST(request: Request) {
     return Response.json(errorBody("SERVICE_DISABLED", "Bridge is disabled.", requestId), { status: 503 })
   }
   if (!authorized) {
-    const authHeader = request.headers.get("authorization")
-    const authScheme = authHeader?.split(" ")[0] ?? null
-    const providedToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : ""
+    const auth = getBridgeAuthToken(request)
     const expectedToken = getBridgeToken()
     console.error("[bridge/stage-outzip] unauthorized", {
       requestId,
-      hasAuthHeader: Boolean(authHeader),
-      authScheme,
-      tokenPrefix: providedToken ? `${providedToken.slice(0, 6)}***` : null,
+      hasAuthHeader: Boolean(auth.authHeader),
+      authScheme: auth.authScheme,
+      tokenPrefix: auth.bearerToken ? `${auth.bearerToken.slice(0, 6)}***` : null,
+      cookieTokenPrefix: auth.cookieToken ? `${auth.cookieToken.slice(0, 6)}***` : null,
       expectedTokenPrefix: expectedToken ? `${expectedToken.slice(0, 6)}***` : null,
     })
     return Response.json(errorBody("UNAUTHORIZED", "Invalid bridge token.", requestId), { status: 401 })
