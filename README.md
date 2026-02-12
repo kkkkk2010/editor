@@ -129,7 +129,7 @@ docker compose build --no-cache editor
 docker compose up -d --force-recreate editor
 curl -I http://localhost:3000
 # после открытия редактора и клика Save проверьте в консоли браузера:
-# SAVE_HANDLER_VERSION-2026-02-11c remote-only
+# SAVE_HANDLER_VERSION-2026-02-11d url-primary
 ```
 
 ## Переменные окружения (PPTX)

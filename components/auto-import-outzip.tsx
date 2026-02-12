@@ -105,11 +105,20 @@ export default function AutoImportOutZip({
           const saveToken = qs.get("saveToken")
           const saveEndpoint = qs.get("saveEndpoint")
           const presentationId = qs.get("presentationId")
+          const importOutZip = qs.get("importOutZip")
+          const bridgeToken = qs.get("t") ?? ""
+          let outZipUrl: string | undefined
+          if (importOutZip) {
+            const sourceUrl = new URL(importOutZip, window.location.origin)
+            sourceUrl.searchParams.set("t", bridgeToken)
+            outZipUrl = sourceUrl.toString()
+          }
           if (saveToken && saveEndpoint && presentationId) {
             const wpSaveCtx = {
               saveToken,
               saveEndpoint,
               presentationId,
+              outZipUrl,
               ts: Date.now(),
             }
             sessionStorage.setItem("wpSaveCtx", JSON.stringify(wpSaveCtx))
