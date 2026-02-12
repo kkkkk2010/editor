@@ -181,6 +181,7 @@ export default function Home() {
   const textEditOriginalTextRef = useRef<string | null>(null)
   const [isBridgeImporting, setIsBridgeImporting] = useState(false)
   const [isSavingProject, setIsSavingProject] = useState(false)
+  const [importRev, setImportRev] = useState(0)
   const isImportFlowRef = useRef(false)
 
   const present = history.present
@@ -205,6 +206,10 @@ export default function Home() {
       setPresent((state) => ({ ...state, selectedElementId: null }))
     }
   }, [selectedElementId, selectedElement])
+
+  useEffect(() => {
+    console.log("[ui] render slides=", slides.length, "first slide=", slides[0])
+  }, [slides])
 
   const setPresent = (updater: EditorState | ((state: EditorState) => EditorState)) => {
     setHistory((state) => {
@@ -937,14 +942,26 @@ export default function Home() {
   }
 
   const handleImport = (result: ImportResult) => {
+    const importedSlides = result.slides.map((slide) => ({
+      ...slide,
+      background: { ...slide.background },
+      elements: slide.elements.map((element) => ({
+        ...element,
+        position: { ...element.position },
+        size: { ...element.size },
+        style: { ...element.style },
+      })),
+    }))
+
     setSlideSize(result.slideSize)
     resetHistory({
-      slides: result.slides,
+      slides: importedSlides,
       currentSlideIndex: 0,
       selectedElementId: null,
     })
-    console.log("[auto-import] after import slides=", result.slides.length)
-    console.log("[auto-import] after import first slide=", result.slides[0])
+    setImportRev((value) => value + 1)
+    console.log("[auto-import] after import slides=", importedSlides.length)
+    console.log("[auto-import] after import first slide=", importedSlides[0])
     if (isImportFlowRef.current) {
       try {
         const params = new URLSearchParams(window.location.search)
@@ -959,11 +976,11 @@ export default function Home() {
           JSON.stringify({
             presentationId,
             importedAt: Date.now(),
-            slideCount: result.slides.length,
-            firstSlideId: result.slides[0]?.id ?? null,
+            slideCount: importedSlides.length,
+            firstSlideId: importedSlides[0]?.id ?? null,
           }),
         )
-        console.log("[auto-import] cache persisted", { presentationId, slideCount: result.slides.length })
+        console.log("[auto-import] cache persisted", { presentationId, slideCount: importedSlides.length })
       } catch (error) {
         console.error("[auto-import] failed to persist cache", error)
       }
@@ -1004,9 +1021,9 @@ export default function Home() {
   }, [])
 
   const handleAutoImportComplete = useCallback((success: boolean) => {
-    console.log("[auto-import] complete", { success })
+    console.log("[auto-import] complete", { success, importRev: success ? importRev + 1 : importRev })
     isImportFlowRef.current = false
-  }, [])
+  }, [importRev])
 
   const renderBackgroundBytes = async (background: Background) => {
     const container = document.createElement("div")
@@ -1360,6 +1377,7 @@ export default function Home() {
 
           <div className="flex-1 overflow-hidden">
             <EditorLayout
+              key={`import-${importRev}`}
               sidebar={
                   <Sidebar
                     slides={slides}

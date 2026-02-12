@@ -53,6 +53,10 @@ export default function SlideEditor({
   const editorRef = useRef<HTMLDivElement>(null)
   const [editingElementId, setEditingElementId] = useState<string | null>(null)
   const RESIZE_DEBUG = false
+
+  useEffect(() => {
+    console.log("[ui] SlideEditor render slide=", slide.id, "elements=", slide.elements.length)
+  }, [slide])
   const MIN_ELEMENT_WIDTH = 50
   const MIN_ELEMENT_HEIGHT = 20
 

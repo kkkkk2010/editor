@@ -37,6 +37,10 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
 
   const currentSlide = slides[currentSlideIndex]
   const isFirstSlide = currentSlideIndex === 0
+
+  useEffect(() => {
+    console.log("[ui] SlidePreview render slides=", slides.length, "first slide=", slides[0])
+  }, [slides])
   const isLastSlide = currentSlideIndex === slides.length - 1
 
   const goToPreviousSlide = () => {

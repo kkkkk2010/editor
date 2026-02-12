@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import type { Element, Slide } from "@/lib/types"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import TextPropertyPanel from "./text-property-panel"
@@ -26,6 +27,9 @@ export default function PropertyPanel({
   onReplaceImage,
   onClose,
 }: PropertyPanelProps) {
+  useEffect(() => {
+    console.log("[ui] PropertyPanel render selected=", selectedElement?.id ?? null)
+  }, [selectedElement])
   if (!selectedElement) {
     return (
       <div className="h-full flex flex-col">
