@@ -1234,10 +1234,15 @@ export default function Home() {
         ? new URL(outZipUrl, window.location.origin).searchParams.get("t")
         : null
       const bridgeTokenFromUrl = new URLSearchParams(window.location.search).get("t")
-      const bridgeToken = bridgeTokenFromSavedOutZip ?? bridgeTokenFromUrl
+      const bridgeTokenFromConfig =
+        process.env.NEXT_PUBLIC_PRESENTONIKA_BRIDGE_TOKEN?.trim() ||
+        process.env.NEXT_PUBLIC_BRIDGE_TOKEN?.trim() ||
+        null
+      const bridgeToken = bridgeTokenFromConfig ?? bridgeTokenFromSavedOutZip ?? bridgeTokenFromUrl
       if (!bridgeToken) {
         throw new Error("Missing bridge token for staging out.zip")
       }
+      console.log("[wp-save] bridge token prefix", `${bridgeToken.slice(0, 6)}***`)
 
       const stageResponse = await fetch("/api/bridge/stage-outzip", {
         method: "POST",

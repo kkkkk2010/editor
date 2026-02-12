@@ -9,7 +9,7 @@ const DEFAULT_DOWNLOAD_TIMEOUT_MS = 90_000
 const MAX_REDIRECT_HOPS = 3
 
 function getBridgeToken() {
-  return process.env.BRIDGE_TOKEN?.trim() || ""
+  return process.env.PRESENTONIKA_BRIDGE_TOKEN?.trim() || process.env.BRIDGE_TOKEN?.trim() || ""
 }
 
 function getMaxOutzipBytes() {

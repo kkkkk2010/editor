@@ -10,7 +10,7 @@ function errorBody(code: string, message: string, requestId?: string) {
 }
 
 function getBridgeToken() {
-  return process.env.BRIDGE_TOKEN?.trim() || ""
+  return process.env.PRESENTONIKA_BRIDGE_TOKEN?.trim() || process.env.BRIDGE_TOKEN?.trim() || ""
 }
 
 function getMaxStageBytes() {
@@ -40,6 +40,17 @@ export async function POST(request: Request) {
     return Response.json(errorBody("SERVICE_DISABLED", "Bridge is disabled.", requestId), { status: 503 })
   }
   if (!authorized) {
+    const authHeader = request.headers.get("authorization")
+    const authScheme = authHeader?.split(" ")[0] ?? null
+    const providedToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : ""
+    const expectedToken = getBridgeToken()
+    console.error("[bridge/stage-outzip] unauthorized", {
+      requestId,
+      hasAuthHeader: Boolean(authHeader),
+      authScheme,
+      tokenPrefix: providedToken ? `${providedToken.slice(0, 6)}***` : null,
+      expectedTokenPrefix: expectedToken ? `${expectedToken.slice(0, 6)}***` : null,
+    })
     return Response.json(errorBody("UNAUTHORIZED", "Invalid bridge token.", requestId), { status: 401 })
   }
 

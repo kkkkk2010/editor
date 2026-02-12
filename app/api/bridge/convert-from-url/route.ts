@@ -8,7 +8,7 @@ const DEFAULT_MAX_PPTX_BYTES = 60 * 1024 * 1024
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 90_000
 
 function getBridgeToken() {
-  return process.env.BRIDGE_TOKEN?.trim() || ""
+  return process.env.PRESENTONIKA_BRIDGE_TOKEN?.trim() || process.env.BRIDGE_TOKEN?.trim() || ""
 }
 
 function getConverterUrl() {
