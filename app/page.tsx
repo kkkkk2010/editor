@@ -1006,7 +1006,7 @@ export default function Home() {
     }
 
     setIsSavingProject(true)
-    console.info("SAVE_HANDLER_VERSION-2026-02-11d url-primary")
+    console.info("SAVE_HANDLER_VERSION-2026-02-12-json-url")
     toast({
       title: "Saving to WP…",
       description: "Подождите, выполняется удаленное сохранение.",
@@ -1136,91 +1136,53 @@ export default function Home() {
       const bytes = new Uint8Array(src.byteLength)
       bytes.set(src)
       const blob = new Blob([toArrayBuffer(bytes)], { type: "application/zip" })
+      console.log("[wp-save] generated zip bytes", blob.size)
 
-      const endpointFromUrl = saveEndpoint.includes("/save-outzip")
-        ? saveEndpoint.replace("/save-outzip", "/save-outzip-from-url")
-        : `${saveEndpoint.replace(/\/$/, "")}-from-url`
-
-      const parseSaveResponse = (response: Response, responseText: string) => {
-        let responseJson: { ok?: boolean; message?: string } | null = null
-        try {
-          responseJson = JSON.parse(responseText) as { ok?: boolean; message?: string }
-        } catch {
-          responseJson = null
-        }
-
-        if (!response.ok) {
-          const message = responseJson?.message || `HTTP ${response.status}: ${responseText.slice(0, 200)}`
-          const isInvalidToken = /token\s*(expired|invalid)|expired\s*token|invalid\s*token/i.test(message)
-          throw new Error(isInvalidToken ? "Token expired/invalid: открой презентацию заново из кабинета" : message)
-        }
-
-        if (!responseJson?.ok) {
-          const message = responseJson?.message || "Save failed"
-          const isInvalidToken = /token\s*(expired|invalid)|expired\s*token|invalid\s*token/i.test(message)
-          throw new Error(isInvalidToken ? "Token expired/invalid: открой презентацию заново из кабинета" : message)
-        }
+      if (!outZipUrl) {
+        throw new Error("Missing outZipUrl for from-url save")
       }
 
-      const saveViaMultipart = async () => {
-        const fd = new FormData()
-        fd.append("presentationId", String(presentationId))
-        fd.append("saveToken", String(saveToken))
-        fd.append("file", blob, "latest.out.zip")
+      console.log("[wp-save] mode from-url")
+      console.log("[wp-save] endpoint", saveEndpoint)
+      console.log("[wp-save] payload", {
+        presentationId: String(presentationId),
+        saveToken: `${String(saveToken).slice(0, 6)}...`,
+        outZipUrl,
+      })
 
-        console.log("[wp-save] endpoint", saveEndpoint)
-        for (const [k, v] of fd.entries()) {
-          if (k === "saveToken") {
-            const masked = `${String(v).slice(0, 6)}...`
-            console.log("[wp-save] fd", k, masked)
-          } else {
-            console.log("[wp-save] fd", k, v instanceof Blob ? `Blob(${v.size})` : v)
-          }
-        }
-
-        const response = await fetch(saveEndpoint, {
-          method: "POST",
-          body: fd,
-          credentials: "omit",
-        })
-        const responseText = await response.text()
-        parseSaveResponse(response, responseText)
+      const payload = {
+        outZipUrl,
+        presentationId: String(presentationId),
+        saveToken: String(saveToken),
       }
 
-      const saveViaUrl = async () => {
-        if (!outZipUrl) {
-          throw new Error("Missing outZipUrl for URL-based save")
-        }
+      const response = await fetch(saveEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        mode: "cors",
+        body: JSON.stringify(payload),
+      })
 
-        console.log("[wp-save] url endpoint", endpointFromUrl)
-        console.log("[wp-save] payload", {
-          presentationId: String(presentationId),
-          saveToken: `${String(saveToken).slice(0, 6)}...`,
-          outZipUrl,
-        })
-
-        const response = await fetch(endpointFromUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify({
-            presentationId: String(presentationId),
-            saveToken: String(saveToken),
-            outZipUrl,
-          }),
-        })
-        const responseText = await response.text()
-        parseSaveResponse(response, responseText)
+      const responseText = await response.text()
+      if (!response.ok) {
+        console.error("[wp-save] from-url failed", response.status, responseText)
+        throw new Error(`HTTP ${response.status}: ${responseText.slice(0, 200)}`)
       }
 
+      let responseJson: { ok?: boolean; message?: string; url?: string } | null = null
       try {
-        await saveViaUrl()
-      } catch (error) {
-        console.error("[wp-save] save via URL failed, fallback to multipart", error)
-        await saveViaMultipart()
+        responseJson = JSON.parse(responseText) as { ok?: boolean; message?: string; url?: string }
+      } catch {
+        responseJson = null
       }
+
+      if (!responseJson?.ok) {
+        throw new Error(responseJson?.message || "Save failed")
+      }
+
+      console.log("[wp-save] from-url success", responseJson.url ?? null)
 
       toast({
         title: "Saved",
