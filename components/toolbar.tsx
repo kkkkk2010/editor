@@ -151,6 +151,11 @@ export default function Toolbar({
             <Save className="h-4 w-4 mr-2" />
             {isSavingProject ? "Saving…" : "Сохранить"}
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => {
+            window.location.href = "https://www.presentonika.ru/cabinet"
+          }}>
+            Кабинет
+          </Button>
         </div>
         <div className="flex items-center gap-2">
           <ImportZipDialog importOutZipFromArrayBuffer={importOutZipFromArrayBuffer} hasUnsavedChanges={hasUnsavedChanges} />
