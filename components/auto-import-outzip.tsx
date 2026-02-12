@@ -9,6 +9,7 @@ type AutoImportOutZipProps = {
   onImportStateChange?: (isImporting: boolean) => void
   onImportStart?: () => void
   onImportComplete?: (success: boolean) => void
+  currentPresentationId?: string | null
 }
 
 type CallbackRefs = {
@@ -16,6 +17,7 @@ type CallbackRefs = {
   onImportStateChange?: (isImporting: boolean) => void
   onImportStart?: () => void
   onImportComplete?: (success: boolean) => void
+  currentPresentationId?: string | null
 }
 
 export default function AutoImportOutZip({
@@ -23,11 +25,12 @@ export default function AutoImportOutZip({
   onImportStateChange,
   onImportStart,
   onImportComplete,
+  currentPresentationId,
 }: AutoImportOutZipProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
-  const hasAutoImportedRef = useRef(false)
+  const hasImportedRef = useRef(false)
   const initialUrlRef = useRef<string | null>(null)
   const routerRef = useRef(router)
   const toastRef = useRef(toast)
@@ -36,6 +39,7 @@ export default function AutoImportOutZip({
     onImportStateChange,
     onImportStart,
     onImportComplete,
+    currentPresentationId,
   })
 
   callbackRefs.current = {
@@ -43,6 +47,7 @@ export default function AutoImportOutZip({
     onImportStateChange,
     onImportStart,
     onImportComplete,
+    currentPresentationId,
   }
   routerRef.current = router
   toastRef.current = toast
@@ -63,7 +68,7 @@ export default function AutoImportOutZip({
       return
     }
 
-    if (hasAutoImportedRef.current) {
+    if (hasImportedRef.current) {
       return
     }
 
@@ -71,7 +76,6 @@ export default function AutoImportOutZip({
     const mountedRef = { current: true }
 
     const run = async () => {
-      hasAutoImportedRef.current = true
       let importSucceeded = false
       callbackRefs.current.onImportStateChange?.(true)
       callbackRefs.current.onImportStart?.()
@@ -111,13 +115,15 @@ export default function AutoImportOutZip({
 
         await callbackRefs.current.importOutZipFromArrayBuffer(outZip)
         importSucceeded = true
+        hasImportedRef.current = true
         console.log("[auto-import] import done")
         if (mountedRef.current) {
           // WP save ctx persisted because router clean removes query params
           const qs = new URLSearchParams(window.location.search)
           const saveToken = qs.get("saveToken")
           const saveEndpoint = qs.get("saveEndpoint")
-          const presentationId = qs.get("presentationId")
+          const presentationIdFromUrl = qs.get("presentationId")
+          const presentationId = callbackRefs.current.currentPresentationId ?? presentationIdFromUrl
           const importOutZip = qs.get("importOutZip")
           const bridgeToken = qs.get("t") ?? ""
           let outZipUrl: string | undefined
@@ -127,9 +133,18 @@ export default function AutoImportOutZip({
             outZipUrl = sourceUrl.toString()
           }
           if (saveToken && saveEndpoint && presentationId) {
+            let normalizedSaveEndpoint = saveEndpoint
+            try {
+              const endpointUrl = new URL(saveEndpoint)
+              endpointUrl.searchParams.set("presentationId", presentationId)
+              normalizedSaveEndpoint = endpointUrl.toString()
+            } catch {
+              normalizedSaveEndpoint = saveEndpoint
+            }
+
             const wpSaveCtx = {
               saveToken,
-              saveEndpoint,
+              saveEndpoint: normalizedSaveEndpoint,
               presentationId,
               outZipUrl,
               ts: Date.now(),
@@ -137,7 +152,7 @@ export default function AutoImportOutZip({
             sessionStorage.setItem("wpSaveCtx", JSON.stringify(wpSaveCtx))
             console.log("wpSaveCtx stored", {
               presentationId,
-              saveEndpoint,
+              saveEndpoint: wpSaveCtx.saveEndpoint,
               saveTokenPrefix: `${saveToken.slice(0, 6)}***`,
             })
           }
