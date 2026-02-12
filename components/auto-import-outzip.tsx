@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast"
 
 type AutoImportOutZipProps = {
   importOutZipFromArrayBuffer: (outZip: ArrayBuffer) => Promise<void>
+  currentPresentationId: string | null
   onImportStateChange?: (isImporting: boolean) => void
   onImportStart?: () => void
   onImportComplete?: (success: boolean) => void
@@ -13,6 +14,7 @@ type AutoImportOutZipProps = {
 
 type CallbackRefs = {
   importOutZipFromArrayBuffer: (outZip: ArrayBuffer) => Promise<void>
+  currentPresentationId: string | null
   onImportStateChange?: (isImporting: boolean) => void
   onImportStart?: () => void
   onImportComplete?: (success: boolean) => void
@@ -20,6 +22,7 @@ type CallbackRefs = {
 
 export default function AutoImportOutZip({
   importOutZipFromArrayBuffer,
+  currentPresentationId,
   onImportStateChange,
   onImportStart,
   onImportComplete,
@@ -27,12 +30,13 @@ export default function AutoImportOutZip({
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
-  const hasAutoImportedRef = useRef(false)
+  const hasImportedRef = useRef(false)
   const initialUrlRef = useRef<string | null>(null)
   const routerRef = useRef(router)
   const toastRef = useRef(toast)
   const callbackRefs = useRef<CallbackRefs>({
     importOutZipFromArrayBuffer,
+    currentPresentationId,
     onImportStateChange,
     onImportStart,
     onImportComplete,
@@ -40,6 +44,7 @@ export default function AutoImportOutZip({
 
   callbackRefs.current = {
     importOutZipFromArrayBuffer,
+    currentPresentationId,
     onImportStateChange,
     onImportStart,
     onImportComplete,
@@ -63,7 +68,7 @@ export default function AutoImportOutZip({
       return
     }
 
-    if (hasAutoImportedRef.current) {
+    if (hasImportedRef.current) {
       return
     }
 
@@ -71,7 +76,6 @@ export default function AutoImportOutZip({
     const mountedRef = { current: true }
 
     const run = async () => {
-      hasAutoImportedRef.current = true
       let importSucceeded = false
       callbackRefs.current.onImportStateChange?.(true)
       callbackRefs.current.onImportStart?.()
@@ -111,13 +115,14 @@ export default function AutoImportOutZip({
 
         await callbackRefs.current.importOutZipFromArrayBuffer(outZip)
         importSucceeded = true
+        hasImportedRef.current = true
         console.log("[auto-import] import done")
         if (mountedRef.current) {
           // WP save ctx persisted because router clean removes query params
           const qs = new URLSearchParams(window.location.search)
           const saveToken = qs.get("saveToken")
           const saveEndpoint = qs.get("saveEndpoint")
-          const presentationId = qs.get("presentationId")
+          const presentationId = callbackRefs.current.currentPresentationId
           const importOutZip = qs.get("importOutZip")
           const bridgeToken = qs.get("t") ?? ""
           let outZipUrl: string | undefined

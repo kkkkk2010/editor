@@ -183,6 +183,8 @@ export default function Home() {
   const [isSavingProject, setIsSavingProject] = useState(false)
   const [importRev, setImportRev] = useState(0)
   const isImportFlowRef = useRef(false)
+  const currentPresentationIdRef = useRef<string | null>(null)
+  const [currentPresentationId, setCurrentPresentationId] = useState<string | null>(null)
 
   const present = history.present
   const slides = present.slides
@@ -194,6 +196,17 @@ export default function Home() {
   useEffect(() => {
     presentRef.current = present
   }, [present])
+
+  useEffect(() => {
+    if (currentPresentationIdRef.current !== null) {
+      return
+    }
+    const params = new URLSearchParams(window.location.search)
+    const presentationIdFromUrl = params.get("presentationId")
+    currentPresentationIdRef.current = presentationIdFromUrl
+    setCurrentPresentationId(presentationIdFromUrl)
+    console.log("[wp] currentPresentationIdRef=", presentationIdFromUrl)
+  }, [])
 
   const currentSlide = slides[currentSlideIndex]
   const selectedElement = useMemo(() => {
@@ -964,13 +977,7 @@ export default function Home() {
     console.log("[auto-import] after import first slide=", importedSlides[0])
     if (isImportFlowRef.current) {
       try {
-        const params = new URLSearchParams(window.location.search)
-        const presentationIdFromQuery = params.get("presentationId")
-        const savedCtxRaw = sessionStorage.getItem("wpSaveCtx")
-        const presentationIdFromCtx = savedCtxRaw
-          ? ((JSON.parse(savedCtxRaw) as { presentationId?: string }).presentationId ?? null)
-          : null
-        const presentationId = presentationIdFromQuery ?? presentationIdFromCtx ?? "unknown"
+        const presentationId = currentPresentationIdRef.current ?? "unknown"
         localStorage.setItem(
           `presentonika:imported:${presentationId}`,
           JSON.stringify({
@@ -1076,6 +1083,7 @@ export default function Home() {
 
     try {
       // WP save ctx persisted because router clean removes query params
+      const currentPresentationIdValue = currentPresentationIdRef.current
       const savedCtxRaw = sessionStorage.getItem("wpSaveCtx")
       let ctx: { saveEndpoint: string; saveToken: string; presentationId: string; outZipUrl?: string; ts?: number } | null = null
       if (savedCtxRaw) {
@@ -1114,7 +1122,6 @@ export default function Home() {
         const params = new URLSearchParams(window.location.search)
         const saveEndpoint = params.get("saveEndpoint")
         const saveToken = params.get("saveToken")
-        const presentationId = params.get("presentationId")
         const importOutZip = params.get("importOutZip")
         const bridgeToken = params.get("t") ?? ""
         let outZipUrl: string | undefined
@@ -1123,8 +1130,8 @@ export default function Home() {
           sourceUrl.searchParams.set("t", bridgeToken)
           outZipUrl = sourceUrl.toString()
         }
-        if (saveEndpoint && saveToken && presentationId) {
-          ctx = { saveEndpoint, saveToken, presentationId, outZipUrl }
+        if (saveEndpoint && saveToken && currentPresentationIdValue) {
+          ctx = { saveEndpoint, saveToken, presentationId: currentPresentationIdValue, outZipUrl }
         }
       }
 
@@ -1134,6 +1141,15 @@ export default function Home() {
         toast({
           title: "Save unavailable",
           description: "Save unavailable: open from cabinet",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (!currentPresentationIdValue) {
+        toast({
+          title: "Не удалось сохранить проект",
+          description: "Ошибка сохранения: не найден presentationId в URL. Обнови страницу и попробуй снова.",
           variant: "destructive",
         })
         return
@@ -1206,6 +1222,36 @@ export default function Home() {
 
       console.log("[wp-save] mode from-url")
       console.log("[wp-save] endpoint", saveEndpoint)
+      let endpointPresentationId: string | null = null
+      try {
+        const endpointUrl = new URL(saveEndpoint, window.location.origin)
+        endpointPresentationId = endpointUrl.searchParams.get("presentationId")
+      } catch (error) {
+        console.error("[wp-save] invalid saveEndpoint", saveEndpoint, error)
+      }
+      console.log("[wp-save] guard", {
+        currentPresentationId: currentPresentationIdValue,
+        wpSaveCtxPresentationId: presentationId,
+        saveEndpoint,
+        endpointPresentationId,
+      })
+
+      if (presentationId !== currentPresentationIdValue || (endpointPresentationId && endpointPresentationId !== currentPresentationIdValue)) {
+        const mismatchMessage = `Ошибка сохранения: несовпадение presentationId (ctx=${presentationId}, url=${currentPresentationIdValue}). Обнови страницу и попробуй снова.`
+        console.error("[wp-save] presentationId mismatch", {
+          currentPresentationId: currentPresentationIdValue,
+          wpSaveCtx: ctx,
+          endpointPresentationId,
+          href: window.location.href,
+        })
+        toast({
+          title: "Не удалось сохранить проект",
+          description: mismatchMessage,
+          variant: "destructive",
+        })
+        return
+      }
+
       console.log("[wp-save] payload", {
         presentationId: String(presentationId),
         saveToken: `${String(saveToken).slice(0, 6)}...`,
@@ -1340,6 +1386,7 @@ export default function Home() {
       <Suspense fallback={null}>
         <AutoImportOutZip
           importOutZipFromArrayBuffer={importOutZipFromArrayBuffer}
+          currentPresentationId={currentPresentationId}
           onImportStateChange={setIsBridgeImporting}
           onImportStart={handleAutoImportStart}
           onImportComplete={handleAutoImportComplete}
