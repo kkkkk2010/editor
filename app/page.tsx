@@ -230,6 +230,7 @@ export default function Home() {
       if (isSameState(state.present, next)) {
         return state
       }
+      presentRef.current = next
       return { ...state, present: next }
     })
   }
@@ -240,6 +241,7 @@ export default function Home() {
       if (isSameState(state.present, next)) {
         return state
       }
+      presentRef.current = next
       const past = [...state.past, state.present]
       const trimmedPast = past.length > MAX_HISTORY ? past.slice(past.length - MAX_HISTORY) : past
       return { past: trimmedPast, present: next, future: [] }
@@ -262,6 +264,7 @@ export default function Home() {
   }
 
   const resetHistory = (next: EditorState) => {
+    presentRef.current = next
     setHistory({
       past: [],
       present: next,
@@ -303,6 +306,7 @@ export default function Home() {
       const previous = state.past[state.past.length - 1]
       const past = state.past.slice(0, -1)
       const future = [state.present, ...state.future]
+      presentRef.current = previous
       return { past, present: previous, future }
     })
   }, [])
@@ -313,6 +317,7 @@ export default function Home() {
       const next = state.future[0]
       const future = state.future.slice(1)
       const past = [...state.past, state.present]
+      presentRef.current = next
       return { past, present: next, future }
     })
   }, [])
@@ -1082,6 +1087,7 @@ export default function Home() {
     })
 
     try {
+      await Promise.resolve()
       // WP save ctx persisted because router clean removes query params
       const currentPresentationIdValue = currentPresentationIdRef.current
       const savedCtxRaw = sessionStorage.getItem("wpSaveCtx")
@@ -1156,9 +1162,17 @@ export default function Home() {
       }
 
       const { saveEndpoint, saveToken, presentationId, outZipUrl } = ctx
+      const presentSnapshot = cloneState(presentRef.current)
+      console.log(
+        "[wp-save] snapshot slides=",
+        presentSnapshot.slides.length,
+        "first=",
+        presentSnapshot.slides[0]?.id,
+      )
+      const slidesSnapshot = presentSnapshot.slides
       const assetStore = assetStoreRef.current
       const slidesForExport = await Promise.all(
-        slides.map(async (slide) => {
+        slidesSnapshot.map(async (slide) => {
           const existingBackgroundPath =
             slide.background.type === "image" ? slide.background.assetPath : undefined
           const backgroundAssetPath = existingBackgroundPath || `backgrounds/bg-${slide.id}.png`
