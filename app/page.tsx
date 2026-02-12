@@ -181,6 +181,7 @@ export default function Home() {
   const textEditOriginalTextRef = useRef<string | null>(null)
   const [isBridgeImporting, setIsBridgeImporting] = useState(false)
   const [isSavingProject, setIsSavingProject] = useState(false)
+  const isImportFlowRef = useRef(false)
 
   const present = history.present
   const slides = present.slides
@@ -942,6 +943,31 @@ export default function Home() {
       currentSlideIndex: 0,
       selectedElementId: null,
     })
+    console.log("[auto-import] after import slides=", result.slides.length)
+    console.log("[auto-import] after import first slide=", result.slides[0])
+    if (isImportFlowRef.current) {
+      try {
+        const params = new URLSearchParams(window.location.search)
+        const presentationIdFromQuery = params.get("presentationId")
+        const savedCtxRaw = sessionStorage.getItem("wpSaveCtx")
+        const presentationIdFromCtx = savedCtxRaw
+          ? ((JSON.parse(savedCtxRaw) as { presentationId?: string }).presentationId ?? null)
+          : null
+        const presentationId = presentationIdFromQuery ?? presentationIdFromCtx ?? "unknown"
+        localStorage.setItem(
+          `presentonika:imported:${presentationId}`,
+          JSON.stringify({
+            presentationId,
+            importedAt: Date.now(),
+            slideCount: result.slides.length,
+            firstSlideId: result.slides[0]?.id ?? null,
+          }),
+        )
+        console.log("[auto-import] cache persisted", { presentationId, slideCount: result.slides.length })
+      } catch (error) {
+        console.error("[auto-import] failed to persist cache", error)
+      }
+    }
     setShowPropertyPanel(false)
     setHasUnsavedChanges(false)
   }
@@ -962,6 +988,25 @@ export default function Home() {
     },
     [handleImportZip],
   )
+
+  const handleAutoImportStart = useCallback(() => {
+    isImportFlowRef.current = true
+    assetStoreRef.current.clear()
+    revokeImportObjectUrls(importedAssetUrlsRef.current)
+    importedAssetUrlsRef.current = []
+    resetHistory({
+      slides: defaultSlides,
+      currentSlideIndex: 0,
+      selectedElementId: null,
+    })
+    setHasUnsavedChanges(false)
+    console.log("[auto-import] hard reset done before import")
+  }, [])
+
+  const handleAutoImportComplete = useCallback((success: boolean) => {
+    console.log("[auto-import] complete", { success })
+    isImportFlowRef.current = false
+  }, [])
 
   const renderBackgroundBytes = async (background: Background) => {
     const container = document.createElement("div")
@@ -1279,6 +1324,8 @@ export default function Home() {
         <AutoImportOutZip
           importOutZipFromArrayBuffer={importOutZipFromArrayBuffer}
           onImportStateChange={setIsBridgeImporting}
+          onImportStart={handleAutoImportStart}
+          onImportComplete={handleAutoImportComplete}
         />
       </Suspense>
       {isBridgeImporting ? (

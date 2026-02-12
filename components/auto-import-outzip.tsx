@@ -7,16 +7,22 @@ import { useToast } from "@/hooks/use-toast"
 type AutoImportOutZipProps = {
   importOutZipFromArrayBuffer: (outZip: ArrayBuffer) => Promise<void>
   onImportStateChange?: (isImporting: boolean) => void
+  onImportStart?: () => void
+  onImportComplete?: (success: boolean) => void
 }
 
 type CallbackRefs = {
   importOutZipFromArrayBuffer: (outZip: ArrayBuffer) => Promise<void>
   onImportStateChange?: (isImporting: boolean) => void
+  onImportStart?: () => void
+  onImportComplete?: (success: boolean) => void
 }
 
 export default function AutoImportOutZip({
   importOutZipFromArrayBuffer,
   onImportStateChange,
+  onImportStart,
+  onImportComplete,
 }: AutoImportOutZipProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -28,11 +34,15 @@ export default function AutoImportOutZip({
   const callbackRefs = useRef<CallbackRefs>({
     importOutZipFromArrayBuffer,
     onImportStateChange,
+    onImportStart,
+    onImportComplete,
   })
 
   callbackRefs.current = {
     importOutZipFromArrayBuffer,
     onImportStateChange,
+    onImportStart,
+    onImportComplete,
   }
   routerRef.current = router
   toastRef.current = toast
@@ -62,7 +72,9 @@ export default function AutoImportOutZip({
 
     const run = async () => {
       hasAutoImportedRef.current = true
+      let importSucceeded = false
       callbackRefs.current.onImportStateChange?.(true)
+      callbackRefs.current.onImportStart?.()
       try {
         console.log("[auto-import] fetch start")
         const response = await fetch(initialUrlRef.current!, {
@@ -98,6 +110,7 @@ export default function AutoImportOutZip({
         }
 
         await callbackRefs.current.importOutZipFromArrayBuffer(outZip)
+        importSucceeded = true
         console.log("[auto-import] import done")
         if (mountedRef.current) {
           // WP save ctx persisted because router clean removes query params
@@ -150,6 +163,7 @@ export default function AutoImportOutZip({
       } finally {
         if (mountedRef.current) {
           callbackRefs.current.onImportStateChange?.(false)
+          callbackRefs.current.onImportComplete?.(importSucceeded)
         }
       }
     }
