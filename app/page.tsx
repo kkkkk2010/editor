@@ -1230,9 +1230,38 @@ export default function Home() {
       const blob = new Blob([toArrayBuffer(bytes)], { type: "application/zip" })
       console.log("[wp-save] generated zip bytes", blob.size)
 
-      if (!outZipUrl) {
-        throw new Error("Missing outZipUrl for from-url save")
+      const bridgeTokenFromSavedOutZip = outZipUrl
+        ? new URL(outZipUrl, window.location.origin).searchParams.get("t")
+        : null
+      const bridgeTokenFromUrl = new URLSearchParams(window.location.search).get("t")
+      const bridgeToken = bridgeTokenFromSavedOutZip ?? bridgeTokenFromUrl
+      if (!bridgeToken) {
+        throw new Error("Missing bridge token for staging out.zip")
       }
+
+      const stageResponse = await fetch("/api/bridge/stage-outzip", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${bridgeToken}`,
+          "Content-Type": "application/octet-stream",
+        },
+        body: bytes,
+      })
+      const stageText = await stageResponse.text()
+      if (!stageResponse.ok) {
+        throw new Error(`Staging failed: HTTP ${stageResponse.status}: ${stageText.slice(0, 200)}`)
+      }
+      let stageJson: { outZipUrl?: string } | null = null
+      try {
+        stageJson = JSON.parse(stageText) as { outZipUrl?: string }
+      } catch {
+        stageJson = null
+      }
+      if (!stageJson?.outZipUrl) {
+        throw new Error("Staging failed: missing outZipUrl")
+      }
+      const stagedOutZipUrl = new URL(stageJson.outZipUrl, window.location.origin).toString()
+      console.log("[wp-save] staged outZipUrl=", stagedOutZipUrl, "size=", blob.size)
 
       console.log("[wp-save] mode from-url")
       console.log("[wp-save] endpoint", saveEndpoint)
@@ -1269,11 +1298,12 @@ export default function Home() {
       console.log("[wp-save] payload", {
         presentationId: String(presentationId),
         saveToken: `${String(saveToken).slice(0, 6)}...`,
-        outZipUrl,
+        outZipUrl: stagedOutZipUrl,
       })
+      console.log("[wp-save] payload outZipUrl=", stagedOutZipUrl)
 
       const payload = {
-        outZipUrl,
+        outZipUrl: stagedOutZipUrl,
         presentationId: String(presentationId),
         saveToken: String(saveToken),
       }
