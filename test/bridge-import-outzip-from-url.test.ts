@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const dnsLookupAllMock = vi.fn()
+const hoisted = vi.hoisted(() => ({
+  dnsLookupAllMock: vi.fn(),
+}))
+
 vi.mock("@/src/lib/net/dnsLookup", () => ({
-  dnsLookupAll: dnsLookupAllMock,
+  dnsLookupAll: hoisted.dnsLookupAllMock,
 }))
 
 import { POST } from "@/app/api/bridge/import-outzip-from-url/route"
@@ -26,7 +29,7 @@ describe("POST /api/bridge/import-outzip-from-url", () => {
     process.env.BRIDGE_TOKEN = BRIDGE_TOKEN
     process.env.BRIDGE_TMP_DIR = "/tmp/outzips-test-import"
     process.env.BRIDGE_MAX_OUTZIP_BYTES = "8"
-    dnsLookupAllMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }])
+    hoisted.dnsLookupAllMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }])
   })
 
   afterEach(() => {
