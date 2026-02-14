@@ -17,16 +17,39 @@ function getMaxStageBytes() {
   return parsed
 }
 
+function hasValidWpSaveContext(request: Request) {
+  const presentationId = request.headers.get("x-presentation-id")?.trim() || ""
+  const saveToken = request.headers.get("x-save-token")?.trim() || ""
+
+  const isPresentationIdValid = /^\d+$/.test(presentationId)
+  const isSaveTokenValid = saveToken.length >= 24
+
+  return {
+    ok: isPresentationIdValid && isSaveTokenValid,
+    presentationId,
+    hasSaveToken: Boolean(saveToken),
+  }
+}
+
 export async function POST(request: Request) {
   const requestId = request.headers.get("x-request-id")?.trim() || crypto.randomUUID()
   const authState = checkBridgeAuthorization(request)
   const { enabled, authorized } = authState
+  const wpSaveContext = hasValidWpSaveContext(request)
   if (!enabled) {
     return Response.json(errorBody("SERVICE_DISABLED", "Bridge is disabled.", requestId), { status: 503 })
   }
-  if (!authorized) {
+  if (!authorized && !wpSaveContext.ok) {
     logBridgeUnauthorized("stage-outzip", requestId, authState)
     return Response.json(errorBody("UNAUTHORIZED", "Invalid bridge token.", requestId), { status: 401 })
+  }
+
+  if (!authorized && wpSaveContext.ok) {
+    console.info("[bridge/stage-outzip] authorized-via-save-context", {
+      requestId,
+      presentationId: wpSaveContext.presentationId,
+      hasSaveToken: wpSaveContext.hasSaveToken,
+    })
   }
 
   const contentLength = request.headers.get("content-length")

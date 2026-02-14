@@ -46,6 +46,18 @@ describe("POST /api/bridge/stage-outzip", () => {
     expect(payload.code).toBe("UNAUTHORIZED")
   })
 
+  it("authorizes save flow via x-presentation-id + x-save-token headers", async () => {
+    const request = makeRequest(ZIP_BYTES, { requestId: "req-save-flow" })
+    request.headers.set("x-presentation-id", "123")
+    request.headers.set("x-save-token", "a".repeat(48))
+
+    const response = await POST(request)
+    expect(response.status).toBe(200)
+    const payload = await response.json()
+    expect(payload.ok).toBe(true)
+    expect(payload.requestId).toBe("req-save-flow")
+  })
+
   it("rejects invalid zip signature", async () => {
     const badBytes = new Uint8Array([0x00, 0x11, 0x22, 0x33])
     const response = await POST(makeRequest(badBytes, { cookie: `admin_import=${BRIDGE_TOKEN}` }))
