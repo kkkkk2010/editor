@@ -1181,13 +1181,21 @@ export default function Home() {
     return { bytes, blob }
   }
 
-  const stageOutZip = async (bytes: Uint8Array, blobSize: number, requestId: string) => {
-    const stageBody = toArrayBuffer(bytes)
+  const stageOutZip = async (params: {
+    bytes: Uint8Array
+    blobSize: number
+    requestId: string
+    presentationId: string
+    saveToken: string
+  }) => {
+    const stageBody = toArrayBuffer(params.bytes)
     const stageResponse = await fetch("/api/bridge/stage-outzip", {
       method: "POST",
       headers: {
         "Content-Type": "application/octet-stream",
-        "x-request-id": requestId,
+        "x-request-id": params.requestId,
+        "x-presentation-id": params.presentationId,
+        "x-save-token": params.saveToken,
       },
       credentials: "same-origin",
       body: stageBody,
@@ -1206,7 +1214,7 @@ export default function Home() {
       throw new Error("Staging failed: missing outZipUrl")
     }
     const stagedOutZipUrl = new URL(stageJson.outZipUrl, window.location.origin).toString()
-    console.log("[wp-save] staged outZipUrl=", stagedOutZipUrl, "size=", blobSize, "requestId=", requestId)
+    console.log("[wp-save] staged outZipUrl=", stagedOutZipUrl, "size=", params.blobSize, "requestId=", params.requestId)
     return stagedOutZipUrl
   }
 
@@ -1289,7 +1297,13 @@ export default function Home() {
       const { saveEndpoint, saveToken, presentationId } = ctx
       const requestId = `save-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`
       const { bytes, blob } = await buildOutZipBytesFromSnapshot()
-      const stagedOutZipUrl = await stageOutZip(bytes, blob.size, requestId)
+      const stagedOutZipUrl = await stageOutZip({
+        bytes,
+        blobSize: blob.size,
+        requestId,
+        presentationId,
+        saveToken,
+      })
 
       console.log("[wp-save] mode from-url")
       console.log("[wp-save] endpoint", saveEndpoint)
