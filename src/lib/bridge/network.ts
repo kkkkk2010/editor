@@ -1,5 +1,5 @@
-import dns from "node:dns/promises"
 import net from "node:net"
+import { dnsLookupAll } from "@/src/lib/net/dnsLookup"
 
 function errorBody(code: string, message: string) {
   return {
@@ -59,7 +59,7 @@ export async function assertPublicUrl(rawUrl: string, invalidUrlMessage = "Inval
   }
 
   try {
-    const resolved = await dns.lookup(hostname, { all: true })
+    const resolved = await dnsLookupAll(hostname)
     if (!resolved.length || resolved.some((item) => isPrivateIp(item.address))) {
       throw new Error("Blocked host")
     }
