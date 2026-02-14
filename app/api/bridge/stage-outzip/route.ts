@@ -61,14 +61,11 @@ export async function POST(request: Request) {
   }
   if (!authorized) {
     const auth = getBridgeAuthToken(request)
-    const expectedToken = getBridgeToken()
     console.error("[bridge/stage-outzip] unauthorized", {
       requestId,
       hasAuthHeader: Boolean(auth.authHeader),
       authScheme: auth.authScheme,
-      tokenPrefix: auth.bearerToken ? `${auth.bearerToken.slice(0, 6)}***` : null,
-      cookieTokenPrefix: auth.cookieToken ? `${auth.cookieToken.slice(0, 6)}***` : null,
-      expectedTokenPrefix: expectedToken ? `${expectedToken.slice(0, 6)}***` : null,
+      hasCookieToken: Boolean(auth.cookieToken),
     })
     return Response.json(errorBody("UNAUTHORIZED", "Invalid bridge token.", requestId), { status: 401 })
   }
@@ -104,6 +101,7 @@ export async function POST(request: Request) {
 
   try {
     const job = await createJobFromZipBytes(Buffer.from(bytes), { requestId })
+    console.log("[bridge/stage-outzip] staged", { requestId, jobId: job.jobId })
     return Response.json({
       ok: true,
       outZipUrl: `/api/bridge/staged-outzip/${job.jobId}?t=${encodeURIComponent(job.token)}`,

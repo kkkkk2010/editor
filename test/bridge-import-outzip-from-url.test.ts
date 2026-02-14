@@ -21,7 +21,7 @@ describe("POST /api/bridge/import-outzip-from-url", () => {
     process.env.BRIDGE_TOKEN = BRIDGE_TOKEN
     process.env.BRIDGE_TMP_DIR = "/tmp/outzips-test-import"
     process.env.BRIDGE_MAX_OUTZIP_BYTES = "8"
-    vi.spyOn(dns, "lookup").mockResolvedValue([{ address: "93.184.216.34", family: 4 }])
+    vi.spyOn(dns, "lookup").mockResolvedValue({ address: "93.184.216.34", family: 4 })
   })
 
   afterEach(() => {

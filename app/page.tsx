@@ -23,6 +23,7 @@ import { AssetStore } from "@/src/lib/assets/assetStore"
 import { mapEditorToImporter } from "@/src/lib/import/mapEditorToImporter"
 import { mapImporterToEditor } from "@/src/lib/import/mapImporterToEditor"
 import { exportProjectZip } from "@/src/lib/project/exportProjectZip"
+import { buildWpSavePayload } from "@/src/lib/save/wpSavePayload"
 import html2canvas from "html2canvas"
 
 type EditorState = {
@@ -1074,6 +1075,178 @@ export default function Home() {
     }
   }
 
+  type WpSaveCtx = { saveEndpoint: string; saveToken: string; presentationId: string; outZipUrl?: string; ts?: number }
+
+  const getWpSaveCtx = (currentPresentationIdValue: string | null): WpSaveCtx | null => {
+    const savedCtxRaw = sessionStorage.getItem("wpSaveCtx")
+    if (savedCtxRaw) {
+      try {
+        const parsed = JSON.parse(savedCtxRaw) as WpSaveCtx
+        if (parsed.saveEndpoint && parsed.saveToken && parsed.presentationId) {
+          if (typeof parsed.ts === "number" && Date.now() - parsed.ts > 30 * 60 * 1000) {
+            sessionStorage.removeItem("wpSaveCtx")
+            toast({
+              title: "Save unavailable",
+              description: "Token expired, reopen from cabinet",
+              variant: "destructive",
+            })
+            return null
+          }
+          return parsed
+        }
+      } catch {
+        sessionStorage.removeItem("wpSaveCtx")
+      }
+    }
+
+    const params = new URLSearchParams(window.location.search)
+    const saveEndpoint = params.get("saveEndpoint")
+    const saveToken = params.get("saveToken")
+    const importOutZip = params.get("importOutZip")
+    const bridgeToken = params.get("t") ?? ""
+    let outZipUrl: string | undefined
+    if (importOutZip) {
+      const sourceUrl = new URL(importOutZip, window.location.origin)
+      sourceUrl.searchParams.set("t", bridgeToken)
+      outZipUrl = sourceUrl.toString()
+    }
+    if (saveEndpoint && saveToken && currentPresentationIdValue) {
+      return { saveEndpoint, saveToken, presentationId: currentPresentationIdValue, outZipUrl }
+    }
+    return null
+  }
+
+  const buildOutZipBytesFromSnapshot = async () => {
+    const presentSnapshot = cloneState(presentRef.current)
+    console.log("[wp-save] snapshot slides=", presentSnapshot.slides.length, "first=", presentSnapshot.slides[0]?.id)
+    const slidesSnapshot = presentSnapshot.slides
+    const assetStore = assetStoreRef.current
+    const slidesForExport = await Promise.all(
+      slidesSnapshot.map(async (slide) => {
+        const existingBackgroundPath = slide.background.type === "image" ? slide.background.assetPath : undefined
+        const backgroundAssetPath = existingBackgroundPath || `backgrounds/bg-${slide.id}.png`
+        if (!assetStore.hasAsset(backgroundAssetPath)) {
+          if (existingBackgroundPath) {
+            const backgroundUrl = extractBackgroundUrl(slide.background)
+            if (backgroundUrl) {
+              await storeAssetFromUrlAtPath(backgroundUrl, backgroundAssetPath)
+            }
+          } else {
+            const backgroundBytes = await renderBackgroundBytes(slide.background)
+            assetStore.setAsset(backgroundAssetPath, backgroundBytes, "image/png")
+          }
+        }
+
+        const elements = await Promise.all(
+          slide.elements.map(async (element) => {
+            if (element.type !== "image") {
+              return element
+            }
+
+            const existingPath = element.assetPath
+            const extension = existingPath ? getExtensionFromUrl(existingPath) : getExtensionFromUrl(element.content)
+            const assetPath = existingPath || `assets/images/${element.id}.${extension}`
+
+            if (!assetStore.hasAsset(assetPath)) {
+              await storeAssetFromUrlAtPath(element.content, assetPath)
+            }
+
+            return {
+              ...element,
+              assetPath,
+            }
+          }),
+        )
+
+        return {
+          ...slide,
+          background: {
+            ...slide.background,
+            type: "image" as const,
+            value: normalizeBackgroundValue(slide.background),
+            assetPath: backgroundAssetPath,
+          },
+          elements,
+        }
+      }),
+    )
+
+    const importerDoc = mapEditorToImporter(slidesForExport, slideSize)
+    const zipBytes = exportProjectZip(importerDoc, assetStore)
+    const src = zipBytes instanceof Uint8Array ? zipBytes : new Uint8Array(zipBytes as ArrayBufferLike)
+    const bytes = new Uint8Array(src.byteLength)
+    bytes.set(src)
+    const blob = new Blob([toArrayBuffer(bytes)], { type: "application/zip" })
+    console.log("[wp-save] generated zip bytes", blob.size)
+    return { bytes, blob }
+  }
+
+  const stageOutZip = async (bytes: Uint8Array, blobSize: number, requestId: string) => {
+    const stageResponse = await fetch("/api/bridge/stage-outzip", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "x-request-id": requestId,
+      },
+      credentials: "same-origin",
+      body: bytes,
+    })
+    const stageText = await stageResponse.text()
+    if (!stageResponse.ok) {
+      throw new Error(`Staging failed: HTTP ${stageResponse.status}: ${stageText.slice(0, 200)}`)
+    }
+    let stageJson: { outZipUrl?: string } | null = null
+    try {
+      stageJson = JSON.parse(stageText) as { outZipUrl?: string }
+    } catch {
+      stageJson = null
+    }
+    if (!stageJson?.outZipUrl) {
+      throw new Error("Staging failed: missing outZipUrl")
+    }
+    const stagedOutZipUrl = new URL(stageJson.outZipUrl, window.location.origin).toString()
+    console.log("[wp-save] staged outZipUrl=", stagedOutZipUrl, "size=", blobSize, "requestId=", requestId)
+    return stagedOutZipUrl
+  }
+
+  const saveOutZipUrlToWp = async (params: {
+    saveEndpoint: string
+    saveToken: string
+    presentationId: string
+    stagedOutZipUrl: string
+    requestId: string
+  }) => {
+    const payload = buildWpSavePayload({
+      stagedOutZipUrl: params.stagedOutZipUrl,
+      presentationId: params.presentationId,
+      saveToken: params.saveToken,
+      requestId: params.requestId,
+    })
+    console.log("[wp-save] payload", {
+      presentationId: payload.presentationId,
+      saveToken: `${payload.saveToken.slice(0, 6)}...`,
+      outZipUrl: payload.outZipUrl,
+      requestId: payload.requestId,
+    })
+
+    const response = await fetch(params.saveEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-request-id": params.requestId,
+      },
+      mode: "cors",
+      body: JSON.stringify(payload),
+    })
+
+    const responseText = await response.text()
+    if (!response.ok) {
+      console.error("[wp-save] from-url failed", response.status, responseText)
+      throw new Error(`HTTP ${response.status}: ${responseText.slice(0, 200)}`)
+    }
+    return responseText
+  }
+
   const handleSaveProject = async () => {
     if (isSavingProject) {
       return
@@ -1090,56 +1263,7 @@ export default function Home() {
       await Promise.resolve()
       // WP save ctx persisted because router clean removes query params
       const currentPresentationIdValue = currentPresentationIdRef.current
-      const savedCtxRaw = sessionStorage.getItem("wpSaveCtx")
-      let ctx: { saveEndpoint: string; saveToken: string; presentationId: string; outZipUrl?: string; ts?: number } | null = null
-      if (savedCtxRaw) {
-        try {
-          const parsed = JSON.parse(savedCtxRaw) as {
-            saveEndpoint?: string
-            saveToken?: string
-            presentationId?: string
-            outZipUrl?: string
-            ts?: number
-          }
-          if (parsed.saveEndpoint && parsed.saveToken && parsed.presentationId) {
-            if (typeof parsed.ts === "number" && Date.now() - parsed.ts > 30 * 60 * 1000) {
-              sessionStorage.removeItem("wpSaveCtx")
-              toast({
-                title: "Save unavailable",
-                description: "Token expired, reopen from cabinet",
-                variant: "destructive",
-              })
-              return
-            }
-            ctx = {
-              saveEndpoint: parsed.saveEndpoint,
-              saveToken: parsed.saveToken,
-              presentationId: parsed.presentationId,
-              outZipUrl: parsed.outZipUrl,
-              ts: parsed.ts,
-            }
-          }
-        } catch {
-          sessionStorage.removeItem("wpSaveCtx")
-        }
-      }
-
-      if (!ctx) {
-        const params = new URLSearchParams(window.location.search)
-        const saveEndpoint = params.get("saveEndpoint")
-        const saveToken = params.get("saveToken")
-        const importOutZip = params.get("importOutZip")
-        const bridgeToken = params.get("t") ?? ""
-        let outZipUrl: string | undefined
-        if (importOutZip) {
-          const sourceUrl = new URL(importOutZip, window.location.origin)
-          sourceUrl.searchParams.set("t", bridgeToken)
-          outZipUrl = sourceUrl.toString()
-        }
-        if (saveEndpoint && saveToken && currentPresentationIdValue) {
-          ctx = { saveEndpoint, saveToken, presentationId: currentPresentationIdValue, outZipUrl }
-        }
-      }
+      const ctx = getWpSaveCtx(currentPresentationIdValue)
 
       console.info({ presentationId: ctx?.presentationId ?? null, hasSaveToken: Boolean(ctx?.saveToken), saveEndpoint: ctx?.saveEndpoint ?? null })
 
@@ -1161,112 +1285,10 @@ export default function Home() {
         return
       }
 
-      const { saveEndpoint, saveToken, presentationId, outZipUrl } = ctx
-      const presentSnapshot = cloneState(presentRef.current)
-      console.log(
-        "[wp-save] snapshot slides=",
-        presentSnapshot.slides.length,
-        "first=",
-        presentSnapshot.slides[0]?.id,
-      )
-      const slidesSnapshot = presentSnapshot.slides
-      const assetStore = assetStoreRef.current
-      const slidesForExport = await Promise.all(
-        slidesSnapshot.map(async (slide) => {
-          const existingBackgroundPath =
-            slide.background.type === "image" ? slide.background.assetPath : undefined
-          const backgroundAssetPath = existingBackgroundPath || `backgrounds/bg-${slide.id}.png`
-          if (!assetStore.hasAsset(backgroundAssetPath)) {
-            if (existingBackgroundPath) {
-              const backgroundUrl = extractBackgroundUrl(slide.background)
-              if (backgroundUrl) {
-                await storeAssetFromUrlAtPath(backgroundUrl, backgroundAssetPath)
-              }
-            } else {
-              const bytes = await renderBackgroundBytes(slide.background)
-              assetStore.setAsset(backgroundAssetPath, bytes, "image/png")
-            }
-          }
-
-          const elements = await Promise.all(
-            slide.elements.map(async (element) => {
-              if (element.type !== "image") {
-                return element
-              }
-
-              const existingPath = element.assetPath
-              const extension = existingPath ? getExtensionFromUrl(existingPath) : getExtensionFromUrl(element.content)
-              const assetPath = existingPath || `assets/images/${element.id}.${extension}`
-
-              if (!assetStore.hasAsset(assetPath)) {
-                await storeAssetFromUrlAtPath(element.content, assetPath)
-              }
-
-              return {
-                ...element,
-                assetPath,
-              }
-            }),
-          )
-
-          return {
-            ...slide,
-            background: {
-              ...slide.background,
-              type: "image" as const,
-              value: normalizeBackgroundValue(slide.background),
-              assetPath: backgroundAssetPath,
-            },
-            elements,
-          }
-        }),
-      )
-
-      const importerDoc = mapEditorToImporter(slidesForExport, slideSize)
-      const zipBytes = exportProjectZip(importerDoc, assetStore)
-      const src = zipBytes instanceof Uint8Array ? zipBytes : new Uint8Array(zipBytes as ArrayBufferLike)
-      const bytes = new Uint8Array(src.byteLength)
-      bytes.set(src)
-      const blob = new Blob([toArrayBuffer(bytes)], { type: "application/zip" })
-      console.log("[wp-save] generated zip bytes", blob.size)
-
-      const bridgeTokenFromSavedOutZip = outZipUrl
-        ? new URL(outZipUrl, window.location.origin).searchParams.get("t")
-        : null
-      const bridgeTokenFromUrl = new URLSearchParams(window.location.search).get("t")
-      const bridgeTokenFromConfig =
-        process.env.NEXT_PUBLIC_PRESENTONIKA_BRIDGE_TOKEN?.trim() ||
-        process.env.NEXT_PUBLIC_BRIDGE_TOKEN?.trim() ||
-        null
-      const bridgeToken = bridgeTokenFromConfig ?? bridgeTokenFromSavedOutZip ?? bridgeTokenFromUrl
-      if (!bridgeToken) {
-        throw new Error("Missing bridge token for staging out.zip")
-      }
-      console.log("[wp-save] bridge token prefix", `${bridgeToken.slice(0, 6)}***`)
-
-      const stageResponse = await fetch("/api/bridge/stage-outzip", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${bridgeToken}`,
-          "Content-Type": "application/octet-stream",
-        },
-        body: bytes,
-      })
-      const stageText = await stageResponse.text()
-      if (!stageResponse.ok) {
-        throw new Error(`Staging failed: HTTP ${stageResponse.status}: ${stageText.slice(0, 200)}`)
-      }
-      let stageJson: { outZipUrl?: string } | null = null
-      try {
-        stageJson = JSON.parse(stageText) as { outZipUrl?: string }
-      } catch {
-        stageJson = null
-      }
-      if (!stageJson?.outZipUrl) {
-        throw new Error("Staging failed: missing outZipUrl")
-      }
-      const stagedOutZipUrl = new URL(stageJson.outZipUrl, window.location.origin).toString()
-      console.log("[wp-save] staged outZipUrl=", stagedOutZipUrl, "size=", blob.size)
+      const { saveEndpoint, saveToken, presentationId } = ctx
+      const requestId = `save-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`
+      const { bytes, blob } = await buildOutZipBytesFromSnapshot()
+      const stagedOutZipUrl = await stageOutZip(bytes, blob.size, requestId)
 
       console.log("[wp-save] mode from-url")
       console.log("[wp-save] endpoint", saveEndpoint)
@@ -1300,33 +1322,13 @@ export default function Home() {
         return
       }
 
-      console.log("[wp-save] payload", {
-        presentationId: String(presentationId),
-        saveToken: `${String(saveToken).slice(0, 6)}...`,
-        outZipUrl: stagedOutZipUrl,
+      const responseText = await saveOutZipUrlToWp({
+        saveEndpoint,
+        saveToken,
+        presentationId,
+        stagedOutZipUrl,
+        requestId,
       })
-      console.log("[wp-save] payload outZipUrl=", stagedOutZipUrl)
-
-      const payload = {
-        outZipUrl: stagedOutZipUrl,
-        presentationId: String(presentationId),
-        saveToken: String(saveToken),
-      }
-
-      const response = await fetch(saveEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        mode: "cors",
-        body: JSON.stringify(payload),
-      })
-
-      const responseText = await response.text()
-      if (!response.ok) {
-        console.error("[wp-save] from-url failed", response.status, responseText)
-        throw new Error(`HTTP ${response.status}: ${responseText.slice(0, 200)}`)
-      }
 
       let responseJson: { ok?: boolean; message?: string; url?: string } | null = null
       try {
