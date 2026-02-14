@@ -1,4 +1,5 @@
 import crypto from "node:crypto"
+import { checkBridgeAuthorization, logBridgeUnauthorized } from "@/src/lib/bridge/auth"
 import { assertPublicUrl, sanitizeUrlForLogs } from "@/src/lib/bridge/network"
 import { createJobFromZipBytes } from "@/src/lib/bridge/store"
 
@@ -7,10 +8,6 @@ export const runtime = "nodejs"
 const DEFAULT_MAX_OUTZIP_BYTES = 50 * 1024 * 1024
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 90_000
 const MAX_REDIRECT_HOPS = 3
-
-function getBridgeToken() {
-  return process.env.PRESENTONIKA_BRIDGE_TOKEN?.trim() || process.env.BRIDGE_TOKEN?.trim() || ""
-}
 
 function getMaxOutzipBytes() {
   const raw = process.env.BRIDGE_MAX_OUTZIP_BYTES
@@ -39,19 +36,6 @@ function errorBody(
     targetUrl: options?.targetUrl,
     details: options?.details,
   }
-}
-
-function isAuthorized(request: Request) {
-  const token = getBridgeToken()
-  if (!token) return { enabled: false, authorized: false }
-
-  const authorization = request.headers.get("authorization")
-  if (authorization?.startsWith("Bearer ")) {
-    return { enabled: true, authorized: authorization.slice(7).trim() === token }
-  }
-
-  const fallback = request.headers.get("x-bridge-token")
-  return { enabled: true, authorized: fallback === token }
 }
 
 function getRequestId(request: Request) {
@@ -177,11 +161,13 @@ async function downloadOutzipWithSafeRedirects(rawUrl: string, requestId: string
 
 export async function POST(request: Request) {
   const requestId = getRequestId(request)
-  const { enabled, authorized } = isAuthorized(request)
+  const authState = checkBridgeAuthorization(request)
+  const { enabled, authorized } = authState
   if (!enabled) {
     return Response.json(errorBody("SERVICE_DISABLED", "Bridge is disabled.", { requestId }), { status: 503 })
   }
   if (!authorized) {
+    logBridgeUnauthorized("import-outzip-from-url", requestId, authState)
     return Response.json(errorBody("UNAUTHORIZED", "Invalid bridge token.", { requestId }), { status: 401 })
   }
 

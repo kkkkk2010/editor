@@ -1,4 +1,5 @@
 import crypto from "node:crypto"
+import { checkBridgeAuthorization, logBridgeUnauthorized } from "@/src/lib/bridge/auth"
 import { createJobFromZipBytes } from "@/src/lib/bridge/store"
 
 export const runtime = "nodejs"
@@ -9,30 +10,6 @@ function errorBody(code: string, message: string, requestId?: string) {
   return { code, message, requestId, httpStatus: undefined, targetUrl: undefined, details: undefined }
 }
 
-function getBridgeToken() {
-  return process.env.PRESENTONIKA_BRIDGE_TOKEN?.trim() || process.env.BRIDGE_TOKEN?.trim() || ""
-}
-
-function getBridgeAuthToken(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : ""
-
-  const cookieHeader = request.headers.get("cookie") ?? ""
-  const cookieToken =
-    cookieHeader
-      .split(";")
-      .map((chunk) => chunk.trim())
-      .find((chunk) => chunk.startsWith("admin_import="))
-      ?.slice("admin_import=".length) ?? ""
-
-  return {
-    authHeader,
-    authScheme: authHeader?.split(" ")[0] ?? null,
-    bearerToken,
-    cookieToken,
-  }
-}
-
 function getMaxStageBytes() {
   const raw = process.env.BRIDGE_MAX_STAGE_OUTZIP_BYTES
   const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
@@ -40,33 +17,15 @@ function getMaxStageBytes() {
   return parsed
 }
 
-function isAuthorized(request: Request) {
-  const token = getBridgeToken()
-  if (!token) return { enabled: false, authorized: false }
-  const auth = getBridgeAuthToken(request)
-  if (auth.bearerToken === token) {
-    return { enabled: true, authorized: true }
-  }
-  if (auth.cookieToken === token) {
-    return { enabled: true, authorized: true }
-  }
-  return { enabled: true, authorized: false }
-}
-
 export async function POST(request: Request) {
   const requestId = request.headers.get("x-request-id")?.trim() || crypto.randomUUID()
-  const { enabled, authorized } = isAuthorized(request)
+  const authState = checkBridgeAuthorization(request)
+  const { enabled, authorized } = authState
   if (!enabled) {
     return Response.json(errorBody("SERVICE_DISABLED", "Bridge is disabled.", requestId), { status: 503 })
   }
   if (!authorized) {
-    const auth = getBridgeAuthToken(request)
-    console.error("[bridge/stage-outzip] unauthorized", {
-      requestId,
-      hasAuthHeader: Boolean(auth.authHeader),
-      authScheme: auth.authScheme,
-      hasCookieToken: Boolean(auth.cookieToken),
-    })
+    logBridgeUnauthorized("stage-outzip", requestId, authState)
     return Response.json(errorBody("UNAUTHORIZED", "Invalid bridge token.", requestId), { status: 401 })
   }
 

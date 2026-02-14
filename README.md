@@ -168,7 +168,8 @@ Bridge добавляет same-origin поток:
 
 ### Переменные окружения Bridge
 
-- `BRIDGE_TOKEN` (server-only, обязательно): токен для авторизации bridge-запросов (`Authorization: Bearer <token>`).
+- `PRESENTONIKA_BRIDGE_TOKEN` (server-only, обязательно): основной токен для авторизации bridge-запросов (`Authorization: Bearer <token>`).
+- `BRIDGE_TOKEN` (server-only, fallback): резервное имя переменной для обратной совместимости.
   - Если не задан, `POST /api/bridge/convert-from-url` отключен и возвращает `503 SERVICE_DISABLED`.
 - `BRIDGE_MAX_PPTX_BYTES` (server-only, по умолчанию `62914560` = 60MB): лимит размера PPTX при скачивании по URL.
 - `BRIDGE_TTL_SECONDS` (server-only, по умолчанию `1800`): TTL для временного хранения `out.zip` и метаданных job.
@@ -210,3 +211,13 @@ http://141.105.68.164:3000/?importOutZip=%2Fapi%2Fbridge%2Foutzip%2F<jobId>&t=<d
 - `401 UNAUTHORIZED` — отсутствует или неверный токен `t`.
 - `410 EXPIRED` — job истёк по TTL.
 - `410 ALREADY_USED` — исчерпан лимит скачиваний (`BRIDGE_MAX_DOWNLOADS`).
+
+### Health-check bridge auth
+
+Проверка bridge авторизации:
+
+```bash
+curl -sv -H "Authorization: Bearer <token>" http://141.105.68.164/api/bridge/health
+```
+
+Ожидаемый ответ при валидном токене: `200 {"ok":true,"requestId":"..."}`.

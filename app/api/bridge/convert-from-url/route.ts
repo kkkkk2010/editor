@@ -1,4 +1,5 @@
 import { assertPublicUrl } from "@/src/lib/bridge/network"
+import { checkBridgeAuthorization, getBridgeRequestId, logBridgeUnauthorized } from "@/src/lib/bridge/auth"
 import { createBridgeJob } from "@/src/lib/bridge/store"
 
 export const runtime = "nodejs"
@@ -6,10 +7,6 @@ export const runtime = "nodejs"
 const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 const DEFAULT_MAX_PPTX_BYTES = 60 * 1024 * 1024
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 90_000
-
-function getBridgeToken() {
-  return process.env.PRESENTONIKA_BRIDGE_TOKEN?.trim() || process.env.BRIDGE_TOKEN?.trim() || ""
-}
 
 function getConverterUrl() {
   return process.env.CONVERTER_URL?.trim() || ""
@@ -145,26 +142,16 @@ async function convertPptx(bytes: ArrayBuffer) {
   })), { status: response.status || 500 })
 }
 
-function isAuthorized(request: Request) {
-  const token = getBridgeToken()
-  if (!token) return { enabled: false, authorized: false }
-
-  const authorization = request.headers.get("authorization")
-  if (authorization?.startsWith("Bearer ")) {
-    return { enabled: true, authorized: authorization.slice(7).trim() === token }
-  }
-
-  const fallback = request.headers.get("x-bridge-token")
-  return { enabled: true, authorized: fallback === token }
-}
-
 export async function POST(request: Request) {
-  const { enabled, authorized } = isAuthorized(request)
+  const requestId = getBridgeRequestId(request)
+  const authState = checkBridgeAuthorization(request)
+  const { enabled, authorized } = authState
   if (!enabled) {
-    return Response.json(errorBody("SERVICE_DISABLED", "Bridge is disabled."), { status: 503 })
+    return Response.json(errorBody("SERVICE_DISABLED", "Bridge is disabled.", { requestId }), { status: 503 })
   }
   if (!authorized) {
-    return Response.json(errorBody("UNAUTHORIZED", "Invalid bridge token."), { status: 401 })
+    logBridgeUnauthorized("convert-from-url", requestId, authState)
+    return Response.json(errorBody("UNAUTHORIZED", "Invalid bridge token.", { requestId }), { status: 401 })
   }
 
   let body: { pptxUrl?: string }
