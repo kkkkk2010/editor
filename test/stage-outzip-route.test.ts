@@ -12,10 +12,11 @@ function makeRequest(body: Uint8Array, options?: { cookie?: string; authorizatio
   if (options?.authorization) headers.Authorization = options.authorization
   if (options?.requestId) headers["x-request-id"] = options.requestId
 
+  const requestBody = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer
   return new Request("http://localhost/api/bridge/stage-outzip", {
     method: "POST",
     headers,
-    body,
+    body: requestBody,
   })
 }
 

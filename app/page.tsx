@@ -1182,6 +1182,7 @@ export default function Home() {
   }
 
   const stageOutZip = async (bytes: Uint8Array, blobSize: number, requestId: string) => {
+    const stageBody = toArrayBuffer(bytes)
     const stageResponse = await fetch("/api/bridge/stage-outzip", {
       method: "POST",
       headers: {
@@ -1189,7 +1190,7 @@ export default function Home() {
         "x-request-id": requestId,
       },
       credentials: "same-origin",
-      body: bytes,
+      body: stageBody,
     })
     const stageText = await stageResponse.text()
     if (!stageResponse.ok) {
