@@ -16,6 +16,8 @@ services:
       ADMIN_IMPORT_TOKEN: ${ADMIN_IMPORT_TOKEN:-devtoken}
       CONVERTER_MAX_PPTX_BYTES: ${CONVERTER_MAX_PPTX_BYTES:-31457280}
       NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT: ${NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT:-1}
+      NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-https://editor.presentonika.ru}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://editor.presentonika.ru}
       NODE_ENV: production
     depends_on:
       - converter
