@@ -32,6 +32,13 @@ function getSaveTokenValidateBearer() {
   return process.env.BRIDGE_SAVE_TOKEN_VALIDATE_BEARER?.trim() || ""
 }
 
+function getSaveTokenValidateTimeoutMs() {
+  const raw = process.env.BRIDGE_SAVE_TOKEN_VALIDATE_TIMEOUT_MS
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
+  if (Number.isNaN(parsed) || parsed <= 0) return 5000
+  return parsed
+}
+
 function readSaveFallbackHeaders(request: Request) {
   const presentationId = request.headers.get("x-presentation-id")?.trim() || ""
   const saveToken = request.headers.get("x-save-token")?.trim() || ""
@@ -49,43 +56,130 @@ function maskSaveToken(token: string) {
   return `${token.slice(0, 4)}***`
 }
 
+function logSaveFallbackDiagnostic(
+  scope: string,
+  requestId: string,
+  details: {
+    reason:
+      | "save-token-validator-misconfigured"
+      | "save-token-validator-rejected"
+      | "save-token-validator-response-invalid"
+      | "save-token-validator-request-failed"
+      | "save-fallback-headers-invalid"
+    presentationId?: string
+    hasSaveToken?: boolean
+    validateUrlConfigured?: boolean
+    validateStatus?: number
+    errorMessage?: string
+  },
+) {
+  console.error(`[bridge/${scope}] save-fallback-denied`, {
+    requestId,
+    reason: details.reason,
+    presentationId: details.presentationId ?? null,
+    hasSaveToken: details.hasSaveToken ?? false,
+    validateUrlConfigured: details.validateUrlConfigured ?? false,
+    validateStatus: details.validateStatus ?? null,
+    errorMessage: details.errorMessage ?? null,
+  })
+}
+
 async function validateSaveTokenOnServer(input: {
+  scope: string
   requestId: string
   presentationId: string
   saveToken: string
 }): Promise<SaveTokenValidationResult | null> {
   const url = getSaveTokenValidateUrl()
   if (!url) {
+    logSaveFallbackDiagnostic(input.scope, input.requestId, {
+      reason: "save-token-validator-misconfigured",
+      presentationId: input.presentationId,
+      hasSaveToken: Boolean(input.saveToken),
+      validateUrlConfigured: false,
+    })
     return null
   }
 
   const bearer = getSaveTokenValidateBearer()
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-request-id": input.requestId,
-      ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
-    },
-    cache: "no-store",
-    body: JSON.stringify({
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), getSaveTokenValidateTimeoutMs())
+
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-request-id": input.requestId,
+        ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+      },
+      cache: "no-store",
+      signal: controller.signal,
+      body: JSON.stringify({
+        presentationId: input.presentationId,
+        saveToken: input.saveToken,
+      }),
+    })
+  } catch (error) {
+    logSaveFallbackDiagnostic(input.scope, input.requestId, {
+      reason: "save-token-validator-request-failed",
       presentationId: input.presentationId,
-      saveToken: input.saveToken,
-    }),
-  })
+      hasSaveToken: Boolean(input.saveToken),
+      validateUrlConfigured: true,
+      errorMessage: error instanceof Error ? error.message : "unknown",
+    })
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
 
   if (!response.ok) {
+    logSaveFallbackDiagnostic(input.scope, input.requestId, {
+      reason: "save-token-validator-rejected",
+      presentationId: input.presentationId,
+      hasSaveToken: Boolean(input.saveToken),
+      validateUrlConfigured: true,
+      validateStatus: response.status,
+    })
     return null
   }
 
-  const payload = (await response.json()) as Partial<SaveTokenValidationResult>
-  if (!payload.ok) return null
-  if (!payload.presentationId || payload.presentationId !== input.presentationId) return null
-  if (!payload.userId) return null
+  let payload: Partial<SaveTokenValidationResult>
+  try {
+    payload = (await response.json()) as Partial<SaveTokenValidationResult>
+  } catch {
+    logSaveFallbackDiagnostic(input.scope, input.requestId, {
+      reason: "save-token-validator-response-invalid",
+      presentationId: input.presentationId,
+      hasSaveToken: Boolean(input.saveToken),
+      validateUrlConfigured: true,
+      validateStatus: response.status,
+    })
+    return null
+  }
+
+  if (!payload.ok || !payload.presentationId || payload.presentationId !== input.presentationId || !payload.userId) {
+    logSaveFallbackDiagnostic(input.scope, input.requestId, {
+      reason: "save-token-validator-response-invalid",
+      presentationId: input.presentationId,
+      hasSaveToken: Boolean(input.saveToken),
+      validateUrlConfigured: true,
+      validateStatus: response.status,
+    })
+    return null
+  }
 
   if (payload.expiresAt) {
     const expiresAt = Date.parse(payload.expiresAt)
     if (Number.isNaN(expiresAt) || expiresAt <= Date.now()) {
+      logSaveFallbackDiagnostic(input.scope, input.requestId, {
+        reason: "save-token-validator-response-invalid",
+        presentationId: input.presentationId,
+        hasSaveToken: Boolean(input.saveToken),
+        validateUrlConfigured: true,
+        validateStatus: response.status,
+      })
       return null
     }
   }
@@ -114,37 +208,40 @@ export async function resolveBridgePolicy(request: Request, options: BridgePolic
   if (options.allowSaveFallback) {
     const saveHeaders = readSaveFallbackHeaders(request)
     if (isSaveFallbackHeaderShapeValid(saveHeaders)) {
-      try {
-        const validation = await validateSaveTokenOnServer({
-          requestId,
-          presentationId: saveHeaders.presentationId,
-          saveToken: saveHeaders.saveToken,
-        })
+      const validation = await validateSaveTokenOnServer({
+        scope: options.scope,
+        requestId,
+        presentationId: saveHeaders.presentationId,
+        saveToken: saveHeaders.saveToken,
+      })
 
-        if (validation) {
-          return {
-            requestId,
-            enabled: true,
-            authorized: true,
-            authorizationSource: "save-token",
-            saveContext: {
-              presentationId: validation.presentationId,
-              userId: validation.userId,
-              expiresAt: validation.expiresAt,
-            },
-          }
-        }
-      } catch (error) {
-        console.error(`[bridge/${options.scope}] save-token-validation-failed`, {
+      if (validation) {
+        return {
           requestId,
-          presentationId: saveHeaders.presentationId,
-          saveToken: maskSaveToken(saveHeaders.saveToken),
-          error: error instanceof Error ? { message: error.message } : "unknown",
-        })
+          enabled: true,
+          authorized: true,
+          authorizationSource: "save-token",
+          saveContext: {
+            presentationId: validation.presentationId,
+            userId: validation.userId,
+            expiresAt: validation.expiresAt,
+          },
+        }
       }
+    } else {
+      logSaveFallbackDiagnostic(options.scope, requestId, {
+        reason: "save-fallback-headers-invalid",
+        presentationId: saveHeaders.presentationId || undefined,
+        hasSaveToken: Boolean(saveHeaders.saveToken),
+        validateUrlConfigured: Boolean(getSaveTokenValidateUrl()),
+      })
     }
   }
 
   logBridgeUnauthorized(options.scope, requestId, authState)
   return { requestId, enabled: true, authorized: false, authorizationSource: "none" }
+}
+
+export function __private_for_tests_only__maskSaveToken(token: string) {
+  return maskSaveToken(token)
 }
