@@ -129,3 +129,49 @@ location /api/bridge/ {
   proxy_connect_timeout 15s;
 }
 ```
+
+
+## 10) Manual import UI visibility (admin-only)
+
+Manual import buttons (ZIP/PPTX) are now hidden for regular users and shown only when admin-cookie is active.
+
+```bash
+# enable admin cookie
+curl -i -X POST "https://editor.presentonika.ru/api/admin/enable-import?token=${ADMIN_IMPORT_TOKEN}"
+
+# verify UI status endpoint
+curl -s "https://editor.presentonika.ru/api/admin/import-status"
+# expected: {"enabled":true} when cookie is valid
+```
+
+Auto-import via URL (`?importOutZip=...`) is unaffected.
+
+## 11) Nginx vhost template for editor.presentonika.ru
+
+Use the complete production-ready example from `README.md` section:
+- **Nginx vhost для `editor.presentonika.ru` (готовый пример)**
+
+It includes:
+- HTTPS + redirect 80→443
+- `client_max_body_size 80m`
+- dedicated `limit_req` zones for heavy bridge POST and bridge downloads
+- tuned proxy timeouts for bridge endpoints
+
+## 12) Minimal local alerting (systemd timer)
+
+Files in repo:
+- `ops/alerts/bridge-log-alert.sh`
+- `ops/systemd/presentonika-bridge-alert.service`
+- `ops/systemd/presentonika-bridge-alert.timer`
+
+Install:
+
+```bash
+sudo cp ops/systemd/presentonika-bridge-alert.service /etc/systemd/system/
+sudo cp ops/systemd/presentonika-bridge-alert.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now presentonika-bridge-alert.timer
+
+# check alerts
+sudo tail -n 100 /var/log/presentonika-alerts.log
+```

@@ -29,13 +29,14 @@ A PPT online editor based on the web terminal ｜ 一款基于web端的ppt在线
    - `public/imports/test1/doc.json`
    - папки `public/imports/test1/backgrounds` и `public/imports/test1/assets` (если нужны).
 2. Запустите проект (`npm run dev`).
-3. В редакторе нажмите кнопку **Импорт** в верхней панели.
-4. Во вкладке **URL** введите `/imports/test1/doc.json` и подтвердите импорт.
+3. Включите админ-режим импорта (см. раздел «Ручной импорт скрыт для обычных пользователей» ниже).
+4. В редакторе нажмите кнопку **Импорт** в верхней панели.
+5. Во вкладке **URL** введите `/imports/test1/doc.json` и подтвердите импорт.
 
 ## Проверка round-trip ZIP (PPTX→out.zip→out.zip)
 
 1. Запустите проект (`npm run dev`).
-2. В редакторе нажмите кнопку **Импорт** и выберите `out.zip`, полученный из конвертора PPTX→out.zip.
+2. Включите админ-режим импорта (см. раздел ниже), затем нажмите кнопку **Импорт** и выберите `out.zip`, полученный из конвертора PPTX→out.zip.
 3. Проверьте, что текстовые стили совпадают с исходником (цвет, bold/italic/underline, выравнивание, lineHeight/letterSpacing).
 4. Нажмите **Сохранить** → скачайте новый `out.zip`.
 5. Снова импортируйте сохранённый `out.zip`.
@@ -147,6 +148,174 @@ curl -I http://localhost:3000
 
 > В проде дополнительно настройте `client_max_body_size` в nginx (или аналогичный лимит) как второй уровень защиты.
 > Для проверки лимита можно отправить PPTX больше `CONVERTER_MAX_PPTX_BYTES` и ожидать ответ 413.
+
+
+## UX/Access polish for import flow
+
+### Full-screen overlay during auto-import (`importOutZip` flow)
+
+Когда редактор открыт по ссылке с `?importOutZip=...`, теперь включается полноэкранный overlay:
+
+- состояние `Импортируем проект…` показывается на весь экран,
+- дефолтные слайды не показываются пользователю во время загрузки/распаковки/импорта,
+- overlay скрывается только после успешного завершения импорта,
+- при ошибке показывается короткий текст ошибки и кнопка **Перезагрузить**.
+
+Это UI-слой: логика bridge/import/save и API-контракты не менялись.
+
+### Ручной импорт скрыт для обычных пользователей
+
+Кнопки ручного импорта (ZIP/PPTX) теперь отображаются только в админ-режиме:
+
+1. На сервере задайте `ADMIN_IMPORT_TOKEN`.
+2. Получите admin-cookie:
+
+```bash
+curl -i -X POST "https://editor.presentonika.ru/api/admin/enable-import?token=<ADMIN_IMPORT_TOKEN>"
+```
+
+3. После установки cookie `admin_import` UI покажет ручные кнопки импорта.
+
+Для обычного пользователя ручные кнопки скрыты, но auto-import по `importOutZip` работает как раньше.
+
+### Новый API для проверки UI-доступа к ручному импорту
+
+Добавлен `GET /api/admin/import-status` → `{ "enabled": boolean }`.
+
+- `enabled=true`, если admin-cookie валиден;
+- если `ADMIN_IMPORT_TOKEN` не задан (dev), возвращается `enabled=true` для удобного локального workflow.
+
+
+## Nginx vhost для `editor.presentonika.ru` (готовый пример)
+
+```nginx
+# /etc/nginx/sites-available/editor.presentonika.ru.conf
+
+limit_req_zone $binary_remote_addr zone=editor_bridge_post:10m rate=20r/m;
+limit_req_zone $binary_remote_addr zone=editor_bridge_get:10m rate=120r/m;
+limit_conn_zone $binary_remote_addr zone=editor_conn:10m;
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name editor.presentonika.ru;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/_letsencrypt;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name editor.presentonika.ru;
+
+    ssl_certificate /etc/letsencrypt/live/editor.presentonika.ru/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/editor.presentonika.ru/privkey.pem;
+
+    client_max_body_size 80m;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    location ~* ^/api/bridge/(convert-from-url|import-outzip-from-url|stage-outzip)$ {
+        limit_req zone=editor_bridge_post burst=30 nodelay;
+        limit_conn editor_conn 30;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_read_timeout 180s;
+        proxy_send_timeout 180s;
+        proxy_connect_timeout 15s;
+
+        proxy_pass http://127.0.0.1:3000;
+    }
+
+    location ~* ^/api/bridge/(outzip|staged-outzip)/ {
+        limit_req zone=editor_bridge_get burst=80 nodelay;
+        limit_conn editor_conn 40;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_read_timeout 180s;
+        proxy_send_timeout 180s;
+        proxy_connect_timeout 15s;
+
+        proxy_pass http://127.0.0.1:3000;
+    }
+
+    location / {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+        proxy_pass http://127.0.0.1:3000;
+    }
+}
+```
+
+Примечание: `limit_req_zone`/`limit_conn_zone` объявляются в `http {}` (или в include-файле, который читается внутри `http`).
+
+
+## Минимальная локальная тревожка по логам (без внешних сервисов)
+
+В репозиторий добавлены:
+
+- `ops/alerts/bridge-log-alert.sh`
+- `ops/systemd/presentonika-bridge-alert.service`
+- `ops/systemd/presentonika-bridge-alert.timer`
+
+Скрипт каждые 2 минуты смотрит `docker logs --since 5m` и ищет паттерны:
+
+- `save-fallback-denied`
+- `unauthorized` / `UNAUTHORIZED`
+- `UPSTREAM_TIMEOUT`
+- `5xx`
+
+Если совпадений >= `THRESHOLD` (по умолчанию `3`), пишет:
+
+- в `/var/log/presentonika-alerts.log`
+- в syslog через `logger -t presentonika-alert`
+
+### Установка на VPS
+
+```bash
+# 1) разместить проект, чтобы скрипт был доступен по пути из unit
+# пример: /opt/presentonika/editor
+
+# 2) установить systemd unit/timer
+sudo cp ops/systemd/presentonika-bridge-alert.service /etc/systemd/system/
+sudo cp ops/systemd/presentonika-bridge-alert.timer /etc/systemd/system/
+
+# 3) при необходимости поправить ExecStart в service
+#    (должен указывать на реальный путь к bridge-log-alert.sh)
+
+# 4) включить таймер
+sudo systemctl daemon-reload
+sudo systemctl enable --now presentonika-bridge-alert.timer
+
+# 5) проверить
+systemctl status presentonika-bridge-alert.timer
+sudo journalctl -u presentonika-bridge-alert.service -n 50 --no-pager
+sudo tail -n 100 /var/log/presentonika-alerts.log
+```
 
 
 关注【趣谈前端】公众号，获取更多技术干货，项目最新进展，和开源实践。

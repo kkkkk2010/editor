@@ -186,6 +186,12 @@ export default function Home() {
   const isImportFlowRef = useRef(false)
   const currentPresentationIdRef = useRef<string | null>(null)
   const [currentPresentationId, setCurrentPresentationId] = useState<string | null>(null)
+  const [importOverlayError, setImportOverlayError] = useState<string | null>(null)
+  const [isManualImportEnabled, setIsManualImportEnabled] = useState(false)
+  const [hasPendingAutoImport, setHasPendingAutoImport] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false
+    return new URLSearchParams(window.location.search).has("importOutZip")
+  })
 
   const present = history.present
   const slides = present.slides
@@ -209,6 +215,26 @@ export default function Home() {
     console.log("[wp] currentPresentationIdRef=", presentationIdFromUrl)
   }, [])
 
+  useEffect(() => {
+    let active = true
+    const run = async () => {
+      try {
+        const response = await fetch("/api/admin/import-status", { cache: "no-store", credentials: "same-origin" })
+        if (!response.ok) return
+        const payload = (await response.json()) as { enabled?: boolean }
+        if (active) {
+          setIsManualImportEnabled(Boolean(payload?.enabled))
+        }
+      } catch {
+        // keep manual import actions hidden by default
+      }
+    }
+    void run()
+    return () => {
+      active = false
+    }
+  }, [])
+
   const currentSlide = slides[currentSlideIndex]
   const selectedElement = useMemo(() => {
     if (!selectedElementId) return null
@@ -220,6 +246,17 @@ export default function Home() {
       setPresent((state) => ({ ...state, selectedElementId: null }))
     }
   }, [selectedElementId, selectedElement])
+
+  const showImportOverlay = hasPendingAutoImport || isBridgeImporting
+
+  useEffect(() => {
+    if (!showImportOverlay) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [showImportOverlay])
 
   useEffect(() => {
     console.log("[ui] render slides=", slides.length, "first slide=", slides[0])
@@ -1021,6 +1058,8 @@ export default function Home() {
 
   const handleAutoImportStart = useCallback(() => {
     isImportFlowRef.current = true
+    setHasPendingAutoImport(true)
+    setImportOverlayError(null)
     assetStoreRef.current.clear()
     revokeImportObjectUrls(importedAssetUrlsRef.current)
     importedAssetUrlsRef.current = []
@@ -1036,6 +1075,10 @@ export default function Home() {
   const handleAutoImportComplete = useCallback((success: boolean) => {
     console.log("[auto-import] complete", { success, importRev: success ? importRev + 1 : importRev })
     isImportFlowRef.current = false
+    if (success) {
+      setHasPendingAutoImport(false)
+      setImportOverlayError(null)
+    }
   }, [importRev])
 
   const renderBackgroundBytes = async (background: Background) => {
@@ -1475,11 +1518,9 @@ export default function Home() {
           onImportStateChange={setIsBridgeImporting}
           onImportStart={handleAutoImportStart}
           onImportComplete={handleAutoImportComplete}
+          onImportError={setImportOverlayError}
         />
       </Suspense>
-      {isBridgeImporting ? (
-        <div className="px-4 py-2 text-sm border-b bg-muted/40 text-muted-foreground">Importing out.zip…</div>
-      ) : null}
       {isPreviewMode ? (
         <SlidePreview
           slides={slides}
@@ -1497,7 +1538,7 @@ export default function Home() {
             title={presentationTitle}
             onTitleChange={setPresentationTitle}
             importOutZipFromArrayBuffer={importOutZipFromArrayBuffer}
-            showAdminPptxImport={process.env.NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT === "1"}
+            showAdminImportTools={isManualImportEnabled}
             onUndo={undo}
             onRedo={redo}
             canUndo={canUndo}
@@ -1619,6 +1660,27 @@ export default function Home() {
           </div>
         </>
       )}
+      {showImportOverlay ? (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-background/90 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-xl">
+            {importOverlayError ? (
+              <>
+                <h2 className="text-lg font-semibold">Не удалось импортировать проект</h2>
+                <p className="mt-2 text-sm text-muted-foreground">{importOverlayError}</p>
+                <div className="mt-4 flex justify-center gap-2">
+                  <Button onClick={() => window.location.reload()}>Перезагрузить</Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <h2 className="mt-4 text-lg font-semibold">Импортируем проект…</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Пожалуйста, подождите. Это может занять до минуты.</p>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
       <Toaster />
     </main>
   )

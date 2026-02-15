@@ -26,6 +26,7 @@ type AutoImportOutZipProps = {
   onImportStateChange?: (isImporting: boolean) => void
   onImportStart?: () => void
   onImportComplete?: (success: boolean) => void
+  onImportError?: (message: string | null) => void
 }
 
 type CallbackRefs = {
@@ -34,6 +35,7 @@ type CallbackRefs = {
   onImportStateChange?: (isImporting: boolean) => void
   onImportStart?: () => void
   onImportComplete?: (success: boolean) => void
+  onImportError?: (message: string | null) => void
 }
 
 type InitialSaveCtx = {
@@ -49,6 +51,7 @@ export default function AutoImportOutZip({
   onImportStateChange,
   onImportStart,
   onImportComplete,
+  onImportError,
 }: AutoImportOutZipProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -64,6 +67,7 @@ export default function AutoImportOutZip({
     onImportStateChange,
     onImportStart,
     onImportComplete,
+    onImportError,
   })
 
   callbackRefs.current = {
@@ -72,6 +76,7 @@ export default function AutoImportOutZip({
     onImportStateChange,
     onImportStart,
     onImportComplete,
+    onImportError,
   }
   routerRef.current = router
   toastRef.current = toast
@@ -128,6 +133,7 @@ export default function AutoImportOutZip({
       let importSucceeded = false
       callbackRefs.current.onImportStateChange?.(true)
       callbackRefs.current.onImportStart?.()
+      callbackRefs.current.onImportError?.(null)
       try {
         console.log("[auto-import] fetch start")
         const response = await fetch(initialUrlRef.current!, {
@@ -165,6 +171,7 @@ export default function AutoImportOutZip({
         await callbackRefs.current.importOutZipFromArrayBuffer(outZip)
         importSucceeded = true
         hasImportedRef.current = true
+        callbackRefs.current.onImportError?.(null)
         console.log("[auto-import] import done")
         if (mountedRef.current) {
           // WP save ctx persisted because router clean removes query params
@@ -214,10 +221,12 @@ export default function AutoImportOutZip({
       } catch (error) {
         if (mountedRef.current) {
           const err = error as { name?: string; message?: string }
-          console.log("[auto-import] error", err?.name, err?.message)
+          const errorMessage = err?.message ?? "Попробуйте снова."
+          console.log("[auto-import] error", err?.name, errorMessage)
+          callbackRefs.current.onImportError?.(errorMessage)
           toastRef.current({
             title: err?.name === "AbortError" ? "Импорт отменен" : "Не удалось импортировать out.zip",
-            description: err?.message ?? "Попробуйте снова.",
+            description: errorMessage,
             variant: "destructive",
           })
         }
