@@ -183,8 +183,8 @@ Bridge добавляет same-origin поток:
 
 ```env
 PRESENTONIKA_BRIDGE_TOKEN=strong-secret-token
-BRIDGE_SAVE_TOKEN_VALIDATE_URL=https://presentonika.ru/wp-json/presentonika/v1/validate-save-token
-BRIDGE_SAVE_TOKEN_VALIDATE_BEARER=strong-internal-bearer
+BRIDGE_SAVE_TOKEN_VALIDATE_URL=https://www.presentonika.ru/wp-json/presentonika/v1/validate-save-token
+BRIDGE_SAVE_TOKEN_VALIDATE_BEARER=7ukdfXUG83OMCRjSyRyoUNZvI1SmBQgDbWauiq0MB2TItkEd
 ```
 
 Применение изменений env:

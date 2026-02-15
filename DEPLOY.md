@@ -8,8 +8,8 @@ cat > .env <<'ENV'
 PRESENTONIKA_BRIDGE_TOKEN=strong-secret-token
 CONVERTER_URL=http://converter:3001
 ADMIN_IMPORT_TOKEN=devtoken
-BRIDGE_SAVE_TOKEN_VALIDATE_URL=https://presentonika.ru/wp-json/presentonika/v1/validate-save-token
-BRIDGE_SAVE_TOKEN_VALIDATE_BEARER=strong-internal-bearer
+BRIDGE_SAVE_TOKEN_VALIDATE_URL=https://www.presentonika.ru/wp-json/presentonika/v1/validate-save-token
+BRIDGE_SAVE_TOKEN_VALIDATE_BEARER=7ukdfXUG83OMCRjSyRyoUNZvI1SmBQgDbWauiq0MB2TItkEd
 ENV
 ```
 
@@ -101,6 +101,18 @@ Expected response from validation endpoint:
   "expiresAt": "2026-01-01T12:00:00.000Z"
 }
 ```
+
+Quick check from VPS:
+
+```bash
+curl -sv -X POST "https://www.presentonika.ru/wp-json/presentonika/v1/validate-save-token" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${BRIDGE_SAVE_TOKEN_VALIDATE_BEARER}" \
+  -d '{"presentationId":123,"saveToken":"<saveToken-from-redirectUrl>"}'
+```
+
+For a valid token you should receive HTTP `200` with `{"ok":true,...}`.
+For an invalid/expired token you should receive either `{"ok":false}` or HTTP `403/401` (both are expected denial paths).
 
 If validation is not successful, bridge fallback auth is denied with `401 UNAUTHORIZED`.
 
