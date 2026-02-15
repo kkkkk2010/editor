@@ -1,9 +1,8 @@
 import { unzipSync } from "fflate"
 import type { ImporterDoc } from "@/src/lib/import/importerDoc"
-import { validateImporterDoc } from "@/src/lib/import/validateImporterDoc"
 import { computeSourceSlideSize } from "@/src/lib/import/mapImporterToEditor"
 import type { AssetStore } from "@/src/lib/assets/assetStore"
-import { logStructuredError, reportError } from "@/src/lib/monitoring"
+import { reportError } from "@/src/lib/monitoring"
 
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -126,7 +125,6 @@ async function readZipBytes(input: ZipImportInput): Promise<Uint8Array> {
 }
 
 export async function importZipFile(input: ZipImportInput, assetStore?: AssetStore): Promise<ZipImportResult> {
-  const startTime = Date.now()
   try {
     const zipBytes = await readZipBytes(input)
     if (zipBytes.byteLength > MAX_ZIP_BYTES) {
@@ -151,13 +149,38 @@ export async function importZipFile(input: ZipImportInput, assetStore?: AssetSto
       throw new Error("doc.json содержит невалидный JSON")
     }
 
-    const validation = validateImporterDoc(parsedDoc)
-    if (!validation.ok) {
-      throw new Error(`Ошибка валидации doc.json: ${validation.error}`)
+    if (!parsedDoc || typeof parsedDoc !== "object") {
+      throw new Error("Некорректный doc.json: нет slides")
+    }
+
+    const rawSlides = (parsedDoc as { slides?: unknown }).slides
+    if (!Array.isArray(rawSlides)) {
+      throw new Error("Некорректный doc.json: нет slides")
     }
 
     const createdUrls: string[] = []
-    const doc: ImporterDoc = JSON.parse(JSON.stringify(validation.data))
+    let droppedElements = 0
+    const doc: ImporterDoc = {
+      ...(JSON.parse(JSON.stringify(parsedDoc)) as Record<string, unknown>),
+      slides: rawSlides.map((slide) => {
+        const slideObject = slide && typeof slide === "object" ? (slide as Record<string, unknown>) : {}
+        const rawElements = Array.isArray(slideObject.elements) ? slideObject.elements : []
+        const filteredElements = rawElements.filter((element) => {
+          const type =
+            element && typeof element === "object" ? (element as { type?: unknown }).type : undefined
+          const keep = type === "text" || type === "image" || type === "shape"
+          if (!keep) {
+            droppedElements += 1
+          }
+          return keep
+        })
+        return {
+          ...slideObject,
+          elements: filteredElements,
+        }
+      }),
+    } as ImporterDoc
+    console.warn("[import] relaxed doc.json: droppedElements=", droppedElements)
     const elementBounds = computeSourceSlideSize(doc)
     let sourceSlideSize = elementBounds
 
@@ -227,11 +250,6 @@ export async function importZipFile(input: ZipImportInput, assetStore?: AssetSto
 
     return { doc, createdUrls, sourceSlideSize }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown import error"
-    logStructuredError("zip_import_failed", {
-      message,
-      durationMs: Date.now() - startTime,
-    })
     reportError(error, { scope: "zip_import" })
     throw error
   }

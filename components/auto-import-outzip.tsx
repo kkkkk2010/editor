@@ -4,8 +4,25 @@ import { useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 
+
+function maskSensitiveUrlForLog(rawUrl: string | null | undefined) {
+  if (!rawUrl) return null
+  try {
+    const parsed = new URL(rawUrl, window.location.origin)
+    ;["saveToken", "t"].forEach((key) => {
+      if (parsed.searchParams.has(key)) {
+        parsed.searchParams.set(key, "***")
+      }
+    })
+    return `${parsed.origin}${parsed.pathname}${parsed.search}`
+  } catch {
+    return "invalid-url"
+  }
+}
+
 type AutoImportOutZipProps = {
   importOutZipFromArrayBuffer: (outZip: ArrayBuffer) => Promise<void>
+  currentPresentationId: string | null
   onImportStateChange?: (isImporting: boolean) => void
   onImportStart?: () => void
   onImportComplete?: (success: boolean) => void
@@ -13,6 +30,7 @@ type AutoImportOutZipProps = {
 
 type CallbackRefs = {
   importOutZipFromArrayBuffer: (outZip: ArrayBuffer) => Promise<void>
+  currentPresentationId: string | null
   onImportStateChange?: (isImporting: boolean) => void
   onImportStart?: () => void
   onImportComplete?: (success: boolean) => void
@@ -20,6 +38,7 @@ type CallbackRefs = {
 
 export default function AutoImportOutZip({
   importOutZipFromArrayBuffer,
+  currentPresentationId,
   onImportStateChange,
   onImportStart,
   onImportComplete,
@@ -27,12 +46,13 @@ export default function AutoImportOutZip({
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
-  const hasAutoImportedRef = useRef(false)
+  const hasImportedRef = useRef(false)
   const initialUrlRef = useRef<string | null>(null)
   const routerRef = useRef(router)
   const toastRef = useRef(toast)
   const callbackRefs = useRef<CallbackRefs>({
     importOutZipFromArrayBuffer,
+    currentPresentationId,
     onImportStateChange,
     onImportStart,
     onImportComplete,
@@ -40,6 +60,7 @@ export default function AutoImportOutZip({
 
   callbackRefs.current = {
     importOutZipFromArrayBuffer,
+    currentPresentationId,
     onImportStateChange,
     onImportStart,
     onImportComplete,
@@ -54,7 +75,13 @@ export default function AutoImportOutZip({
       const importUrl = new URL(importOutZip, window.location.origin)
       importUrl.searchParams.set("t", token)
       initialUrlRef.current = importUrl.toString()
-      console.log("[auto-import] downloadUrl", initialUrlRef.current)
+      console.log("[auto-import] downloadUrl", importUrl.pathname)
+
+      const hasSensitiveParams = Boolean(searchParams.get("t") || searchParams.get("saveToken") || searchParams.get("saveEndpoint"))
+      if (hasSensitiveParams) {
+        const cleanUrl = `${window.location.pathname}${window.location.hash}`
+        window.history.replaceState(window.history.state, "", cleanUrl)
+      }
     }
   }
 
@@ -63,7 +90,7 @@ export default function AutoImportOutZip({
       return
     }
 
-    if (hasAutoImportedRef.current) {
+    if (hasImportedRef.current) {
       return
     }
 
@@ -71,7 +98,6 @@ export default function AutoImportOutZip({
     const mountedRef = { current: true }
 
     const run = async () => {
-      hasAutoImportedRef.current = true
       let importSucceeded = false
       callbackRefs.current.onImportStateChange?.(true)
       callbackRefs.current.onImportStart?.()
@@ -111,13 +137,14 @@ export default function AutoImportOutZip({
 
         await callbackRefs.current.importOutZipFromArrayBuffer(outZip)
         importSucceeded = true
+        hasImportedRef.current = true
         console.log("[auto-import] import done")
         if (mountedRef.current) {
           // WP save ctx persisted because router clean removes query params
           const qs = new URLSearchParams(window.location.search)
           const saveToken = qs.get("saveToken")
           const saveEndpoint = qs.get("saveEndpoint")
-          const presentationId = qs.get("presentationId")
+          const presentationId = callbackRefs.current.currentPresentationId
           const importOutZip = qs.get("importOutZip")
           const bridgeToken = qs.get("t") ?? ""
           let outZipUrl: string | undefined
@@ -137,8 +164,7 @@ export default function AutoImportOutZip({
             sessionStorage.setItem("wpSaveCtx", JSON.stringify(wpSaveCtx))
             console.log("wpSaveCtx stored", {
               presentationId,
-              saveEndpoint,
-              saveTokenPrefix: `${saveToken.slice(0, 6)}***`,
+              saveEndpoint: maskSensitiveUrlForLog(saveEndpoint),
             })
           }
 

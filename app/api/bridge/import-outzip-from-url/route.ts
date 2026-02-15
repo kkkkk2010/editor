@@ -1,4 +1,4 @@
-import crypto from "node:crypto"
+import { resolveBridgePolicy } from "@/src/lib/bridge/policy"
 import { assertPublicUrl, sanitizeUrlForLogs } from "@/src/lib/bridge/network"
 import { createJobFromZipBytes } from "@/src/lib/bridge/store"
 
@@ -7,10 +7,6 @@ export const runtime = "nodejs"
 const DEFAULT_MAX_OUTZIP_BYTES = 50 * 1024 * 1024
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 90_000
 const MAX_REDIRECT_HOPS = 3
-
-function getBridgeToken() {
-  return process.env.BRIDGE_TOKEN?.trim() || ""
-}
 
 function getMaxOutzipBytes() {
   const raw = process.env.BRIDGE_MAX_OUTZIP_BYTES
@@ -39,23 +35,6 @@ function errorBody(
     targetUrl: options?.targetUrl,
     details: options?.details,
   }
-}
-
-function isAuthorized(request: Request) {
-  const token = getBridgeToken()
-  if (!token) return { enabled: false, authorized: false }
-
-  const authorization = request.headers.get("authorization")
-  if (authorization?.startsWith("Bearer ")) {
-    return { enabled: true, authorized: authorization.slice(7).trim() === token }
-  }
-
-  const fallback = request.headers.get("x-bridge-token")
-  return { enabled: true, authorized: fallback === token }
-}
-
-function getRequestId(request: Request) {
-  return request.headers.get("x-request-id")?.trim() || crypto.randomUUID()
 }
 
 function isZipContentType(contentType: string) {
@@ -176,60 +155,59 @@ async function downloadOutzipWithSafeRedirects(rawUrl: string, requestId: string
 }
 
 export async function POST(request: Request) {
-  const requestId = getRequestId(request)
-  const { enabled, authorized } = isAuthorized(request)
-  if (!enabled) {
-    return Response.json(errorBody("SERVICE_DISABLED", "Bridge is disabled.", { requestId }), { status: 503 })
+  const policy = await resolveBridgePolicy(request, { scope: "import-outzip-from-url" })
+  if (!policy.enabled) {
+    return Response.json(errorBody("SERVICE_DISABLED", "Bridge is disabled.", { requestId: policy.requestId }), { status: 503 })
   }
-  if (!authorized) {
-    return Response.json(errorBody("UNAUTHORIZED", "Invalid bridge token.", { requestId }), { status: 401 })
+  if (!policy.authorized) {
+    return Response.json(errorBody("UNAUTHORIZED", "Invalid bridge token.", { requestId: policy.requestId }), { status: 401 })
   }
 
   let body: { outZipUrl?: string }
   try {
     body = (await request.json()) as { outZipUrl?: string }
   } catch {
-    return Response.json(errorBody("INVALID_REQUEST", "Invalid JSON body.", { requestId }), { status: 400 })
+    return Response.json(errorBody("INVALID_REQUEST", "Invalid JSON body.", { requestId: policy.requestId }), { status: 400 })
   }
 
   if (!body.outZipUrl || typeof body.outZipUrl !== "string") {
-    return Response.json(errorBody("INVALID_REQUEST", "outZipUrl is required.", { requestId }), { status: 400 })
+    return Response.json(errorBody("INVALID_REQUEST", "outZipUrl is required.", { requestId: policy.requestId }), { status: 400 })
   }
 
   try {
-    const zipBytes = await downloadOutzipWithSafeRedirects(body.outZipUrl, requestId, getMaxOutzipBytes())
-    const job = await createJobFromZipBytes(zipBytes, { requestId })
+    const zipBytes = await downloadOutzipWithSafeRedirects(body.outZipUrl, policy.requestId, getMaxOutzipBytes())
+    const job = await createJobFromZipBytes(zipBytes, { requestId: policy.requestId })
     const outZipUrl = `/api/bridge/outzip/${job.jobId}?t=${encodeURIComponent(job.token)}`
 
     return Response.json(
       {
         outZipUrl,
         expiresAt: job.expiresAt,
-        requestId,
+        requestId: policy.requestId,
       },
-      { headers: { "X-Request-Id": requestId } },
+      { headers: { "X-Request-Id": policy.requestId } },
     )
   } catch (error) {
     if (error instanceof Response) {
       console.error("[bridge/import-outzip-from-url] request failed", {
-        requestId,
+        requestId: policy.requestId,
         url: sanitizeUrlForLogs(body.outZipUrl),
         status: error.status,
       })
       return new Response(error.body, {
         status: error.status,
-        headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
+        headers: { "Content-Type": "application/json", "X-Request-Id": policy.requestId },
       })
     }
 
     console.error("[bridge/import-outzip-from-url] unexpected error", {
-      requestId,
+      requestId: policy.requestId,
       url: sanitizeUrlForLogs(body.outZipUrl),
       error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
     })
-    return Response.json(errorBody("INTERNAL", "Bridge import failed.", { requestId }), {
+    return Response.json(errorBody("INTERNAL", "Bridge import failed.", { requestId: policy.requestId }), {
       status: 500,
-      headers: { "X-Request-Id": requestId },
+      headers: { "X-Request-Id": policy.requestId },
     })
   }
 }

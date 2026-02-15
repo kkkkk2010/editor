@@ -81,7 +81,7 @@ export function exportProjectZip(doc: ImporterDoc, assetStore: AssetStore): Uint
       files[path] = asset.bytes
     })
 
-    const zipped = zipSync(files, { level: 6 })
+    const zipped = zipSync(files)
     const src = zipped instanceof Uint8Array ? zipped : new Uint8Array(zipped)
     const bytes = new Uint8Array(src.byteLength)
     bytes.set(src)
