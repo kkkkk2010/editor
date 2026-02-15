@@ -36,6 +36,13 @@ type CallbackRefs = {
   onImportComplete?: (success: boolean) => void
 }
 
+type InitialSaveCtx = {
+  saveToken: string
+  saveEndpoint: string
+  importOutZip: string
+  bridgeToken: string
+}
+
 export default function AutoImportOutZip({
   importOutZipFromArrayBuffer,
   currentPresentationId,
@@ -48,6 +55,7 @@ export default function AutoImportOutZip({
   const { toast } = useToast()
   const hasImportedRef = useRef(false)
   const initialUrlRef = useRef<string | null>(null)
+  const initialSaveCtxRef = useRef<InitialSaveCtx | null>(null)
   const routerRef = useRef(router)
   const toastRef = useRef(toast)
   const callbackRefs = useRef<CallbackRefs>({
@@ -72,6 +80,25 @@ export default function AutoImportOutZip({
     const importOutZip = searchParams.get("importOutZip")
     if (importOutZip) {
       const token = searchParams.get("t") ?? ""
+      const saveToken = searchParams.get("saveToken") ?? ""
+      const saveEndpoint = searchParams.get("saveEndpoint") ?? ""
+
+      if (saveToken && saveEndpoint) {
+        initialSaveCtxRef.current = {
+          saveToken,
+          saveEndpoint,
+          importOutZip,
+          bridgeToken: token,
+        }
+      }
+
+      console.log("[auto-import] captured save ctx", {
+        hasSaveToken: Boolean(saveToken),
+        hasSaveEndpoint: Boolean(saveEndpoint),
+        hasImportOutZip: Boolean(importOutZip),
+        hasBridgeToken: Boolean(token),
+      })
+
       const importUrl = new URL(importOutZip, window.location.origin)
       importUrl.searchParams.set("t", token)
       initialUrlRef.current = importUrl.toString()
@@ -141,18 +168,26 @@ export default function AutoImportOutZip({
         console.log("[auto-import] import done")
         if (mountedRef.current) {
           // WP save ctx persisted because router clean removes query params
-          const qs = new URLSearchParams(window.location.search)
-          const saveToken = qs.get("saveToken")
-          const saveEndpoint = qs.get("saveEndpoint")
+          const capturedCtx = initialSaveCtxRef.current
+          const saveToken = capturedCtx?.saveToken ?? null
+          const saveEndpoint = capturedCtx?.saveEndpoint ?? null
           const presentationId = callbackRefs.current.currentPresentationId
-          const importOutZip = qs.get("importOutZip")
-          const bridgeToken = qs.get("t") ?? ""
+          const importOutZip = capturedCtx?.importOutZip ?? null
+          const bridgeToken = capturedCtx?.bridgeToken ?? ""
           let outZipUrl: string | undefined
           if (importOutZip) {
             const sourceUrl = new URL(importOutZip, window.location.origin)
             sourceUrl.searchParams.set("t", bridgeToken)
             outZipUrl = sourceUrl.toString()
           }
+
+          console.log("[auto-import] restore save ctx", {
+            hasCapturedCtx: Boolean(capturedCtx),
+            hasSaveToken: Boolean(saveToken),
+            hasSaveEndpoint: Boolean(saveEndpoint),
+            hasPresentationId: Boolean(presentationId),
+          })
+
           if (saveToken && saveEndpoint && presentationId) {
             const wpSaveCtx = {
               saveToken,
