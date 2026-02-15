@@ -14,6 +14,7 @@ ENV
 ```
 
 > `docker-compose.yml` requires `PRESENTONIKA_BRIDGE_TOKEN` and mirrors it to `BRIDGE_TOKEN` for compatibility.
+> Для `POST /api/bridge/stage-outzip` в режиме save-fallback обязательно задайте `BRIDGE_SAVE_TOKEN_VALIDATE_URL`, иначе получите `401` (`save-token-validator-misconfigured`).
 
 ## 2) Recreate containers after env changes
 
@@ -25,7 +26,7 @@ docker compose up -d --force-recreate
 ## 3) Verify token is present inside editor container
 
 ```bash
-docker compose exec editor sh -lc 'env | grep -i "PRESENTONIKA_BRIDGE_TOKEN\|BRIDGE_TOKEN"'
+docker compose exec editor sh -lc 'env | grep -i "PRESENTONIKA_BRIDGE_TOKEN\|BRIDGE_TOKEN\|BRIDGE_SAVE_TOKEN_VALIDATE"'
 ```
 
 ## 4) Verify bridge auth with Bearer (server-to-server path)
@@ -87,7 +88,7 @@ No browser/public token is required.
 
 For `POST /api/bridge/stage-outzip` fallback mode, configure a server-side token validation endpoint:
 
-- `BRIDGE_SAVE_TOKEN_VALIDATE_URL`
+- `BRIDGE_SAVE_TOKEN_VALIDATE_URL` (**required** for save-fallback)
 - `BRIDGE_SAVE_TOKEN_VALIDATE_BEARER` (optional but recommended)
 
 Expected response from validation endpoint:

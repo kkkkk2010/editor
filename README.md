@@ -176,8 +176,23 @@ Bridge добавляет same-origin поток:
 - `BRIDGE_MAX_DOWNLOADS` (server-only, по умолчанию `5`): сколько успешных скачиваний разрешено для одного `outZipUrl` до ответа `410 ALREADY_USED`.
 - `BRIDGE_TMP_DIR` (server-only, опционально, по умолчанию `/tmp/outzips`): каталог для временных `out.zip`.
 - `BRIDGE_DOWNLOAD_TIMEOUT_MS` (server-only, опционально, по умолчанию `90000`): таймаут скачивания PPTX по URL.
-- `BRIDGE_SAVE_TOKEN_VALIDATE_URL` (server-only, опционально, рекомендуется): URL серверной валидации saveToken для fallback в `POST /api/bridge/stage-outzip`.
-- `BRIDGE_SAVE_TOKEN_VALIDATE_BEARER` (server-only, опционально): Bearer для вызова `BRIDGE_SAVE_TOKEN_VALIDATE_URL`.
+- `BRIDGE_SAVE_TOKEN_VALIDATE_URL` (server-only, **обязательно для save-fallback в `POST /api/bridge/stage-outzip`**): URL серверной валидации пары `presentationId + saveToken`. Без этой переменной fallback будет отклонён (`401`) с причиной `save-token-validator-misconfigured`.
+- `BRIDGE_SAVE_TOKEN_VALIDATE_BEARER` (server-only, опционально): Bearer для вызова `BRIDGE_SAVE_TOKEN_VALIDATE_URL`, если endpoint защищён.
+
+Пример `.env` для editor (минимум для bridge + save-fallback):
+
+```env
+PRESENTONIKA_BRIDGE_TOKEN=strong-secret-token
+BRIDGE_SAVE_TOKEN_VALIDATE_URL=https://presentonika.ru/wp-json/presentonika/v1/validate-save-token
+BRIDGE_SAVE_TOKEN_VALIDATE_BEARER=strong-internal-bearer
+```
+
+Применение изменений env:
+
+```bash
+docker compose up -d --force-recreate editor
+docker compose exec editor sh -lc 'env | grep -E "PRESENTONIKA_BRIDGE_TOKEN|BRIDGE_TOKEN|BRIDGE_SAVE_TOKEN_VALIDATE"'
+```
 
 ### Пример запроса от WP
 
