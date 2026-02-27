@@ -24,6 +24,7 @@ import { mapEditorToImporter } from "@/src/lib/import/mapEditorToImporter"
 import { mapImporterToEditor } from "@/src/lib/import/mapImporterToEditor"
 import { exportProjectZip } from "@/src/lib/project/exportProjectZip"
 import { buildWpSavePayload } from "@/src/lib/save/wpSavePayload"
+import type { ImagePlan } from "@/src/lib/import/imagePlan"
 import html2canvas from "html2canvas"
 
 type EditorState = {
@@ -188,6 +189,8 @@ export default function Home() {
   const [currentPresentationId, setCurrentPresentationId] = useState<string | null>(null)
   const [importOverlayError, setImportOverlayError] = useState<string | null>(null)
   const [isManualImportEnabled, setIsManualImportEnabled] = useState(false)
+  const [imagePlan, setImagePlan] = useState<ImagePlan | null>(null)
+  const [selectedElementIndex, setSelectedElementIndex] = useState<number | null>(null)
   const [hasPendingAutoImport, setHasPendingAutoImport] = useState<boolean>(() => {
     if (typeof window === "undefined") return false
     return new URLSearchParams(window.location.search).has("importOutZip")
@@ -637,6 +640,8 @@ export default function Home() {
   }
 
   const handleElementSelect = (element: Element | null) => {
+    const nextIndex = element ? currentSlide.elements.findIndex((item) => item === element) : -1
+    setSelectedElementIndex(nextIndex >= 0 ? nextIndex : null)
     setPresent((state) => ({
       ...state,
       selectedElementId: element?.id ?? null,
@@ -1015,6 +1020,7 @@ export default function Home() {
       currentSlideIndex: 0,
       selectedElementId: null,
     })
+    setSelectedElementIndex(null)
     setImportRev((value) => value + 1)
     console.log("[auto-import] after import slides=", importedSlides.length)
     console.log("[auto-import] after import first slide=", importedSlides[0])
@@ -1049,7 +1055,8 @@ export default function Home() {
     async (outZip: ArrayBuffer) => {
       assetStoreRef.current.clear()
       const { importZipFile } = await import("@/src/lib/import/zipImport")
-      const { doc, createdUrls, sourceSlideSize } = await importZipFile(outZip, assetStoreRef.current)
+      const { doc, createdUrls, sourceSlideSize, imagePlan } = await importZipFile(outZip, assetStoreRef.current)
+      setImagePlan(imagePlan)
       const mapped = mapImporterToEditor(doc, { sourceSlideSize, allowResize: true })
       handleImportZip(mapped, createdUrls)
     },
@@ -1606,10 +1613,13 @@ export default function Home() {
               propertyPanel={
                 <PropertyPanel
                   selectedElement={selectedElement}
+                  selectedElementIndex={selectedElementIndex}
                   onUpdateElement={updateElement}
                   onReplaceImage={handleReplaceImage}
                   onClose={() => setShowPropertyPanel(false)}
                   currentSlide={currentSlide}
+                  currentSlideIndex={currentSlideIndex}
+                  imagePlan={imagePlan}
                   onMoveElementForward={handleMoveElementForward}
                   onMoveElementBackward={handleMoveElementBackward}
                   onMoveElementToFront={handleMoveElementToFront}

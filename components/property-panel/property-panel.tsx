@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import type { Element, Slide } from "@/lib/types"
+import type { ImagePlan } from "@/src/lib/import/imagePlan"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import TextPropertyPanel from "./text-property-panel"
 import ShapePropertyPanel from "./shape-property-panel"
@@ -11,10 +12,13 @@ import { Button } from "@/components/ui/button"
 
 interface PropertyPanelProps {
   selectedElement: Element | null
+  selectedElementIndex?: number | null
   onUpdateElement: (element: Element) => void
   onReplaceImage?: (imageUrl: string, file?: File) => void
   onClose: () => void
   currentSlide?: Slide
+  currentSlideIndex?: number
+  imagePlan?: ImagePlan | null
   onMoveElementForward?: (element: Element) => void
   onMoveElementBackward?: (element: Element) => void
   onMoveElementToFront?: (element: Element) => void
@@ -23,9 +27,13 @@ interface PropertyPanelProps {
 
 export default function PropertyPanel({
   selectedElement,
+  selectedElementIndex,
   onUpdateElement,
   onReplaceImage,
   onClose,
+  currentSlide,
+  currentSlideIndex,
+  imagePlan,
 }: PropertyPanelProps) {
   useEffect(() => {
     console.log("[ui] PropertyPanel render selected=", selectedElement?.id ?? null)
@@ -72,6 +80,10 @@ export default function PropertyPanel({
           {selectedElement.type === "image" && (
             <ImagePropertyPanel
               element={selectedElement}
+              currentSlide={currentSlide}
+              currentSlideIndex={currentSlideIndex}
+              selectedElementIndex={selectedElementIndex}
+              imagePlan={imagePlan}
               onUpdateElement={onUpdateElement}
               onReplaceImage={onReplaceImage}
             />

@@ -3,6 +3,7 @@ import type { ImporterDoc } from "@/src/lib/import/importerDoc"
 import { computeSourceSlideSize } from "@/src/lib/import/mapImporterToEditor"
 import type { AssetStore } from "@/src/lib/assets/assetStore"
 import { reportError } from "@/src/lib/monitoring"
+import { parseImagePlan, type ImagePlan } from "@/src/lib/import/imagePlan"
 
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -21,6 +22,7 @@ export interface ZipImportResult {
   doc: ImporterDoc
   createdUrls: string[]
   sourceSlideSize: { width: number; height: number }
+  imagePlan: ImagePlan | null
 }
 
 export function revokeImportObjectUrls(urls: string[]) {
@@ -158,6 +160,16 @@ export async function importZipFile(input: ZipImportInput, assetStore?: AssetSto
       throw new Error("Некорректный doc.json: нет slides")
     }
 
+    let imagePlan: ImagePlan | null = null
+    const imagePlanBytes = entries.get("imagePlan.json")
+    if (imagePlanBytes) {
+      try {
+        imagePlan = parseImagePlan(buildDocJson(imagePlanBytes))
+      } catch {
+        imagePlan = null
+      }
+    }
+
     const createdUrls: string[] = []
     let droppedElements = 0
     const doc: ImporterDoc = {
@@ -248,7 +260,7 @@ export async function importZipFile(input: ZipImportInput, assetStore?: AssetSto
       throw error
     }
 
-    return { doc, createdUrls, sourceSlideSize }
+    return { doc, createdUrls, sourceSlideSize, imagePlan }
   } catch (error) {
     reportError(error, { scope: "zip_import" })
     throw error
