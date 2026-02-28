@@ -27,7 +27,7 @@ interface ToolbarProps {
   title: string
   onTitleChange: (title: string) => void
   importOutZipFromArrayBuffer: (outZip: ArrayBuffer) => Promise<void>
-  showAdminPptxImport?: boolean
+  showAdminImportTools?: boolean
   onUndo: () => void
   onRedo: () => void
   canUndo: boolean
@@ -45,7 +45,7 @@ export default function Toolbar({
   title,
   onTitleChange,
   importOutZipFromArrayBuffer,
-  showAdminPptxImport,
+  showAdminImportTools,
   onUndo,
   onRedo,
   canUndo,
@@ -158,9 +158,11 @@ export default function Toolbar({
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          <ImportZipDialog importOutZipFromArrayBuffer={importOutZipFromArrayBuffer} hasUnsavedChanges={hasUnsavedChanges} />
-          {showAdminPptxImport ? (
-            <ImportPptxDialog importOutZipFromArrayBuffer={importOutZipFromArrayBuffer} hasUnsavedChanges={hasUnsavedChanges} />
+          {showAdminImportTools ? (
+            <>
+              <ImportZipDialog importOutZipFromArrayBuffer={importOutZipFromArrayBuffer} hasUnsavedChanges={hasUnsavedChanges} />
+              <ImportPptxDialog importOutZipFromArrayBuffer={importOutZipFromArrayBuffer} hasUnsavedChanges={hasUnsavedChanges} />
+            </>
           ) : null}
         </div>
       </div>

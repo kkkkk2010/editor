@@ -3,6 +3,24 @@ import type { ImporterDoc } from "@/src/lib/import/importerDoc"
 import type { AssetStore } from "@/src/lib/assets/assetStore"
 import { logStructuredError, reportError } from "@/src/lib/monitoring"
 
+type ImageCreditItem = {
+  src: string
+  slot: {
+    slotId: string
+    slide: number
+    element: number
+  }
+  pageUrl: string
+  imageUrl: string
+  licenseLabel?: string
+  licenseUrl?: string
+  confirmedAt: string
+}
+
+type ExportOptions = {
+  imageCredits?: ImageCreditItem[]
+}
+
 const INVALID_ASSET_PREFIX = /^(blob:|data:|https?:|file:)/i
 
 function assertRelativeAssetPath(path: string) {
@@ -48,7 +66,7 @@ function normalizeDocEntry(files: Record<string, Uint8Array>) {
   }
 }
 
-export function exportProjectZip(doc: ImporterDoc, assetStore: AssetStore): Uint8Array {
+export function exportProjectZip(doc: ImporterDoc, assetStore: AssetStore, options?: ExportOptions): Uint8Array {
   const startTime = Date.now()
   try {
     const encoder = new TextEncoder()
@@ -81,7 +99,20 @@ export function exportProjectZip(doc: ImporterDoc, assetStore: AssetStore): Uint
       files[path] = asset.bytes
     })
 
-    const zipped = zipSync(files, { level: 6 })
+    if (options?.imageCredits && options.imageCredits.length > 0) {
+      files["imageCredits.json"] = toBytes(
+        JSON.stringify(
+          {
+            version: 1,
+            items: options.imageCredits,
+          },
+          null,
+          2,
+        ),
+      )
+    }
+
+    const zipped = zipSync(files)
     const src = zipped instanceof Uint8Array ? zipped : new Uint8Array(zipped)
     const bytes = new Uint8Array(src.byteLength)
     bytes.set(src)

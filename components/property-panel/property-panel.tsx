@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import type { Element, Slide } from "@/lib/types"
+import type { ImagePlan } from "@/src/lib/import/imagePlan"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import TextPropertyPanel from "./text-property-panel"
 import ShapePropertyPanel from "./shape-property-panel"
@@ -11,10 +12,27 @@ import { Button } from "@/components/ui/button"
 
 interface PropertyPanelProps {
   selectedElement: Element | null
+  selectedElementIndex?: number | null
   onUpdateElement: (element: Element) => void
   onReplaceImage?: (imageUrl: string, file?: File) => void
   onClose: () => void
   currentSlide?: Slide
+  currentSlideIndex?: number
+  imagePlan?: ImagePlan | null
+  hasPlaceholderReplacement?: (srcPath: string) => boolean
+  onInsertPlaceholderImage?: (payload: {
+    srcPath: string
+    currentContent: string
+    slot: { slotId: string; slide: number; element: number }
+    selection: {
+      pageUrl: string
+      imageUrl: string
+      licenseLabel?: string
+      licenseUrl?: string
+      source?: string
+    }
+  }) => Promise<void>
+  onResetPlaceholderImage?: (payload: { srcPath: string }) => void
   onMoveElementForward?: (element: Element) => void
   onMoveElementBackward?: (element: Element) => void
   onMoveElementToFront?: (element: Element) => void
@@ -23,9 +41,16 @@ interface PropertyPanelProps {
 
 export default function PropertyPanel({
   selectedElement,
+  selectedElementIndex,
   onUpdateElement,
   onReplaceImage,
   onClose,
+  currentSlide,
+  currentSlideIndex,
+  imagePlan,
+  hasPlaceholderReplacement,
+  onInsertPlaceholderImage,
+  onResetPlaceholderImage,
 }: PropertyPanelProps) {
   useEffect(() => {
     console.log("[ui] PropertyPanel render selected=", selectedElement?.id ?? null)
@@ -72,6 +97,15 @@ export default function PropertyPanel({
           {selectedElement.type === "image" && (
             <ImagePropertyPanel
               element={selectedElement}
+              currentSlide={currentSlide}
+              currentSlideIndex={currentSlideIndex}
+              selectedElementIndex={selectedElementIndex}
+              imagePlan={imagePlan}
+              hasPlaceholderReplacement={
+                selectedElement.assetPath ? hasPlaceholderReplacement?.(selectedElement.assetPath) : false
+              }
+              onInsertPlaceholderImage={onInsertPlaceholderImage}
+              onResetPlaceholderImage={onResetPlaceholderImage}
               onUpdateElement={onUpdateElement}
               onReplaceImage={onReplaceImage}
             />

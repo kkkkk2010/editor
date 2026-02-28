@@ -23,6 +23,8 @@ import { AssetStore } from "@/src/lib/assets/assetStore"
 import { mapEditorToImporter } from "@/src/lib/import/mapEditorToImporter"
 import { mapImporterToEditor } from "@/src/lib/import/mapImporterToEditor"
 import { exportProjectZip } from "@/src/lib/project/exportProjectZip"
+import { buildWpSavePayload } from "@/src/lib/save/wpSavePayload"
+import type { ImagePlan } from "@/src/lib/import/imagePlan"
 import html2canvas from "html2canvas"
 
 type EditorState = {
@@ -40,6 +42,28 @@ type HistoryState = {
 type HistoryMeta = {
   type?: string
   reason?: string
+}
+
+type PlaceholderSlotRef = {
+  slotId: string
+  slide: number
+  element: number
+}
+
+type ReplacedAsset = {
+  bytesBase64: string
+  contentType: string
+  originalContent: string
+  source: {
+    pageUrl: string
+    imageUrl: string
+    licenseLabel?: string
+    licenseUrl?: string
+    source?: string
+    confirmedAt: string
+  }
+  slot: PlaceholderSlotRef
+  previewUrl: string
 }
 
 const MAX_HISTORY = 100
@@ -183,6 +207,17 @@ export default function Home() {
   const [isSavingProject, setIsSavingProject] = useState(false)
   const [importRev, setImportRev] = useState(0)
   const isImportFlowRef = useRef(false)
+  const currentPresentationIdRef = useRef<string | null>(null)
+  const [currentPresentationId, setCurrentPresentationId] = useState<string | null>(null)
+  const [importOverlayError, setImportOverlayError] = useState<string | null>(null)
+  const [isManualImportEnabled, setIsManualImportEnabled] = useState(false)
+  const [imagePlan, setImagePlan] = useState<ImagePlan | null>(null)
+  const [selectedElementIndex, setSelectedElementIndex] = useState<number | null>(null)
+  const [replacedAssets, setReplacedAssets] = useState<Record<string, ReplacedAsset>>({})
+  const [hasPendingAutoImport, setHasPendingAutoImport] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false
+    return new URLSearchParams(window.location.search).has("importOutZip")
+  })
 
   const present = history.present
   const slides = present.slides
@@ -195,17 +230,70 @@ export default function Home() {
     presentRef.current = present
   }, [present])
 
+  useEffect(() => {
+    if (currentPresentationIdRef.current !== null) {
+      return
+    }
+    const params = new URLSearchParams(window.location.search)
+    const presentationIdFromUrl = params.get("presentationId")
+    currentPresentationIdRef.current = presentationIdFromUrl
+    setCurrentPresentationId(presentationIdFromUrl)
+    console.log("[wp] currentPresentationIdRef=", presentationIdFromUrl)
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    const run = async () => {
+      try {
+        const response = await fetch("/api/admin/import-status", { cache: "no-store", credentials: "same-origin" })
+        if (!response.ok) return
+        const payload = (await response.json()) as { enabled?: boolean }
+        if (active) {
+          setIsManualImportEnabled(Boolean(payload?.enabled))
+        }
+      } catch {
+        // keep manual import actions hidden by default
+      }
+    }
+    void run()
+    return () => {
+      active = false
+    }
+  }, [])
+
   const currentSlide = slides[currentSlideIndex]
   const selectedElement = useMemo(() => {
     if (!selectedElementId) return null
-    return currentSlide?.elements.find((el) => el.id === selectedElementId) ?? null
-  }, [currentSlide, selectedElementId])
+    const element = currentSlide?.elements.find((el) => el.id === selectedElementId) ?? null
+    if (!element || element.type !== "image" || !element.assetPath) {
+      return element
+    }
+    const replacement = replacedAssets[element.assetPath]
+    if (!replacement) {
+      return element
+    }
+    return {
+      ...element,
+      content: replacement.previewUrl,
+    }
+  }, [currentSlide, replacedAssets, selectedElementId])
 
   useEffect(() => {
     if (selectedElementId && !selectedElement) {
       setPresent((state) => ({ ...state, selectedElementId: null }))
     }
   }, [selectedElementId, selectedElement])
+
+  const showImportOverlay = hasPendingAutoImport || isBridgeImporting
+
+  useEffect(() => {
+    if (!showImportOverlay) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [showImportOverlay])
 
   useEffect(() => {
     console.log("[ui] render slides=", slides.length, "first slide=", slides[0])
@@ -217,6 +305,7 @@ export default function Home() {
       if (isSameState(state.present, next)) {
         return state
       }
+      presentRef.current = next
       return { ...state, present: next }
     })
   }
@@ -227,6 +316,7 @@ export default function Home() {
       if (isSameState(state.present, next)) {
         return state
       }
+      presentRef.current = next
       const past = [...state.past, state.present]
       const trimmedPast = past.length > MAX_HISTORY ? past.slice(past.length - MAX_HISTORY) : past
       return { past: trimmedPast, present: next, future: [] }
@@ -249,6 +339,7 @@ export default function Home() {
   }
 
   const resetHistory = (next: EditorState) => {
+    presentRef.current = next
     setHistory({
       past: [],
       present: next,
@@ -290,6 +381,7 @@ export default function Home() {
       const previous = state.past[state.past.length - 1]
       const past = state.past.slice(0, -1)
       const future = [state.present, ...state.future]
+      presentRef.current = previous
       return { past, present: previous, future }
     })
   }, [])
@@ -300,6 +392,7 @@ export default function Home() {
       const next = state.future[0]
       const future = state.future.slice(1)
       const past = [...state.past, state.present]
+      presentRef.current = next
       return { past, present: next, future }
     })
   }, [])
@@ -581,6 +674,8 @@ export default function Home() {
   }
 
   const handleElementSelect = (element: Element | null) => {
+    const nextIndex = element ? currentSlide.elements.findIndex((item) => item === element) : -1
+    setSelectedElementIndex(nextIndex >= 0 ? nextIndex : null)
     setPresent((state) => ({
       ...state,
       selectedElementId: element?.id ?? null,
@@ -725,6 +820,116 @@ export default function Home() {
       assetPath,
     })
   }
+
+  const hasPlaceholderReplacement = useCallback(
+    (srcPath: string) => Boolean(replacedAssets[srcPath]),
+    [replacedAssets],
+  )
+
+  const handleResetPlaceholderImage = useCallback(({ srcPath }: { srcPath: string }) => {
+    const originalContent = replacedAssets[srcPath]?.originalContent
+    setReplacedAssets((previous) => {
+      const existing = previous[srcPath]
+      if (!existing) return previous
+      URL.revokeObjectURL(existing.previewUrl)
+      const next = { ...previous }
+      delete next[srcPath]
+      return next
+    })
+
+    setPresent((state) => {
+      const slide = state.slides[state.currentSlideIndex]
+      if (!slide) return state
+      const index = slide.elements.findIndex((el) => el.id === state.selectedElementId)
+      if (index < 0) return state
+      const element = slide.elements[index]
+      if (element.type !== "image" || element.assetPath !== srcPath) return state
+      const updatedElements = [...slide.elements]
+      updatedElements[index] = {
+        ...element,
+        content: originalContent || element.assetPath || element.content,
+      }
+      const updatedSlides = [...state.slides]
+      updatedSlides[state.currentSlideIndex] = { ...slide, elements: updatedElements }
+      return { ...state, slides: updatedSlides }
+    })
+  }, [replacedAssets])
+
+  const handleInsertPlaceholderImage = useCallback(
+    async (payload: {
+      srcPath: string
+      currentContent: string
+      slot: { slotId: string; slide: number; element: number }
+      selection: {
+        pageUrl: string
+        imageUrl: string
+        licenseLabel?: string
+        licenseUrl?: string
+        source?: string
+      }
+    }) => {
+      const response = await fetch("/api/images/fetch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: payload.selection.imageUrl }),
+      })
+      const body = (await response.json()) as { ok?: boolean; bytesBase64?: string; contentType?: string; message?: string }
+      if (!response.ok || !body.ok || !body.bytesBase64 || !body.contentType) {
+        throw new Error(body?.message || "Не удалось получить изображение")
+      }
+      const bytesBase64 = body.bytesBase64
+      const contentType = body.contentType
+
+      const bytes = Uint8Array.from(atob(bytesBase64), (ch) => ch.charCodeAt(0))
+      const blob = new Blob([toArrayBuffer(bytes)], { type: contentType })
+      const previewUrl = URL.createObjectURL(blob)
+
+      setReplacedAssets((previous) => {
+        const existing = previous[payload.srcPath]
+        if (existing) {
+          URL.revokeObjectURL(existing.previewUrl)
+        }
+        return {
+            ...previous,
+            [payload.srcPath]: {
+            bytesBase64,
+            contentType,
+            originalContent: payload.currentContent,
+            previewUrl,
+            slot: payload.slot,
+            source: {
+              pageUrl: payload.selection.pageUrl,
+              imageUrl: payload.selection.imageUrl,
+              licenseLabel: payload.selection.licenseLabel,
+              licenseUrl: payload.selection.licenseUrl,
+              source: payload.selection.source,
+              confirmedAt: new Date().toISOString(),
+            },
+          },
+        }
+      })
+
+      assetStoreRef.current.setAsset(payload.srcPath, bytes, contentType)
+
+      setPresent((state) => {
+        const slide = state.slides[state.currentSlideIndex]
+        if (!slide) return state
+        const index = slide.elements.findIndex((el) => el.id === state.selectedElementId)
+        if (index < 0) return state
+        const element = slide.elements[index]
+        if (element.type !== "image" || element.assetPath !== payload.srcPath) return state
+        const updatedElements = [...slide.elements]
+        updatedElements[index] = {
+          ...element,
+          content: previewUrl,
+        }
+        const updatedSlides = [...state.slides]
+        updatedSlides[state.currentSlideIndex] = { ...slide, elements: updatedElements }
+        return { ...state, slides: updatedSlides }
+      })
+    },
+    [],
+  )
 
   // 右键菜单功能
   const handleCopyElement = (element: Element) => {
@@ -959,18 +1164,17 @@ export default function Home() {
       currentSlideIndex: 0,
       selectedElementId: null,
     })
+    setReplacedAssets((previous) => {
+      Object.values(previous).forEach((item) => URL.revokeObjectURL(item.previewUrl))
+      return {}
+    })
+    setSelectedElementIndex(null)
     setImportRev((value) => value + 1)
     console.log("[auto-import] after import slides=", importedSlides.length)
     console.log("[auto-import] after import first slide=", importedSlides[0])
     if (isImportFlowRef.current) {
       try {
-        const params = new URLSearchParams(window.location.search)
-        const presentationIdFromQuery = params.get("presentationId")
-        const savedCtxRaw = sessionStorage.getItem("wpSaveCtx")
-        const presentationIdFromCtx = savedCtxRaw
-          ? ((JSON.parse(savedCtxRaw) as { presentationId?: string }).presentationId ?? null)
-          : null
-        const presentationId = presentationIdFromQuery ?? presentationIdFromCtx ?? "unknown"
+        const presentationId = currentPresentationIdRef.current ?? "unknown"
         localStorage.setItem(
           `presentonika:imported:${presentationId}`,
           JSON.stringify({
@@ -999,7 +1203,8 @@ export default function Home() {
     async (outZip: ArrayBuffer) => {
       assetStoreRef.current.clear()
       const { importZipFile } = await import("@/src/lib/import/zipImport")
-      const { doc, createdUrls, sourceSlideSize } = await importZipFile(outZip, assetStoreRef.current)
+      const { doc, createdUrls, sourceSlideSize, imagePlan } = await importZipFile(outZip, assetStoreRef.current)
+      setImagePlan(imagePlan)
       const mapped = mapImporterToEditor(doc, { sourceSlideSize, allowResize: true })
       handleImportZip(mapped, createdUrls)
     },
@@ -1008,7 +1213,13 @@ export default function Home() {
 
   const handleAutoImportStart = useCallback(() => {
     isImportFlowRef.current = true
+    setHasPendingAutoImport(true)
+    setImportOverlayError(null)
     assetStoreRef.current.clear()
+    setReplacedAssets((previous) => {
+      Object.values(previous).forEach((item) => URL.revokeObjectURL(item.previewUrl))
+      return {}
+    })
     revokeImportObjectUrls(importedAssetUrlsRef.current)
     importedAssetUrlsRef.current = []
     resetHistory({
@@ -1023,6 +1234,10 @@ export default function Home() {
   const handleAutoImportComplete = useCallback((success: boolean) => {
     console.log("[auto-import] complete", { success, importRev: success ? importRev + 1 : importRev })
     isImportFlowRef.current = false
+    if (success) {
+      setHasPendingAutoImport(false)
+      setImportOverlayError(null)
+    }
   }, [importRev])
 
   const renderBackgroundBytes = async (background: Background) => {
@@ -1062,6 +1277,213 @@ export default function Home() {
     }
   }
 
+  type WpSaveCtx = { saveEndpoint: string; saveToken: string; presentationId: string; outZipUrl?: string; ts?: number }
+
+
+  const maskSensitiveUrl = (rawUrl: string | null | undefined) => {
+    if (!rawUrl) return null
+    try {
+      const parsed = new URL(rawUrl, window.location.origin)
+      ;["saveToken", "t"].forEach((key) => {
+        if (parsed.searchParams.has(key)) {
+          parsed.searchParams.set(key, "***")
+        }
+      })
+      return `${parsed.origin}${parsed.pathname}${parsed.search}`
+    } catch {
+      return "invalid-url"
+    }
+  }
+
+  const getWpSaveCtx = (currentPresentationIdValue: string | null): WpSaveCtx | null => {
+    const savedCtxRaw = sessionStorage.getItem("wpSaveCtx")
+    if (savedCtxRaw) {
+      try {
+        const parsed = JSON.parse(savedCtxRaw) as WpSaveCtx
+        if (parsed.saveEndpoint && parsed.saveToken && parsed.presentationId) {
+          if (typeof parsed.ts === "number" && Date.now() - parsed.ts > 30 * 60 * 1000) {
+            sessionStorage.removeItem("wpSaveCtx")
+            toast({
+              title: "Save unavailable",
+              description: "Token expired, reopen from cabinet",
+              variant: "destructive",
+            })
+            return null
+          }
+          return parsed
+        }
+      } catch {
+        sessionStorage.removeItem("wpSaveCtx")
+      }
+    }
+
+    const params = new URLSearchParams(window.location.search)
+    const saveEndpoint = params.get("saveEndpoint")
+    const saveToken = params.get("saveToken")
+    const importOutZip = params.get("importOutZip")
+    const bridgeToken = params.get("t") ?? ""
+    let outZipUrl: string | undefined
+    if (importOutZip) {
+      const sourceUrl = new URL(importOutZip, window.location.origin)
+      sourceUrl.searchParams.set("t", bridgeToken)
+      outZipUrl = sourceUrl.toString()
+    }
+    if (saveEndpoint && saveToken && currentPresentationIdValue) {
+      return { saveEndpoint, saveToken, presentationId: currentPresentationIdValue, outZipUrl }
+    }
+    return null
+  }
+
+  const buildOutZipBytesFromSnapshot = async () => {
+    const presentSnapshot = cloneState(presentRef.current)
+    console.log("[wp-save] snapshot slides=", presentSnapshot.slides.length, "first=", presentSnapshot.slides[0]?.id)
+    const slidesSnapshot = presentSnapshot.slides
+    const assetStore = assetStoreRef.current
+    const slidesForExport = await Promise.all(
+      slidesSnapshot.map(async (slide) => {
+        const existingBackgroundPath = slide.background.type === "image" ? slide.background.assetPath : undefined
+        const backgroundAssetPath = existingBackgroundPath || `backgrounds/bg-${slide.id}.png`
+        if (!assetStore.hasAsset(backgroundAssetPath)) {
+          if (existingBackgroundPath) {
+            const backgroundUrl = extractBackgroundUrl(slide.background)
+            if (backgroundUrl) {
+              await storeAssetFromUrlAtPath(backgroundUrl, backgroundAssetPath)
+            }
+          } else {
+            const backgroundBytes = await renderBackgroundBytes(slide.background)
+            assetStore.setAsset(backgroundAssetPath, backgroundBytes, "image/png")
+          }
+        }
+
+        const elements = await Promise.all(
+          slide.elements.map(async (element) => {
+            if (element.type !== "image") {
+              return element
+            }
+
+            const existingPath = element.assetPath
+            const extension = existingPath ? getExtensionFromUrl(existingPath) : getExtensionFromUrl(element.content)
+            const assetPath = existingPath || `assets/images/${element.id}.${extension}`
+
+            if (!assetStore.hasAsset(assetPath)) {
+              await storeAssetFromUrlAtPath(element.content, assetPath)
+            }
+
+            return {
+              ...element,
+              assetPath,
+            }
+          }),
+        )
+
+        return {
+          ...slide,
+          background: {
+            ...slide.background,
+            type: "image" as const,
+            value: normalizeBackgroundValue(slide.background),
+            assetPath: backgroundAssetPath,
+          },
+          elements,
+        }
+      }),
+    )
+
+    const importerDoc = mapEditorToImporter(slidesForExport, slideSize)
+    const imageCredits = Object.entries(replacedAssets).map(([src, item]) => ({
+      src,
+      slot: item.slot,
+      pageUrl: item.source.pageUrl,
+      imageUrl: item.source.imageUrl,
+      licenseLabel: item.source.licenseLabel,
+      licenseUrl: item.source.licenseUrl,
+      confirmedAt: item.source.confirmedAt,
+    }))
+    const zipBytes = exportProjectZip(importerDoc, assetStore, {
+      imageCredits: imageCredits.length > 0 ? imageCredits : undefined,
+    })
+    const src = zipBytes instanceof Uint8Array ? zipBytes : new Uint8Array(zipBytes as ArrayBufferLike)
+    const bytes = new Uint8Array(src.byteLength)
+    bytes.set(src)
+    const blob = new Blob([toArrayBuffer(bytes)], { type: "application/zip" })
+    console.log("[wp-save] generated zip bytes", blob.size)
+    return { bytes, blob }
+  }
+
+  const stageOutZip = async (params: {
+    bytes: Uint8Array
+    blobSize: number
+    requestId: string
+    presentationId: string
+    saveToken: string
+  }) => {
+    const stageBody = toArrayBuffer(params.bytes)
+    const stageResponse = await fetch("/api/bridge/stage-outzip", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "x-request-id": params.requestId,
+        "x-presentation-id": params.presentationId,
+        "x-save-token": params.saveToken,
+      },
+      credentials: "same-origin",
+      body: stageBody,
+    })
+    const stageText = await stageResponse.text()
+    if (!stageResponse.ok) {
+      throw new Error(`Staging failed: HTTP ${stageResponse.status}: ${stageText.slice(0, 200)}`)
+    }
+    let stageJson: { outZipUrl?: string } | null = null
+    try {
+      stageJson = JSON.parse(stageText) as { outZipUrl?: string }
+    } catch {
+      stageJson = null
+    }
+    if (!stageJson?.outZipUrl) {
+      throw new Error("Staging failed: missing outZipUrl")
+    }
+    const stagedOutZipUrl = new URL(stageJson.outZipUrl, window.location.origin).toString()
+    console.log("[wp-save] staged outZipUrl=", stagedOutZipUrl, "size=", params.blobSize, "requestId=", params.requestId)
+    return stagedOutZipUrl
+  }
+
+  const saveOutZipUrlToWp = async (params: {
+    saveEndpoint: string
+    saveToken: string
+    presentationId: string
+    stagedOutZipUrl: string
+    requestId: string
+  }) => {
+    const payload = buildWpSavePayload({
+      stagedOutZipUrl: params.stagedOutZipUrl,
+      presentationId: params.presentationId,
+      saveToken: params.saveToken,
+      requestId: params.requestId,
+    })
+    console.log("[wp-save] payload", {
+      presentationId: payload.presentationId,
+      outZipUrl: payload.outZipUrl,
+      requestId: payload.requestId,
+    })
+
+    const response = await fetch(params.saveEndpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-request-id": params.requestId,
+      },
+      mode: "cors",
+      body: JSON.stringify(payload),
+    })
+
+    const responseText = await response.text()
+    if (!response.ok) {
+      console.error("[wp-save] from-url failed", response.status, responseText)
+      throw new Error(`HTTP ${response.status}: ${responseText.slice(0, 200)}`)
+    }
+    return responseText
+  }
+
   const handleSaveProject = async () => {
     if (isSavingProject) {
       return
@@ -1075,60 +1497,12 @@ export default function Home() {
     })
 
     try {
+      await Promise.resolve()
       // WP save ctx persisted because router clean removes query params
-      const savedCtxRaw = sessionStorage.getItem("wpSaveCtx")
-      let ctx: { saveEndpoint: string; saveToken: string; presentationId: string; outZipUrl?: string; ts?: number } | null = null
-      if (savedCtxRaw) {
-        try {
-          const parsed = JSON.parse(savedCtxRaw) as {
-            saveEndpoint?: string
-            saveToken?: string
-            presentationId?: string
-            outZipUrl?: string
-            ts?: number
-          }
-          if (parsed.saveEndpoint && parsed.saveToken && parsed.presentationId) {
-            if (typeof parsed.ts === "number" && Date.now() - parsed.ts > 30 * 60 * 1000) {
-              sessionStorage.removeItem("wpSaveCtx")
-              toast({
-                title: "Save unavailable",
-                description: "Token expired, reopen from cabinet",
-                variant: "destructive",
-              })
-              return
-            }
-            ctx = {
-              saveEndpoint: parsed.saveEndpoint,
-              saveToken: parsed.saveToken,
-              presentationId: parsed.presentationId,
-              outZipUrl: parsed.outZipUrl,
-              ts: parsed.ts,
-            }
-          }
-        } catch {
-          sessionStorage.removeItem("wpSaveCtx")
-        }
-      }
+      const currentPresentationIdValue = currentPresentationIdRef.current
+      const ctx = getWpSaveCtx(currentPresentationIdValue)
 
-      if (!ctx) {
-        const params = new URLSearchParams(window.location.search)
-        const saveEndpoint = params.get("saveEndpoint")
-        const saveToken = params.get("saveToken")
-        const presentationId = params.get("presentationId")
-        const importOutZip = params.get("importOutZip")
-        const bridgeToken = params.get("t") ?? ""
-        let outZipUrl: string | undefined
-        if (importOutZip) {
-          const sourceUrl = new URL(importOutZip, window.location.origin)
-          sourceUrl.searchParams.set("t", bridgeToken)
-          outZipUrl = sourceUrl.toString()
-        }
-        if (saveEndpoint && saveToken && presentationId) {
-          ctx = { saveEndpoint, saveToken, presentationId, outZipUrl }
-        }
-      }
-
-      console.info({ presentationId: ctx?.presentationId ?? null, hasSaveToken: Boolean(ctx?.saveToken), saveEndpoint: ctx?.saveEndpoint ?? null })
+      console.info({ presentationId: ctx?.presentationId ?? null, hasSaveToken: Boolean(ctx?.saveToken), saveEndpoint: maskSensitiveUrl(ctx?.saveEndpoint ?? null) })
 
       if (!ctx) {
         toast({
@@ -1139,99 +1513,69 @@ export default function Home() {
         return
       }
 
-      const { saveEndpoint, saveToken, presentationId, outZipUrl } = ctx
-      const assetStore = assetStoreRef.current
-      const slidesForExport = await Promise.all(
-        slides.map(async (slide) => {
-          const existingBackgroundPath =
-            slide.background.type === "image" ? slide.background.assetPath : undefined
-          const backgroundAssetPath = existingBackgroundPath || `backgrounds/bg-${slide.id}.png`
-          if (!assetStore.hasAsset(backgroundAssetPath)) {
-            if (existingBackgroundPath) {
-              const backgroundUrl = extractBackgroundUrl(slide.background)
-              if (backgroundUrl) {
-                await storeAssetFromUrlAtPath(backgroundUrl, backgroundAssetPath)
-              }
-            } else {
-              const bytes = await renderBackgroundBytes(slide.background)
-              assetStore.setAsset(backgroundAssetPath, bytes, "image/png")
-            }
-          }
-
-          const elements = await Promise.all(
-            slide.elements.map(async (element) => {
-              if (element.type !== "image") {
-                return element
-              }
-
-              const existingPath = element.assetPath
-              const extension = existingPath ? getExtensionFromUrl(existingPath) : getExtensionFromUrl(element.content)
-              const assetPath = existingPath || `assets/images/${element.id}.${extension}`
-
-              if (!assetStore.hasAsset(assetPath)) {
-                await storeAssetFromUrlAtPath(element.content, assetPath)
-              }
-
-              return {
-                ...element,
-                assetPath,
-              }
-            }),
-          )
-
-          return {
-            ...slide,
-            background: {
-              ...slide.background,
-              type: "image" as const,
-              value: normalizeBackgroundValue(slide.background),
-              assetPath: backgroundAssetPath,
-            },
-            elements,
-          }
-        }),
-      )
-
-      const importerDoc = mapEditorToImporter(slidesForExport, slideSize)
-      const zipBytes = exportProjectZip(importerDoc, assetStore)
-      const src = zipBytes instanceof Uint8Array ? zipBytes : new Uint8Array(zipBytes as ArrayBufferLike)
-      const bytes = new Uint8Array(src.byteLength)
-      bytes.set(src)
-      const blob = new Blob([toArrayBuffer(bytes)], { type: "application/zip" })
-      console.log("[wp-save] generated zip bytes", blob.size)
-
-      if (!outZipUrl) {
-        throw new Error("Missing outZipUrl for from-url save")
+      if (!currentPresentationIdValue) {
+        toast({
+          title: "Не удалось сохранить проект",
+          description: "Ошибка сохранения: не найден presentationId в URL. Обнови страницу и попробуй снова.",
+          variant: "destructive",
+        })
+        return
       }
+
+      const { saveEndpoint, saveToken, presentationId } = ctx
+      const requestId = `save-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`
+      const { bytes, blob } = await buildOutZipBytesFromSnapshot()
+      const stagedOutZipUrl = await stageOutZip({
+        bytes,
+        blobSize: blob.size,
+        requestId,
+        presentationId,
+        saveToken,
+      })
 
       console.log("[wp-save] mode from-url")
-      console.log("[wp-save] endpoint", saveEndpoint)
-      console.log("[wp-save] payload", {
-        presentationId: String(presentationId),
-        saveToken: `${String(saveToken).slice(0, 6)}...`,
-        outZipUrl,
+      console.log("[wp-save] endpoint", maskSensitiveUrl(saveEndpoint))
+      let endpointPresentationId: string | null = null
+      try {
+        const endpointUrl = new URL(saveEndpoint, window.location.origin)
+        endpointPresentationId = endpointUrl.searchParams.get("presentationId")
+      } catch (error) {
+        console.error("[wp-save] invalid saveEndpoint", maskSensitiveUrl(saveEndpoint), error)
+      }
+      console.log("[wp-save] guard", {
+        currentPresentationId: currentPresentationIdValue,
+        wpSaveCtxPresentationId: presentationId,
+        saveEndpoint: maskSensitiveUrl(saveEndpoint),
+        endpointPresentationId,
       })
 
-      const payload = {
-        outZipUrl,
-        presentationId: String(presentationId),
-        saveToken: String(saveToken),
+      if (presentationId !== currentPresentationIdValue || (endpointPresentationId && endpointPresentationId !== currentPresentationIdValue)) {
+        const mismatchMessage = `Ошибка сохранения: несовпадение presentationId (ctx=${presentationId}, url=${currentPresentationIdValue}). Обнови страницу и попробуй снова.`
+        console.error("[wp-save] presentationId mismatch", {
+          currentPresentationId: currentPresentationIdValue,
+          wpSaveCtx: {
+            presentationId: ctx.presentationId,
+            saveEndpoint: maskSensitiveUrl(ctx.saveEndpoint),
+            hasSaveToken: Boolean(ctx.saveToken),
+          },
+          endpointPresentationId,
+          href: window.location.href,
+        })
+        toast({
+          title: "Не удалось сохранить проект",
+          description: mismatchMessage,
+          variant: "destructive",
+        })
+        return
       }
 
-      const response = await fetch(saveEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        mode: "cors",
-        body: JSON.stringify(payload),
+      const responseText = await saveOutZipUrlToWp({
+        saveEndpoint,
+        saveToken,
+        presentationId,
+        stagedOutZipUrl,
+        requestId,
       })
-
-      const responseText = await response.text()
-      if (!response.ok) {
-        console.error("[wp-save] from-url failed", response.status, responseText)
-        throw new Error(`HTTP ${response.status}: ${responseText.slice(0, 200)}`)
-      }
 
       let responseJson: { ok?: boolean; message?: string; url?: string } | null = null
       try {
@@ -1340,14 +1684,13 @@ export default function Home() {
       <Suspense fallback={null}>
         <AutoImportOutZip
           importOutZipFromArrayBuffer={importOutZipFromArrayBuffer}
+          currentPresentationId={currentPresentationId}
           onImportStateChange={setIsBridgeImporting}
           onImportStart={handleAutoImportStart}
           onImportComplete={handleAutoImportComplete}
+          onImportError={setImportOverlayError}
         />
       </Suspense>
-      {isBridgeImporting ? (
-        <div className="px-4 py-2 text-sm border-b bg-muted/40 text-muted-foreground">Importing out.zip…</div>
-      ) : null}
       {isPreviewMode ? (
         <SlidePreview
           slides={slides}
@@ -1365,7 +1708,7 @@ export default function Home() {
             title={presentationTitle}
             onTitleChange={setPresentationTitle}
             importOutZipFromArrayBuffer={importOutZipFromArrayBuffer}
-            showAdminPptxImport={process.env.NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT === "1"}
+            showAdminImportTools={isManualImportEnabled}
             onUndo={undo}
             onRedo={redo}
             canUndo={canUndo}
@@ -1433,10 +1776,16 @@ export default function Home() {
               propertyPanel={
                 <PropertyPanel
                   selectedElement={selectedElement}
+                  selectedElementIndex={selectedElementIndex}
                   onUpdateElement={updateElement}
                   onReplaceImage={handleReplaceImage}
                   onClose={() => setShowPropertyPanel(false)}
                   currentSlide={currentSlide}
+                  currentSlideIndex={currentSlideIndex}
+                  imagePlan={imagePlan}
+                  hasPlaceholderReplacement={hasPlaceholderReplacement}
+                  onInsertPlaceholderImage={handleInsertPlaceholderImage}
+                  onResetPlaceholderImage={handleResetPlaceholderImage}
                   onMoveElementForward={handleMoveElementForward}
                   onMoveElementBackward={handleMoveElementBackward}
                   onMoveElementToFront={handleMoveElementToFront}
@@ -1487,6 +1836,27 @@ export default function Home() {
           </div>
         </>
       )}
+      {showImportOverlay ? (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-background/90 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-xl">
+            {importOverlayError ? (
+              <>
+                <h2 className="text-lg font-semibold">Не удалось импортировать проект</h2>
+                <p className="mt-2 text-sm text-muted-foreground">{importOverlayError}</p>
+                <div className="mt-4 flex justify-center gap-2">
+                  <Button onClick={() => window.location.reload()}>Перезагрузить</Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <h2 className="mt-4 text-lg font-semibold">Импортируем проект…</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Пожалуйста, подождите. Это может занять до минуты.</p>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
       <Toaster />
     </main>
   )
