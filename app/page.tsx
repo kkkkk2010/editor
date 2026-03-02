@@ -16,6 +16,7 @@ import { type Slide, type Element, defaultSlides, defaultSlideSize, type SlideSi
 import { Button } from "@/components/ui/button"
 import { Play, PanelRight } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
+import { useIsMobile } from "@/components/ui/use-mobile"
 import { useToast } from "@/hooks/use-toast"
 import type { ImportResult } from "@/src/lib/import/importerDoc"
 import { revokeImportObjectUrls } from "@/src/lib/import/zipImport"
@@ -220,6 +221,7 @@ export default function Home() {
   })
 
   const present = history.present
+  const isMobile = useIsMobile()
   const slides = present.slides
   const currentSlideIndex = present.currentSlideIndex
   const selectedElementId = present.selectedElementId
@@ -1677,7 +1679,16 @@ export default function Home() {
           onImportError={setImportOverlayError}
         />
       </Suspense>
-      {isPreviewMode ? (
+      {isMobile ? (
+        <SlidePreview
+          slides={slides}
+          initialSlide={currentSlideIndex}
+          onExit={() => {
+            // На мобильных используем режим просмотра как основной.
+          }}
+          slideSize={slideSize}
+        />
+      ) : isPreviewMode ? (
         <SlidePreview
           slides={slides}
           initialSlide={currentSlideIndex}

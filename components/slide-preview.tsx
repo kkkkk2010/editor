@@ -15,6 +15,7 @@ interface SlidePreviewProps {
 
 export default function SlidePreview({ slides, initialSlide, onExit, slideSize }: SlidePreviewProps) {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(initialSlide)
+  const [viewport, setViewport] = useState({ width: 0, height: 0 })
   const previewRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -34,6 +35,15 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
       window.removeEventListener("keydown", handleKeyDown)
     }
   }, [onExit, slides.length])
+
+  useEffect(() => {
+    const updateViewport = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight })
+    }
+    updateViewport()
+    window.addEventListener("resize", updateViewport)
+    return () => window.removeEventListener("resize", updateViewport)
+  }, [])
 
   const currentSlide = slides[currentSlideIndex]
   const isFirstSlide = currentSlideIndex === 0
@@ -55,6 +65,11 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
     }
   }
 
+  const previewScale =
+    viewport.width > 0 && viewport.height > 0
+      ? Math.min((viewport.width - 24) / slideSize.width, (viewport.height - 96) / slideSize.height, 1)
+      : 1
+
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
       <div
@@ -63,6 +78,8 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
         style={{
           width: slideSize.width,
           height: slideSize.height,
+          transform: `scale(${previewScale})`,
+          transformOrigin: "center center",
           ...(currentSlide.background.type === "image"
             ? {
                 backgroundImage: currentSlide.background.value.startsWith("url(")
