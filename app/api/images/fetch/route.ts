@@ -5,6 +5,15 @@ const DEFAULT_MAX_IMAGE_BYTES = 8 * 1024 * 1024
 const DEFAULT_TIMEOUT_MS = 12_000
 const MAX_REDIRECTS = 5
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/svg+xml"])
+const DEFAULT_IMG_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9,ru;q=0.8",
+  Referer: "https://picsum.photos/",
+  "Cache-Control": "no-cache",
+  Pragma: "no-cache",
+} as const
 
 type DebugPayload = {
   stage: "validate" | "redirect" | "redirect_host_not_allowed" | "fetch" | "mime" | "size"
@@ -134,6 +143,23 @@ function errorResponse(message: string, status: number, debug?: DebugPayload) {
   )
 }
 
+async function fetchImageHop(url: URL, signal: AbortSignal) {
+  return fetch(url.toString(), {
+    method: "GET",
+    redirect: "manual",
+    cache: "no-store",
+    signal,
+    headers: DEFAULT_IMG_HEADERS,
+  })
+}
+
+function sleepWithJitter(minMs: number, maxMs: number) {
+  const jitterMs = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs
+  return new Promise<void>((resolve) => {
+    setTimeout(() => resolve(), jitterMs)
+  })
+}
+
 export async function POST(request: Request) {
   const redirects: string[] = []
   const allowedHosts = getAllowedHosts()
@@ -179,15 +205,12 @@ export async function POST(request: Request) {
 
     try {
       for (let i = 0; i <= MAX_REDIRECTS; i += 1) {
-        const response = await fetch(currentUrl.toString(), {
-          method: "GET",
-          redirect: "manual",
-          cache: "no-store",
-          signal: controller.signal,
-          headers: {
-            Accept: "image/jpeg,image/png,image/webp,image/svg+xml,*/*",
-          },
-        })
+        let response = await fetchImageHop(currentUrl, controller.signal)
+
+        if (i === 0 && [401, 403, 429].includes(response.status)) {
+          await sleepWithJitter(100, 200)
+          response = await fetchImageHop(currentUrl, controller.signal)
+        }
 
         if ([301, 302, 303, 307, 308].includes(response.status)) {
           const location = response.headers.get("location")

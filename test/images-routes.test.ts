@@ -48,6 +48,36 @@ describe("POST /api/images/fetch", () => {
     expect(payload.finalUrl).toBe("https://fastly.picsum.photos/id/10/1200/800.jpg?hmac=abc")
   })
 
+
+  it("retries once on first-hop 403 and uses browser-like headers", async () => {
+    process.env.IMAGE_FETCH_ALLOWED_HOSTS = "picsum.photos,.picsum.photos"
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(null, { status: 403 }))
+      .mockResolvedValueOnce(
+        new Response(new Uint8Array([0xff, 0xd8, 0xff]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        }),
+      )
+
+    const response = await fetchImagePost(
+      jsonRequest("http://localhost/api/images/fetch", {
+        imageUrl: "https://picsum.photos/id/10/1200/800",
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+    const firstCallOptions = fetchSpy.mock.calls[0]?.[1] as RequestInit
+    expect(firstCallOptions?.cache).toBe("no-store")
+    expect(firstCallOptions?.redirect).toBe("manual")
+    const headers = firstCallOptions?.headers as Record<string, string>
+    expect(headers?.["User-Agent"]).toContain("Mozilla/5.0")
+    expect(headers?.Referer).toBe("https://picsum.photos/")
+  })
+
   it("returns redirect_host_not_allowed when redirect target is outside allowlist", async () => {
     process.env.NODE_ENV = "development"
     process.env.IMAGE_FETCH_ALLOWED_HOSTS = "picsum.photos"
