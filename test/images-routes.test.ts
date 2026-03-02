@@ -75,13 +75,65 @@ describe("POST /api/images/fetch", () => {
 })
 
 describe("POST /api/images/search", () => {
-  it("returns deterministic fastly picsum image urls for the same query", async () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("returns deterministic final fastly urls when redirects resolve", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://fastly.picsum.photos/id/101/1200/800.jpg?hmac=ok1" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://fastly.picsum.photos/id/202/1200/800.jpg?hmac=ok2" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://fastly.picsum.photos/id/303/1200/800.jpg?hmac=ok3" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+
     const requestA = jsonRequest("http://localhost/api/images/search", { query: "кот", count: 3 })
     const requestB = jsonRequest("http://localhost/api/images/search", { query: "кот", count: 3 })
 
     const responseA = await searchImagesPost(requestA)
-    const responseB = await searchImagesPost(requestB)
     const payloadA = await responseA.json()
+
+    vi.restoreAllMocks()
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://fastly.picsum.photos/id/101/1200/800.jpg?hmac=ok1" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://fastly.picsum.photos/id/202/1200/800.jpg?hmac=ok2" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://fastly.picsum.photos/id/303/1200/800.jpg?hmac=ok3" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+
+    const responseB = await searchImagesPost(requestB)
     const payloadB = await responseB.json()
 
     expect(payloadA.results.map((item: { id: string }) => item.id)).toEqual(
@@ -89,8 +141,21 @@ describe("POST /api/images/search", () => {
     )
 
     const first = payloadA.results[0]
-    expect(first.imageUrl).toMatch(/^https:\/\/fastly\.picsum\.photos\/id\/\d+\/1200\/800\.jpg\?hmac=[a-f0-9]+$/)
-    expect(first.imageUrl).not.toContain("/seed/")
+    expect(first.imageUrl).toBe("https://fastly.picsum.photos/id/101/1200/800.jpg?hmac=ok1")
     expect(first.pageUrl).toMatch(/^https:\/\/picsum\.photos\//)
+  })
+
+  it("falls back to picsum url when redirect points outside picsum hosts", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(null, {
+        status: 302,
+        headers: { location: "https://example.com/bad" },
+      }),
+    )
+
+    const response = await searchImagesPost(jsonRequest("http://localhost/api/images/search", { query: "кот", count: 1 }))
+    const payload = await response.json()
+
+    expect(payload.results[0].imageUrl).toMatch(/^https:\/\/picsum\.photos\/id\/\d+\/1200\/800$/)
   })
 })
