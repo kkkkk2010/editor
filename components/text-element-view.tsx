@@ -149,7 +149,7 @@ export default function TextElementView({
         top: element.position.y,
         width: element.size.width,
         height: element.size.height,
-        overflow: "hidden",
+        overflow: "visible",
         padding: 0,
         margin: 0,
         transform: element.style.rotation ? `rotate(${element.style.rotation}deg)` : undefined,

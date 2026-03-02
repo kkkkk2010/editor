@@ -490,24 +490,10 @@ export default function Home() {
     const newSlide: Slide = {
       id: createId("slide"),
       background: {
-        type: "gradient",
-        value: "linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)",
+        type: "color",
+        value: "#ffffff",
       },
-      elements: [
-        {
-          id: createId("text"),
-          type: "text",
-          content: "Новый слайд", // Перевел: "新幻灯片"
-          position: { x: slideSize.width / 2 - 200, y: slideSize.height / 2 - 40 },
-          size: { width: 400, height: 80 },
-          style: {
-            fontSizePt: 48,
-            fontWeight: "bold",
-            color: "#ffffff",
-            textAlign: "center",
-          },
-        },
-      ],
+      elements: [],
     }
     const nextSlides = [...slides, newSlide]
     commit({

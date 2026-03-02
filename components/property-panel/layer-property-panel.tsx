@@ -36,40 +36,40 @@ export default function LayerPropertyPanel({
             size="sm"
             onClick={() => onMoveElementToFront?.(element)}
             disabled={isTopElement}
-            className="flex items-center justify-center"
+            className="flex h-auto items-start justify-start gap-2 whitespace-normal break-words py-2 text-left leading-tight"
           >
-            <ArrowUpToLine className="h-4 w-4 mr-2" />
-            На передний план
+            <ArrowUpToLine className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>На передний план</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => onMoveElementToBack?.(element)}
             disabled={isBottomElement}
-            className="flex items-center justify-center"
+            className="flex h-auto items-start justify-start gap-2 whitespace-normal break-words py-2 text-left leading-tight"
           >
-            <ArrowDownToLine className="h-4 w-4 mr-2" />
-            На задний план
+            <ArrowDownToLine className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>На задний план</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => onMoveElementForward?.(element)}
             disabled={isTopElement}
-            className="flex items-center justify-center"
+            className="flex h-auto items-start justify-start gap-2 whitespace-normal break-words py-2 text-left leading-tight"
           >
-            <MoveUp className="h-4 w-4 mr-2" />
-            Поднять на один слой
+            <MoveUp className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>Поднять на один слой</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => onMoveElementBackward?.(element)}
             disabled={isBottomElement}
-            className="flex items-center justify-center"
+            className="flex h-auto items-start justify-start gap-2 whitespace-normal break-words py-2 text-left leading-tight"
           >
-            <MoveDown className="h-4 w-4 mr-2" />
-            Опустить на один слой
+            <MoveDown className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>Опустить на один слой</span>
           </Button>
         </div>
       </div>
@@ -82,23 +82,8 @@ export default function LayerPropertyPanel({
           <p>
             Положение слоя: {elementIndex + 1} / {currentSlide.elements.length}
           </p>
-          <p>Тип элемента: {getElementTypeName(element.type)}</p>
-          <p>ID элемента: {element.id}</p>
         </div>
       </div>
     </div>
   )
-}
-
-function getElementTypeName(type: Element["type"]): string {
-  switch (type) {
-    case "text":
-      return "Текст"
-    case "image":
-      return "Изображение"
-    case "shape":
-      return "Фигура"
-    default:
-      return type
-  }
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
+import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 
 interface EditorLayoutProps {
   sidebar: ReactNode
@@ -26,12 +26,9 @@ export default function EditorLayout({ sidebar, editor, propertyPanel, showPrope
 
         {/* 右侧属性面板 */}
         {showPropertyPanel && (
-          <>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={25} minSize={15} maxSize={40} className="bg-background border-l">
-              {propertyPanel}
-            </ResizablePanel>
-          </>
+          <ResizablePanel defaultSize={25} minSize={25} maxSize={25} className="bg-background border-l">
+            {propertyPanel}
+          </ResizablePanel>
         )}
       </ResizablePanelGroup>
     </div>

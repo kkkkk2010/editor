@@ -139,19 +139,19 @@ export default function Toolbar({
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center">
           <div className="flex items-center mr-2 space-x-1">
-            <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} aria-label="Undo">
+            <Button variant="outline" size="icon" onClick={onUndo} disabled={!canUndo} aria-label="Undo">
               <Undo2 className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={onRedo} disabled={!canRedo} aria-label="Redo">
+            <Button variant="outline" size="icon" onClick={onRedo} disabled={!canRedo} aria-label="Redo">
               <Redo2 className="h-4 w-4" />
             </Button>
           </div>
           <TitleEditor title={title} onTitleChange={onTitleChange} />
-          <Button variant="ghost" size="sm" onClick={onSaveProject} disabled={isSavingProject}>
+          <Button variant="outline" size="sm" onClick={onSaveProject} disabled={isSavingProject}>
             <Save className="h-4 w-4 mr-2" />
             {isSavingProject ? "Saving…" : "Сохранить"}
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => {
+          <Button variant="outline" size="sm" onClick={() => {
             window.location.href = "https://www.presentonika.ru/cabinet"
           }}>
             Кабинет
