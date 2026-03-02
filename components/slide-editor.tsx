@@ -8,6 +8,12 @@ import { renderAdvancedShape } from "@/components/shapes/advanced-shapes"
 import TextElementView from "@/components/text-element-view"
 import { cn } from "@/lib/utils"
 import { ptToPx } from "@/lib/utils/units"
+import {
+  MAX_TEXT_FONT_SIZE_PT,
+  MIN_ELEMENT_HEIGHT,
+  MIN_ELEMENT_WIDTH,
+  MIN_TEXT_FONT_SIZE_PT,
+} from "@/lib/editor-constants"
 
 interface SlideEditorProps {
   slide: Slide
@@ -52,14 +58,20 @@ export default function SlideEditor({
   const [resizeDirection, setResizeDirection] = useState("")
   const editorRef = useRef<HTMLDivElement>(null)
   const [editingElementId, setEditingElementId] = useState<string | null>(null)
+  const resizeSessionRef = useRef<{
+    elementId: string
+    startX: number
+    startY: number
+    startWidth: number
+    startHeight: number
+    startFontSizePt: number
+    direction: string
+  } | null>(null)
   const RESIZE_DEBUG = false
 
   useEffect(() => {
     console.log("[ui] SlideEditor render slide=", slide.id, "elements=", slide.elements.length)
   }, [slide])
-  const MIN_ELEMENT_WIDTH = 50
-  const MIN_ELEMENT_HEIGHT = 20
-
   const getEditorScale = (rect: DOMRect) => {
     const scaleX = rect.width / slideSize.width
     const scaleY = rect.height / slideSize.height
@@ -99,6 +111,22 @@ export default function SlideEditor({
     return value
   }
 
+  const clampRectToSlide = (x: number, y: number, width: number, height: number) => {
+    const maxWidth = Math.max(MIN_ELEMENT_WIDTH, slideSize.width)
+    const maxHeight = Math.max(MIN_ELEMENT_HEIGHT, slideSize.height)
+    const clampedWidth = Math.min(Math.max(width, MIN_ELEMENT_WIDTH), maxWidth)
+    const clampedHeight = Math.min(Math.max(height, MIN_ELEMENT_HEIGHT), maxHeight)
+    const clampedX = Math.min(Math.max(x, 0), Math.max(0, slideSize.width - clampedWidth))
+    const clampedY = Math.min(Math.max(y, 0), Math.max(0, slideSize.height - clampedHeight))
+
+    return {
+      x: clampedX,
+      y: clampedY,
+      width: clampedWidth,
+      height: clampedHeight,
+    }
+  }
+
   const handleElementClick = (element: Element, e: React.MouseEvent) => {
     e.stopPropagation()
     if (element.style.locked) return
@@ -116,6 +144,7 @@ export default function SlideEditor({
   }
 
   const handleElementMouseDown = (element: Element, e: React.MouseEvent) => {
+    e.preventDefault()
     e.stopPropagation()
 
     if (element.style.locked) return
@@ -137,6 +166,7 @@ export default function SlideEditor({
   }
 
   const handleResizeMouseDown = (e: React.MouseEvent, element: Element, direction: string) => {
+    e.preventDefault()
     e.stopPropagation()
     if (element.style.locked) return
     onElementSelect(element)
@@ -144,6 +174,15 @@ export default function SlideEditor({
     setResizing(true)
     setResizeDirection(direction)
     setDraggingElement(element)
+    resizeSessionRef.current = {
+      elementId: element.id,
+      startX: element.position.x,
+      startY: element.position.y,
+      startWidth: element.size.width,
+      startHeight: element.size.height,
+      startFontSizePt: element.style.fontSizePt ?? 18,
+      direction,
+    }
   }
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -153,66 +192,92 @@ export default function SlideEditor({
     const pointer = getPointerPosition(e, editorRect)
 
     if (resizing && selectedElement) {
-      let newWidth = selectedElement.size.width
-      let newHeight = selectedElement.size.height
-      let newX = selectedElement.position.x
-      let newY = selectedElement.position.y
+      const session = resizeSessionRef.current
+      if (!session || session.elementId !== selectedElement.id) return
 
-      if (resizeDirection.includes("e")) {
-        newWidth = pointer.x - selectedElement.position.x
+      let newWidth = session.startWidth
+      let newHeight = session.startHeight
+      let newX = session.startX
+      let newY = session.startY
+
+      if (session.direction.includes("e")) {
+        newWidth = pointer.x - session.startX
       }
 
-      if (resizeDirection.includes("s")) {
-        newHeight = pointer.y - selectedElement.position.y
+      if (session.direction.includes("s")) {
+        newHeight = pointer.y - session.startY
       }
 
-      if (resizeDirection.includes("w")) {
-        newWidth = selectedElement.position.x + selectedElement.size.width - pointer.x
+      if (session.direction.includes("w")) {
+        newWidth = session.startX + session.startWidth - pointer.x
         newX = pointer.x
       }
 
-      if (resizeDirection.includes("n")) {
-        newHeight = selectedElement.position.y + selectedElement.size.height - pointer.y
+      if (session.direction.includes("n")) {
+        newHeight = session.startY + session.startHeight - pointer.y
         newY = pointer.y
       }
 
       const normalizedWidth = normalizeDimension(
         newWidth,
         MIN_ELEMENT_WIDTH,
-        selectedElement.size.width,
+        session.startWidth,
         "width",
       )
       const normalizedHeight = normalizeDimension(
         newHeight,
         MIN_ELEMENT_HEIGHT,
-        selectedElement.size.height,
+        session.startHeight,
         "height",
       )
 
-      if (resizeDirection.includes("w")) {
-        newX = selectedElement.position.x + selectedElement.size.width - normalizedWidth
+      if (session.direction.includes("w")) {
+        newX = session.startX + session.startWidth - normalizedWidth
       }
 
-      if (resizeDirection.includes("n")) {
-        newY = selectedElement.position.y + selectedElement.size.height - normalizedHeight
+      if (session.direction.includes("n")) {
+        newY = session.startY + session.startHeight - normalizedHeight
       }
 
-      newX = normalizePosition(newX, selectedElement.position.x, "x")
-      newY = normalizePosition(newY, selectedElement.position.y, "y")
+      newX = normalizePosition(newX, session.startX, "x")
+      newY = normalizePosition(newY, session.startY, "y")
+
+      const clamped = clampRectToSlide(newX, newY, normalizedWidth, normalizedHeight)
 
       const newSize = {
-        width: normalizedWidth,
-        height: normalizedHeight,
+        width: clamped.width,
+        height: clamped.height,
       }
       const newPosition = {
-        x: newX,
-        y: newY,
+        x: clamped.x,
+        y: clamped.y,
       }
+
+      const widthRatio = session.startWidth > 0 ? newSize.width / session.startWidth : 1
+      const heightRatio = session.startHeight > 0 ? newSize.height / session.startHeight : 1
+      let textScale = Math.sqrt(Math.max(0.0001, widthRatio * heightRatio))
+      if ((session.direction === "e" || session.direction === "w") && Number.isFinite(widthRatio)) {
+        textScale = widthRatio
+      }
+      if ((session.direction === "n" || session.direction === "s") && Number.isFinite(heightRatio)) {
+        textScale = heightRatio
+      }
+      const scaledFontSizePt = Math.max(
+        MIN_TEXT_FONT_SIZE_PT,
+        Math.min(MAX_TEXT_FONT_SIZE_PT, session.startFontSizePt * textScale),
+      )
 
       const updatedElement = {
         ...selectedElement,
         size: newSize,
         position: newPosition,
+        style:
+          selectedElement.type === "text"
+            ? {
+                ...selectedElement.style,
+                fontSizePt: Math.round(scaledFontSizePt * 10) / 10,
+              }
+            : selectedElement.style,
       }
 
       if (RESIZE_DEBUG) {
@@ -235,12 +300,13 @@ export default function SlideEditor({
     } else if (draggingElement) {
       const newX = pointer.x - dragOffset.x
       const newY = pointer.y - dragOffset.y
+      const clamped = clampRectToSlide(newX, newY, draggingElement.size.width, draggingElement.size.height)
 
       const updatedElement = {
         ...draggingElement,
         position: {
-          x: Math.max(0, Math.min(newX, slideSize.width - draggingElement.size.width)),
-          y: Math.max(0, Math.min(newY, slideSize.height - draggingElement.size.height)),
+          x: clamped.x,
+          y: clamped.y,
         },
       }
 
@@ -274,7 +340,21 @@ export default function SlideEditor({
     setDraggingElement(null)
     setResizing(false)
     setResizeDirection("")
+    resizeSessionRef.current = null
   }, [draggingElement, resizing, onTransformEnd])
+
+  useEffect(() => {
+    if (!(draggingElement || resizing)) return
+    const previousUserSelect = document.body.style.userSelect
+    const previousWebkitUserSelect = document.body.style.webkitUserSelect
+    document.body.style.userSelect = "none"
+    document.body.style.webkitUserSelect = "none"
+
+    return () => {
+      document.body.style.userSelect = previousUserSelect
+      document.body.style.webkitUserSelect = previousWebkitUserSelect
+    }
+  }, [draggingElement, resizing])
 
   const handleTextDoubleClick = (element: Element) => {
     if (element.type !== "text" || element.style.locked) return
@@ -715,35 +795,35 @@ export default function SlideEditor({
     return (
       <div className="absolute inset-0 pointer-events-none">
         <div
-          className="resize-handle absolute w-2 h-2 bg-primary border border-white rounded-full cursor-nw-resize -top-1 -left-1 z-10 pointer-events-auto"
+          className="resize-handle absolute w-5 h-5 -top-2.5 -left-2.5 z-10 pointer-events-auto cursor-nw-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "nw")}
         />
         <div
-          className="resize-handle absolute w-2 h-2 bg-primary border border-white rounded-full cursor-n-resize -top-1 left-1/2 -translate-x-1/2 z-10 pointer-events-auto"
+          className="resize-handle absolute w-5 h-5 -top-2.5 left-1/2 -translate-x-1/2 z-10 pointer-events-auto cursor-n-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "n")}
         />
         <div
-          className="resize-handle absolute w-2 h-2 bg-primary border border-white rounded-full cursor-ne-resize -top-1 -right-1 z-10 pointer-events-auto"
+          className="resize-handle absolute w-5 h-5 -top-2.5 -right-2.5 z-10 pointer-events-auto cursor-ne-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "ne")}
         />
         <div
-          className="resize-handle absolute w-2 h-2 bg-primary border border-white rounded-full cursor-e-resize top-1/2 -right-1 -translate-y-1/2 z-10 pointer-events-auto"
+          className="resize-handle absolute w-5 h-5 top-1/2 -right-2.5 -translate-y-1/2 z-10 pointer-events-auto cursor-e-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "e")}
         />
         <div
-          className="resize-handle absolute w-2 h-2 bg-primary border border-white rounded-full cursor-se-resize -bottom-1 -right-1 z-10 pointer-events-auto"
+          className="resize-handle absolute w-5 h-5 -bottom-2.5 -right-2.5 z-10 pointer-events-auto cursor-se-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "se")}
         />
         <div
-          className="resize-handle absolute w-2 h-2 bg-primary border border-white rounded-full cursor-s-resize -bottom-1 left-1/2 -translate-x-1/2 z-10 pointer-events-auto"
+          className="resize-handle absolute w-5 h-5 -bottom-2.5 left-1/2 -translate-x-1/2 z-10 pointer-events-auto cursor-s-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "s")}
         />
         <div
-          className="resize-handle absolute w-2 h-2 bg-primary border border-white rounded-full cursor-sw-resize -bottom-1 -left-1 z-10 pointer-events-auto"
+          className="resize-handle absolute w-5 h-5 -bottom-2.5 -left-2.5 z-10 pointer-events-auto cursor-sw-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "sw")}
         />
         <div
-          className="resize-handle absolute w-2 h-2 bg-primary border border-white rounded-full cursor-w-resize top-1/2 -left-1 -translate-y-1/2 z-10 pointer-events-auto"
+          className="resize-handle absolute w-5 h-5 top-1/2 -left-2.5 -translate-y-1/2 z-10 pointer-events-auto cursor-w-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "w")}
         />
       </div>

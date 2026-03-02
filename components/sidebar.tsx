@@ -1,6 +1,7 @@
 "use client"
 
 import type { CSSProperties } from "react"
+import { useState } from "react"
 import type { Slide } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from "lucide-react"
@@ -16,6 +17,7 @@ interface SidebarProps {
   onDuplicateSlide: (index: number) => void
   onMoveSlideUp: (index: number) => void
   onMoveSlideDown: (index: number) => void
+  onReorderSlides?: (fromIndex: number, toIndex: number) => void
   slideSize: { width: number; height: number }
 }
 
@@ -28,15 +30,62 @@ export default function Sidebar({
   onDuplicateSlide,
   onMoveSlideUp,
   onMoveSlideDown,
+  onReorderSlides,
   slideSize,
 }: SidebarProps) {
   const thumbnailWidth = 192
   const thumbnailHeight = 108
   const DEBUG_THUMBNAIL = false
+  const [draggingSlideIndex, setDraggingSlideIndex] = useState<number | null>(null)
+  const [dropIndicatorIndex, setDropIndicatorIndex] = useState<number | null>(null)
 
   const getFitScale = (containerWidth: number, containerHeight: number, slideWidth: number, slideHeight: number) => {
     if (slideWidth <= 0 || slideHeight <= 0) return 1
     return Math.min(containerWidth / slideWidth, containerHeight / slideHeight)
+  }
+
+  const handleDragStart = (index: number, event: React.DragEvent<HTMLDivElement>) => {
+    event.dataTransfer.effectAllowed = "move"
+    event.dataTransfer.setData("text/plain", String(index))
+    setDraggingSlideIndex(index)
+    setDropIndicatorIndex(index)
+  }
+
+  const handleDragOver = (index: number, event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "move"
+    if (draggingSlideIndex === null) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    const before = event.clientY < rect.top + rect.height / 2
+    const dropIndex = before ? index : index + 1
+    setDropIndicatorIndex(dropIndex)
+  }
+
+  const handleDrop = (index: number, event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const from = draggingSlideIndex
+    setDraggingSlideIndex(null)
+
+    if (from === null || !onReorderSlides) {
+      setDropIndicatorIndex(null)
+      return
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect()
+    const before = event.clientY < rect.top + rect.height / 2
+    let to = before ? index : index + 1
+    if (to > from) to -= 1
+
+    if (to >= 0 && to < slides.length && to !== from) {
+      onReorderSlides(from, to)
+    }
+
+    setDropIndicatorIndex(null)
+  }
+
+  const handleDragEnd = () => {
+    setDraggingSlideIndex(null)
+    setDropIndicatorIndex(null)
   }
 
   const renderShapePreview = (element: Slide["elements"][number]) => {
@@ -129,10 +178,11 @@ export default function Sidebar({
     const trimmed = value.trim()
     const urlMatch = trimmed.match(/^url\((.*)\)$/i)
     if (urlMatch) {
-      return urlMatch[1].trim().replace(/^['"]|['"]$/g, "")
+      return urlMatch[1].trim().replace(/^["']|["']$/g, "")
     }
     return trimmed
   }
+
   const renderSlidePreview = (slide: Slide, index: number) => {
     const scale = getFitScale(thumbnailWidth, thumbnailHeight, slideSize.width, slideSize.height)
     const isCurrent = index === currentSlideIndex
@@ -148,216 +198,234 @@ export default function Sidebar({
     }
 
     return (
-      <div
-        key={slide.id}
-        className={cn(
-          "relative border rounded-md overflow-hidden cursor-pointer transition-all mb-3 group",
-          isCurrent ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-primary/50",
+      <div key={slide.id} className="relative">
+        {dropIndicatorIndex === index && draggingSlideIndex !== null && (
+          <div className="absolute -top-1 left-0 right-0 h-1 rounded bg-primary" aria-hidden="true" />
         )}
-        style={{
-          width: thumbnailWidth,
-          height: thumbnailHeight,
-        }}
-        onClick={() => onSlideSelect(index)}
-      >
-        {isCurrent && (
-          <div className="absolute left-1 top-1 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-            <button
-              type="button"
-              className={cn(
-                "rounded-full bg-background/90 p-1 text-foreground shadow-sm",
-                index === 0 && "cursor-not-allowed opacity-50",
-              )}
-              onClick={(event) => {
-                event.stopPropagation()
-                onMoveSlideUp(index)
-              }}
-              disabled={index === 0}
-              aria-label="Переместить слайд вверх"
-              title="Переместить слайд вверх"
-            >
-              <ArrowUp className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              className={cn(
-                "rounded-full bg-background/90 p-1 text-foreground shadow-sm",
-                index === slides.length - 1 && "cursor-not-allowed opacity-50",
-              )}
-              onClick={(event) => {
-                event.stopPropagation()
-                onMoveSlideDown(index)
-              }}
-              disabled={index === slides.length - 1}
-              aria-label="Переместить слайд вниз"
-              title="Переместить слайд вниз"
-            >
-              <ArrowDown className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              className="rounded-full bg-background/90 p-1 text-foreground shadow-sm"
-              onClick={(event) => {
-                event.stopPropagation()
-                onDuplicateSlide(index)
-              }}
-              aria-label="Дублировать слайд"
-              title="Дублировать слайд"
-            >
-              <Copy className="h-3 w-3" />
-            </button>
-          </div>
-        )}
-        <button
-          type="button"
+        <div
           className={cn(
-            "absolute right-1 top-1 z-10 rounded-full bg-background/90 p-1 text-foreground shadow-sm opacity-0 transition-opacity group-hover:opacity-100",
-            slides.length === 1 && "cursor-not-allowed opacity-50",
+            "relative border rounded-md overflow-hidden cursor-pointer transition-all mb-3 group select-none",
+            isCurrent ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-primary/50",
+            draggingSlideIndex === index && "opacity-40",
           )}
-          onClick={(event) => {
-            event.stopPropagation()
-            onRemoveSlide(index)
+          style={{
+            width: thumbnailWidth,
+            height: thumbnailHeight,
           }}
-          disabled={slides.length === 1}
-          aria-label="Удалить слайд"
-          title="Удалить слайд"
+          onClick={() => onSlideSelect(index)}
+          draggable
+          onDragStart={(event) => handleDragStart(index, event)}
+          onDragOver={(event) => handleDragOver(index, event)}
+          onDrop={(event) => handleDrop(index, event)}
+          onDragEnd={handleDragEnd}
         >
-          <Trash2 className="h-3 w-3" />
-        </button>
-        <div className="absolute inset-0">
-          <div
-            style={{
-              position: "absolute",
-              left: "50%",
-              top: "50%",
-              width: slideSize.width,
-              height: slideSize.height,
-              transform: `translate(-50%, -50%) scale(${scale})`,
-              transformOrigin: "center center",
-              border: DEBUG_THUMBNAIL ? "1px dashed rgba(255,255,255,0.6)" : undefined,
+          {isCurrent && (
+            <div className="absolute left-1 top-1 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <button
+                type="button"
+                className={cn(
+                  "rounded-full bg-background/90 p-1 text-foreground shadow-sm",
+                  index === 0 && "cursor-not-allowed opacity-50",
+                )}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onMoveSlideUp(index)
+                }}
+                disabled={index === 0}
+                aria-label="Переместить слайд вверх"
+                title="Переместить слайд вверх"
+              >
+                <ArrowUp className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "rounded-full bg-background/90 p-1 text-foreground shadow-sm",
+                  index === slides.length - 1 && "cursor-not-allowed opacity-50",
+                )}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onMoveSlideDown(index)
+                }}
+                disabled={index === slides.length - 1}
+                aria-label="Переместить слайд вниз"
+                title="Переместить слайд вниз"
+              >
+                <ArrowDown className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                className="rounded-full bg-background/90 p-1 text-foreground shadow-sm"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onDuplicateSlide(index)
+                }}
+                aria-label="Дублировать слайд"
+                title="Дублировать слайд"
+              >
+                <Copy className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+          <button
+            type="button"
+            className={cn(
+              "absolute right-1 top-1 z-10 rounded-full bg-background/90 p-1 text-foreground shadow-sm opacity-0 transition-opacity group-hover:opacity-100",
+              slides.length === 1 && "cursor-not-allowed opacity-50",
+            )}
+            onClick={(event) => {
+              event.stopPropagation()
+              onRemoveSlide(index)
             }}
+            disabled={slides.length === 1}
+            aria-label="Удалить слайд"
+            title="Удалить слайд"
           >
+            <Trash2 className="h-3 w-3" />
+          </button>
+          <div className="absolute inset-0 pointer-events-none select-none">
             <div
               style={{
-                position: "relative",
-                width: "100%",
-                height: "100%",
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                width: slideSize.width,
+                height: slideSize.height,
+                transform: `translate(-50%, -50%) scale(${scale})`,
+                transformOrigin: "center center",
+                border: DEBUG_THUMBNAIL ? "1px dashed rgba(255,255,255,0.6)" : undefined,
               }}
             >
               <div
                 style={{
-                  position: "absolute",
-                  inset: 0,
+                  position: "relative",
                   width: "100%",
                   height: "100%",
-                  zIndex: 0,
-                  overflow: "hidden",
-                  background:
-                    slide.background.type === "image" ? "transparent" : slide.background.value,
                 }}
               >
-                {slide.background.type === "image" && (
-                  <img
-                    src={resolveBackgroundImage(slide.background.value)}
-                    alt=""
-                    draggable={false}
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      objectPosition: "center",
-                      display: "block",
-                    }}
-                  />
-                )}
-              </div>
-              {slide.elements.map((element) => {
-                if (element.type === "text") {
-                  return (
-                    <div
-                      key={element.id}
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    zIndex: 0,
+                    overflow: "hidden",
+                    background: slide.background.type === "image" ? "transparent" : slide.background.value,
+                  }}
+                >
+                  {slide.background.type === "image" && (
+                    <img
+                      src={resolveBackgroundImage(slide.background.value)}
+                      alt=""
+                      draggable={false}
                       style={{
                         position: "absolute",
-                        left: element.position.x,
-                        top: element.position.y,
-                        width: element.size.width,
-                        height: element.size.height,
-                        fontSize: `${ptToPx(element.style.fontSizePt ?? 18)}px`,
-                        fontFamily: element.style.fontFamily,
-                        fontWeight: element.style.fontWeight,
-                        color: element.style.color,
-                        textAlign: element.style.textAlign as CSSProperties["textAlign"],
-                        lineHeight:
-                          element.style.lineHeight !== undefined ? String(element.style.lineHeight) : "normal",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        objectPosition: "center",
                         display: "block",
-                        minWidth: 0,
-                        minHeight: 0,
-                        overflow: "hidden",
-                        zIndex: 1,
-                      }}
-                    >
-                      {element.content}
-                    </div>
-                  )
-                }
-                if (element.type === "image") {
-                  return (
-                    <div
-                      key={element.id}
-                      style={{
-                        position: "absolute",
-                        left: element.position.x,
-                        top: element.position.y,
-                        width: element.size.width,
-                        height: element.size.height,
-                        backgroundImage: `url(${element.content})`,
-                        backgroundSize: "cover",
-                        backgroundPosition: "center",
-                        zIndex: 1,
                       }}
                     />
-                  )
-                }
-                if (element.type === "shape") {
-                  return (
-                    <div
-                      key={element.id}
-                      style={{
-                        position: "absolute",
-                        left: element.position.x,
-                        top: element.position.y,
-                        width: element.size.width,
-                        height: element.size.height,
-                        opacity: element.style.opacity,
-                        transform: element.style.rotation ? `rotate(${element.style.rotation}deg)` : undefined,
-                        zIndex: 1,
-                      }}
-                    >
-                      {renderShapePreview(element)}
-                    </div>
-                  )
-                }
-                return null
-              })}
+                  )}
+                </div>
+                {slide.elements.map((element) => {
+                  if (element.type === "text") {
+                    return (
+                      <div
+                        key={element.id}
+                        style={{
+                          position: "absolute",
+                          left: element.position.x,
+                          top: element.position.y,
+                          width: element.size.width,
+                          height: element.size.height,
+                          fontSize: `${ptToPx(element.style.fontSizePt ?? 18)}px`,
+                          fontFamily: element.style.fontFamily,
+                          fontWeight: element.style.fontWeight,
+                          color: element.style.color,
+                          textAlign: element.style.textAlign as CSSProperties["textAlign"],
+                          lineHeight: element.style.lineHeight !== undefined ? String(element.style.lineHeight) : "normal",
+                          display: "block",
+                          minWidth: 0,
+                          minHeight: 0,
+                          overflow: "hidden",
+                          zIndex: 1,
+                          pointerEvents: "none",
+                          userSelect: "none",
+                          WebkitUserSelect: "none",
+                        }}
+                      >
+                        {element.content}
+                      </div>
+                    )
+                  }
+                  if (element.type === "image") {
+                    return (
+                      <div
+                        key={element.id}
+                        style={{
+                          position: "absolute",
+                          left: element.position.x,
+                          top: element.position.y,
+                          width: element.size.width,
+                          height: element.size.height,
+                          backgroundImage: `url(${element.content})`,
+                          backgroundSize: "cover",
+                          backgroundPosition: "center",
+                          zIndex: 1,
+                          pointerEvents: "none",
+                        }}
+                      />
+                    )
+                  }
+                  if (element.type === "shape") {
+                    return (
+                      <div
+                        key={element.id}
+                        style={{
+                          position: "absolute",
+                          left: element.position.x,
+                          top: element.position.y,
+                          width: element.size.width,
+                          height: element.size.height,
+                          opacity: element.style.opacity,
+                          transform: element.style.rotation ? `rotate(${element.style.rotation}deg)` : undefined,
+                          zIndex: 1,
+                          pointerEvents: "none",
+                        }}
+                      >
+                        {renderShapePreview(element)}
+                      </div>
+                    )
+                  }
+                  return null
+                })}
+              </div>
             </div>
           </div>
+          <div className="absolute bottom-1 left-1 text-xs text-white bg-black/50 px-1 rounded">{index + 1}</div>
         </div>
-        <div className="absolute bottom-1 left-1 text-xs text-white bg-black/50 px-1 rounded">{index + 1}</div>
       </div>
     )
   }
 
   return (
-    <div className="w-56 border-r bg-background flex flex-col h-full">
+    <div className="w-56 border-r bg-background flex flex-col h-full overflow-x-hidden">
       <div className="p-3 border-b">
         <Button onClick={onAddSlide} variant="outline" className="w-full">
           <Plus className="h-4 w-4 mr-2" />
           Добавить слайд
         </Button>
       </div>
-      <div className="flex-1 overflow-y-auto p-3">{slides.map((slide, index) => renderSlidePreview(slide, index))}</div>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3">
+        {slides.map((slide, index) => renderSlidePreview(slide, index))}
+        {dropIndicatorIndex === slides.length && draggingSlideIndex !== null && (
+          <div className="h-1 rounded bg-primary" aria-hidden="true" />
+        )}
+      </div>
     </div>
   )
 }

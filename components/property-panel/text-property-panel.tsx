@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo, useState } from "react"
 import type { Element } from "@/lib/types"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,9 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { normalizeFontFamily } from "@/lib/text-style"
+import { MAX_TEXT_FONT_SIZE_PT, MIN_TEXT_FONT_SIZE_PT } from "@/lib/editor-constants"
 
 interface TextPropertyPanelProps {
   element: Element
@@ -23,8 +26,31 @@ interface TextPropertyPanelProps {
 
 const baseFontFamilies = ["Times New Roman", "Arial", "Georgia", "Verdana", "Courier New"]
 const seenFontFamilies = new Set(baseFontFamilies)
+const PRESET_COLORS = [
+  "#000000",
+  "#111827",
+  "#374151",
+  "#6b7280",
+  "#ffffff",
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#06b6d4",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899",
+  "#7c2d12",
+  "#14532d",
+  "#1e3a8a",
+]
 
-export default function TextPropertyPanel({ element, onUpdateElement }: TextPropertyPanelProps) {
+export default function TextPropertyPanel({
+  element,
+  onUpdateElement,
+}: TextPropertyPanelProps) {
+  const [colorDraft, setColorDraft] = useState(element.style.color || "#000000")
+
   const updateStyle = <K extends keyof Element["style"]>(property: K, value: Element["style"][K]) => {
     onUpdateElement({
       ...element,
@@ -44,13 +70,22 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
     seenFontFamilies.add(normalizedFontFamily)
   }
   const availableFontFamilies = Array.from(seenFontFamilies).filter(
-    (font): font is string => typeof font === "string" && font.trim().length > 0
+    (font): font is string => typeof font === "string" && font.trim().length > 0,
   )
   const selectedFontSizePt = element.style.fontSizePt ?? 18
 
   const clampFontSize = (value: number) => {
-    const clamped = Math.min(200, Math.max(6, value))
+    const clamped = Math.min(MAX_TEXT_FONT_SIZE_PT, Math.max(MIN_TEXT_FONT_SIZE_PT, value))
     return Math.round(clamped * 2) / 2
+  }
+
+  const currentColor = useMemo(() => element.style.color || "#000000", [element.style.color])
+
+  const applyColor = (nextColor: string) => {
+    const normalized = nextColor.trim()
+    if (!normalized) return
+    updateStyle("color", normalized)
+    setColorDraft(normalized)
   }
 
   return (
@@ -75,8 +110,8 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
         <div className="flex items-center mt-1 space-x-2">
           <Slider
             id="fontSize"
-            min={6}
-            max={200}
+            min={MIN_TEXT_FONT_SIZE_PT}
+            max={MAX_TEXT_FONT_SIZE_PT}
             step={0.5}
             value={[selectedFontSizePt]}
             onValueChange={(value) => updateStyle("fontSizePt", clampFontSize(value[0]))}
@@ -87,8 +122,8 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
             value={selectedFontSizePt}
             onChange={(e) => updateStyle("fontSizePt", clampFontSize(Number(e.target.value)))}
             className="w-16"
-            min={6}
-            max={200}
+            min={MIN_TEXT_FONT_SIZE_PT}
+            max={MAX_TEXT_FONT_SIZE_PT}
             step={0.5}
           />
         </div>
@@ -158,21 +193,46 @@ export default function TextPropertyPanel({ element, onUpdateElement }: TextProp
 
       <div>
         <Label htmlFor="color">Цвет текста</Label>
-        <div className="flex items-center mt-1 space-x-2">
-          <Input
-            id="color"
-            type="color"
-            value={element.style.color || "#000000"}
-            onChange={(e) => updateStyle("color", e.target.value)}
-            className="w-10 h-10 p-1"
-          />
-          <Input
-            type="text"
-            value={element.style.color || "#000000"}
-            onChange={(e) => updateStyle("color", e.target.value)}
-            className="flex-1"
-          />
-        </div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="mt-1 w-full justify-start gap-2">
+              <span className="inline-block h-4 w-4 rounded border" style={{ backgroundColor: currentColor }} />
+              <span>{currentColor}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 space-y-3" align="start">
+            <div className="grid grid-cols-8 gap-2">
+              {PRESET_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className={cn(
+                    "h-6 w-6 rounded border transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary",
+                    currentColor.toLowerCase() === color.toLowerCase() && "ring-2 ring-primary",
+                  )}
+                  style={{ backgroundColor: color }}
+                  onClick={() => applyColor(color)}
+                  aria-label={`Выбрать цвет ${color}`}
+                />
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                id="color"
+                type="text"
+                value={colorDraft}
+                onChange={(e) => setColorDraft(e.target.value)}
+                onBlur={() => applyColor(colorDraft)}
+              />
+              <Input
+                type="color"
+                value={currentColor}
+                onChange={(e) => applyColor(e.target.value)}
+                className="h-10 w-12 p-1"
+              />
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div>

@@ -1738,6 +1738,30 @@ export default function Home() {
                   onDuplicateSlide={duplicateSlide}
                   onMoveSlideUp={(index) => moveSlide(index, "up")}
                   onMoveSlideDown={(index) => moveSlide(index, "down")}
+                  onReorderSlides={(fromIndex, toIndex) => {
+                    if (fromIndex === toIndex) return
+                    if (fromIndex < 0 || fromIndex >= slides.length) return
+                    if (toIndex < 0 || toIndex >= slides.length) return
+
+                    const nextSlides = [...slides]
+                    const [movedSlide] = nextSlides.splice(fromIndex, 1)
+                    nextSlides.splice(toIndex, 0, movedSlide)
+
+                    const activeSlideId = slides[currentSlideIndex]?.id
+                    const nextCurrentIndex = Math.max(
+                      0,
+                      nextSlides.findIndex((slide) => slide.id === activeSlideId),
+                    )
+
+                    commit(
+                      {
+                        slides: nextSlides,
+                        currentSlideIndex: nextCurrentIndex,
+                        selectedElementId: null,
+                      },
+                      { type: "slide", reason: "reorder" },
+                    )
+                  }}
                 />
               }
               editor={

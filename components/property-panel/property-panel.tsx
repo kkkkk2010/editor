@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import TextPropertyPanel from "./text-property-panel"
 import ShapePropertyPanel from "./shape-property-panel"
 import ImagePropertyPanel from "./image-property-panel"
+import LayerPropertyPanel from "./layer-property-panel"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -51,6 +52,10 @@ export default function PropertyPanel({
   hasPlaceholderReplacement,
   onInsertPlaceholderImage,
   onResetPlaceholderImage,
+  onMoveElementForward,
+  onMoveElementBackward,
+  onMoveElementToFront,
+  onMoveElementToBack,
 }: PropertyPanelProps) {
   useEffect(() => {
     console.log("[ui] PropertyPanel render selected=", selectedElement?.id ?? null)
@@ -109,6 +114,18 @@ export default function PropertyPanel({
               onUpdateElement={onUpdateElement}
               onReplaceImage={onReplaceImage}
             />
+          )}
+          {currentSlide && (
+            <div className="mt-6 pt-4 border-t">
+              <LayerPropertyPanel
+                element={selectedElement}
+                currentSlide={currentSlide}
+                onMoveElementForward={onMoveElementForward}
+                onMoveElementBackward={onMoveElementBackward}
+                onMoveElementToFront={onMoveElementToFront}
+                onMoveElementToBack={onMoveElementToBack}
+              />
+            </div>
           )}
         </div>
       </ScrollArea>
