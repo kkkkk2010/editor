@@ -4,13 +4,15 @@ const DEFAULT_COUNT = 6
 const MAX_COUNT = 12
 const IMAGE_WIDTH = 1200
 const IMAGE_HEIGHT = 800
-const MAX_REDIRECTS = 5
-const RESOLVE_TIMEOUT_MS = 2_500
-const RESOLVE_CONCURRENCY = 3
 
-function isDev() {
-  return process.env.NODE_ENV !== "production"
-}
+const MOCK_IMAGES = [
+  { path: "/mock-images/hero1.jpg", contentType: "image/jpeg" },
+  { path: "/mock-images/hero2.jpg", contentType: "image/jpeg" },
+  { path: "/mock-images/photo1.jpg", contentType: "image/jpeg" },
+  { path: "/mock-images/photo2.jpg", contentType: "image/jpeg" },
+  { path: "/mock-images/icon1.png", contentType: "image/png" },
+  { path: "/mock-images/icon2.png", contentType: "image/png" },
+] as const
 
 function hashString(input: string) {
   let hash = 2166136261
@@ -24,105 +26,12 @@ function hashString(input: string) {
 function buildMockImageMeta(query: string, index: number) {
   const seed = `${query}:${index}`
   const hash = hashString(seed)
-  const imageId = (hash % 1084) + 1
-  return {
-    id: `${query}-${imageId}-${index + 1}`,
-    imageId,
-  }
-}
-
-function isAllowedPicsumHost(hostname: string) {
-  const host = hostname.toLowerCase()
-  return host === "picsum.photos" || host.endsWith(".picsum.photos")
-}
-
-type ResolveResult = {
-  imageUrl: string
-  finalHost: string
-  redirectCount: number
-}
-
-async function resolvePicsumFinalUrl(startUrl: string): Promise<ResolveResult> {
-  let currentUrl = new URL(startUrl)
-  let redirectCount = 0
-
-  if (!isAllowedPicsumHost(currentUrl.hostname)) {
-    return {
-      imageUrl: startUrl,
-      finalHost: currentUrl.hostname,
-      redirectCount,
-    }
-  }
-
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), RESOLVE_TIMEOUT_MS)
-
-  try {
-    for (let step = 0; step <= MAX_REDIRECTS; step += 1) {
-      const response = await fetch(currentUrl.toString(), {
-        method: "GET",
-        redirect: "manual",
-        cache: "no-store",
-        signal: controller.signal,
-      })
-
-      if ([301, 302, 303, 307, 308].includes(response.status)) {
-        const location = response.headers.get("location")
-        if (!location) break
-
-        const nextUrl = new URL(location, currentUrl)
-        if (!isAllowedPicsumHost(nextUrl.hostname)) {
-          return {
-            imageUrl: startUrl,
-            finalHost: nextUrl.hostname,
-            redirectCount,
-          }
-        }
-
-        currentUrl = nextUrl
-        redirectCount += 1
-        continue
-      }
-
-      if (response.status === 200) {
-        return {
-          imageUrl: currentUrl.toString(),
-          finalHost: currentUrl.hostname,
-          redirectCount,
-        }
-      }
-
-      break
-    }
-  } catch {
-    // fallback below
-  } finally {
-    clearTimeout(timer)
-  }
+  const image = MOCK_IMAGES[hash % MOCK_IMAGES.length]
 
   return {
-    imageUrl: startUrl,
-    finalHost: currentUrl.hostname,
-    redirectCount,
+    id: `${query}-${hash}-${index + 1}`,
+    image,
   }
-}
-
-async function mapWithConcurrency<T, R>(items: T[], concurrency: number, mapper: (item: T, index: number) => Promise<R>) {
-  const results = new Array<R>(items.length)
-  let cursor = 0
-
-  async function worker() {
-    while (true) {
-      const index = cursor
-      cursor += 1
-      if (index >= items.length) break
-      results[index] = await mapper(items[index], index)
-    }
-  }
-
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker())
-  await Promise.all(workers)
-  return results
 }
 
 export async function POST(request: Request) {
@@ -140,33 +49,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, results: [] })
   }
 
-  const encoded = encodeURIComponent(query)
   const metas = Array.from({ length: count }, (_, index) => buildMockImageMeta(query, index))
-
-  const results = await mapWithConcurrency(metas, RESOLVE_CONCURRENCY, async ({ id, imageId }, index) => {
-    const picsumImageUrl = `https://picsum.photos/id/${imageId}/${IMAGE_WIDTH}/${IMAGE_HEIGHT}`
-    const resolved = await resolvePicsumFinalUrl(picsumImageUrl)
-
-    return {
-      id,
-      thumbUrl: `https://via.placeholder.com/300?text=${encoded}-${index + 1}`,
-      pageUrl: `https://picsum.photos/id/${imageId}`,
-      imageUrl: resolved.imageUrl,
+  const results = metas.map(({ id, image }) => ({
+    id,
+    thumbUrl: image.path,
+    pageUrl: "https://picsum.photos/",
+    imageUrl: image.path,
+    width: IMAGE_WIDTH,
+    height: IMAGE_HEIGHT,
+    dimensions: {
       width: IMAGE_WIDTH,
       height: IMAGE_HEIGHT,
-      source: "mock",
-      licenseLabel: "Demo license",
-      licenseUrl: "https://example.com/license",
-      ...(isDev()
-        ? {
-            debug: {
-              finalHost: resolved.finalHost,
-              redirectCount: resolved.redirectCount,
-            },
-          }
-        : {}),
-    }
-  })
+    },
+    contentType: image.contentType,
+    source: "mock",
+    licenseLabel: "Demo license",
+    licenseUrl: "https://example.com/license",
+  }))
 
   return NextResponse.json({ results })
 }

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
+import fs from "node:fs/promises"
 import net from "node:net"
+import path from "node:path"
 
 const DEFAULT_MAX_IMAGE_BYTES = 8 * 1024 * 1024
 const DEFAULT_TIMEOUT_MS = 12_000
@@ -132,6 +134,20 @@ function validateUrl(rawUrl: string, allowedHosts: string[]) {
   return parsed
 }
 
+function detectLocalContentType(imageUrl: string) {
+  const extension = path.extname(imageUrl).toLowerCase()
+  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg"
+  if (extension === ".png") return "image/png"
+  if (extension === ".webp") return "image/webp"
+  return null
+}
+
+function isAllowedRelativePath(imageUrl: string) {
+  if (!imageUrl.startsWith("/mock-images/")) return false
+  if (imageUrl.includes("..") || imageUrl.includes("\\")) return false
+  return true
+}
+
 function errorResponse(message: string, status: number, debug?: DebugPayload) {
   return NextResponse.json(
     {
@@ -185,6 +201,48 @@ export async function POST(request: Request) {
         stage: "validate",
         redirects,
         errorMessage: "Missing image URL",
+      })
+    }
+
+    if (normalized.startsWith("/")) {
+      if (!isAllowedRelativePath(normalized)) {
+        return errorResponse("Blocked imageUrl", 400, {
+          stage: "validate",
+          redirects,
+          finalUrl: normalized,
+          errorMessage: "Only /mock-images/* relative URLs are allowed",
+        })
+      }
+
+      const contentType = detectLocalContentType(normalized)
+      if (!contentType || !ALLOWED_TYPES.has(contentType)) {
+        return errorResponse("Unsupported content type", 400, {
+          stage: "mime",
+          redirects,
+          finalUrl: normalized,
+        })
+      }
+
+      const localPath = path.join(process.cwd(), "public", normalized)
+      const bytes = await fs.readFile(localPath)
+      const maxBytes = getMaxBytes()
+
+      if (bytes.byteLength > maxBytes) {
+        return errorResponse("Image too large", 400, {
+          stage: "size",
+          redirects,
+          contentType,
+          finalUrl: normalized,
+          errorMessage: `bytes=${bytes.byteLength}`,
+        })
+      }
+
+      return NextResponse.json({
+        ok: true,
+        bytesBase64: Buffer.from(bytes).toString("base64"),
+        contentType,
+        finalUrl: `local:${normalized}`,
+        bytes: bytes.byteLength,
       })
     }
 
