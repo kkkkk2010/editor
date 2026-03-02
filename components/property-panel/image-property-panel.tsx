@@ -284,7 +284,11 @@ export default function ImagePropertyPanel({
   }
 
   return (
-    <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value === "search" ? "search" : "edit")}>
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => setActiveTab(value === "search" ? "search" : "edit")}
+      className="w-full min-w-0"
+    >
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="edit" className="w-full min-w-0 px-2 text-xs sm:text-sm">Свойства</TabsTrigger>
         <TabsTrigger value="search" className="w-full min-w-0 px-2 text-xs sm:text-sm">Подобрать</TabsTrigger>
@@ -294,10 +298,10 @@ export default function ImagePropertyPanel({
         {renderEditPanel()}
       </TabsContent>
 
-      <TabsContent value="search" className="mt-4 space-y-4">
+      <TabsContent value="search" className="mt-4 w-full min-w-0 space-y-4">
         <div>
-          <h4 className="text-sm font-medium">Изображение для: {slot.slotId}</h4>
-          {slot.hint ? <p className="text-xs text-muted-foreground mt-1">{slot.hint}</p> : null}
+          <h4 className="break-all text-sm font-medium">Изображение для: {slot.slotId}</h4>
+          {slot.hint ? <p className="mt-1 break-words text-xs text-muted-foreground">{slot.hint}</p> : null}
         </div>
 
         <div className="space-y-2">
@@ -325,7 +329,7 @@ export default function ImagePropertyPanel({
           {isSearching ? "Поиск..." : "Искать"}
         </Button>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {results.map((item) => (
             <button
               key={item.id}
@@ -338,7 +342,7 @@ export default function ImagePropertyPanel({
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" disabled={!selectedResult} onClick={() => {
             if (!selectedResult) return
             window.open(selectedResult.pageUrl, "_blank", "noopener,noreferrer")
