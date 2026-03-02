@@ -46,6 +46,33 @@ A PPT online editor based on the web terminal ｜ 一款基于web端的ppt在线
    - элементы не смещаются из-за потери lineHeight/letterSpacing.
 
 
+
+## Manual test: mock images offline
+
+1. Запустите проект (`npm run dev`).
+2. Выполните поиск мок-изображений:
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/images/search \
+     -H "Content-Type: application/json" \
+     -d '{"query":"hero"}'
+   ```
+
+   Убедитесь, что в `results[*].imageUrl` и `results[*].thumbUrl` приходят относительные пути вида `/mock-images/hero1.jpg`.
+
+3. Проверьте fetch оффлайн (без внешних источников):
+
+   ```bash
+   curl -i -X POST http://localhost:3000/api/images/fetch \
+     -H "Content-Type: application/json" \
+     -d '{"imageUrl":"/mock-images/hero1.jpg"}'
+   ```
+
+   Ожидается `200` и `ok:true` с полями `bytesBase64`, `contentType`, `finalUrl`, `bytes`.
+
+4. Вставьте изображение в редакторе и выполните экспорт `out.zip`.
+5. Проверьте, что ZIP содержит заменённые bytes изображений и `imageCredits.json`.
+
 ## Docker (production)
 
 ### 1) Сборка production-образа Editor
