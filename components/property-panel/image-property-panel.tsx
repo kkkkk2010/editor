@@ -286,8 +286,8 @@ export default function ImagePropertyPanel({
   return (
     <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value === "search" ? "search" : "edit")}>
       <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="edit">Свойства</TabsTrigger>
-        <TabsTrigger value="search">Подобрать</TabsTrigger>
+        <TabsTrigger value="edit" className="w-full min-w-0 px-2 text-xs sm:text-sm">Свойства</TabsTrigger>
+        <TabsTrigger value="search" className="w-full min-w-0 px-2 text-xs sm:text-sm">Подобрать</TabsTrigger>
       </TabsList>
 
       <TabsContent value="edit" className="mt-4">

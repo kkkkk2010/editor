@@ -151,7 +151,7 @@ export default function Toolbar({
             <Save className="h-4 w-4 mr-2" />
             {isSavingProject ? "Saving…" : "Сохранить"}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => {
+          <Button variant="outline" size="sm" className="ml-2" onClick={() => {
             window.location.href = "https://www.presentonika.ru/cabinet"
           }}>
             Кабинет
