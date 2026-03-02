@@ -7,7 +7,7 @@ const MAX_REDIRECTS = 5
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/svg+xml"])
 
 type DebugPayload = {
-  stage: "validate" | "redirect" | "fetch" | "mime" | "size"
+  stage: "validate" | "redirect" | "redirect_host_not_allowed" | "fetch" | "mime" | "size"
   status?: number
   contentType?: string
   finalUrl?: string
@@ -42,6 +42,28 @@ function getAllowedHosts() {
     .filter(Boolean)
 }
 
+function isHostAllowed(hostname: string, allowedHosts: string[]) {
+  if (allowedHosts.length === 0) return true
+  return allowedHosts.some((rule) => {
+    if (rule.startsWith(".")) {
+      const root = rule.slice(1)
+      return hostname === root || hostname.endsWith(rule)
+    }
+    return hostname === rule
+  })
+}
+
+class UrlValidationError extends Error {
+  code: "invalid_url" | "blocked_host" | "allowlist_not_allowed"
+  host?: string
+
+  constructor(message: string, code: "invalid_url" | "blocked_host" | "allowlist_not_allowed", host?: string) {
+    super(message)
+    this.code = code
+    this.host = host
+  }
+}
+
 function isPrivateIpLiteral(hostname: string) {
   if (net.isIPv4(hostname)) {
     const parts = hostname.split(".").map((part) => Number.parseInt(part, 10))
@@ -70,32 +92,32 @@ function validateUrl(rawUrl: string, allowedHosts: string[]) {
   try {
     parsed = new URL(rawUrl)
   } catch {
-    throw new Error("Invalid URL")
+    throw new UrlValidationError("Invalid URL", "invalid_url")
   }
 
   if (!parsed.protocol || !["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error("Only http/https URLs are allowed")
+    throw new UrlValidationError("Only http/https URLs are allowed", "invalid_url")
   }
 
   if (isProd() && parsed.protocol !== "https:") {
-    throw new Error("Only https URLs are allowed in production")
+    throw new UrlValidationError("Only https URLs are allowed in production", "invalid_url")
   }
 
   if (parsed.username || parsed.password) {
-    throw new Error("URL credentials are not allowed")
+    throw new UrlValidationError("URL credentials are not allowed", "invalid_url")
   }
 
   const hostname = parsed.hostname.toLowerCase()
   if (hostname.includes("localhost") || hostname === "::1") {
-    throw new Error("Blocked host")
+    throw new UrlValidationError("Blocked host", "blocked_host", hostname)
   }
 
   if (isPrivateIpLiteral(hostname)) {
-    throw new Error("Blocked host")
+    throw new UrlValidationError("Blocked host", "blocked_host", hostname)
   }
 
-  if (allowedHosts.length > 0 && !allowedHosts.includes(hostname)) {
-    throw new Error("Host is not in allowlist")
+  if (!isHostAllowed(hostname, allowedHosts)) {
+    throw new UrlValidationError("Host is not in allowlist", "allowlist_not_allowed", hostname)
   }
 
   return parsed
@@ -184,6 +206,15 @@ export async function POST(request: Request) {
           try {
             currentUrl = validateUrl(nextUrl.toString(), allowedHosts)
           } catch (error) {
+            if (error instanceof UrlValidationError && error.code === "allowlist_not_allowed" && error.host) {
+              return errorResponse(`Redirect host not allowed: ${error.host}`, 400, {
+                stage: "redirect_host_not_allowed",
+                redirects,
+                status: response.status,
+                finalUrl: nextUrl.toString(),
+                errorMessage: error.message,
+              })
+            }
             return errorResponse("Blocked redirect target", 400, {
               stage: "redirect",
               redirects,
