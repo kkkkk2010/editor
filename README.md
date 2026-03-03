@@ -214,6 +214,54 @@ Manual test:
 8. Выберите обычную картинку (не placeholder) — вкладки не показываются.
 9. Импортируйте архив без `imagePlan.json` — всё работает по-старому.
 
+### Реальный поиск изображений через Yandex Search API (с fallback на mock)
+
+`POST /api/images/search` умеет работать в двух режимах:
+
+- **Yandex provider**, если заданы `YANDEX_SEARCH_API_KEY` и `YANDEX_SEARCH_FOLDER_ID` и `YANDEX_SEARCH_ENABLE=true`.
+- **Mock provider**, если ключи не заданы или `YANDEX_SEARCH_ENABLE=false`.
+
+Пример `.env.local`:
+
+```bash
+YANDEX_SEARCH_FOLDER_ID=<your-folder-id>
+YANDEX_SEARCH_API_KEY=<your-api-key>
+YANDEX_SEARCH_ENABLE=true
+
+YANDEX_SEARCH_DEFAULT_TYPE=SEARCH_TYPE_RU
+YANDEX_SEARCH_FAMILY_MODE=FAMILY_MODE_STRICT
+YANDEX_SEARCH_FIX_TYPO_MODE=FIX_TYPO_MODE_ON
+YANDEX_SEARCH_DOCS_ON_PAGE_DEFAULT=8
+YANDEX_SEARCH_TIMEOUT_MS=6000
+YANDEX_SEARCH_CACHE_TTL_MS=300000
+```
+
+Быстрый smoke test:
+
+```bash
+curl -X POST http://localhost:3000/api/images/search \
+  -H "Content-Type: application/json" \
+  -d '{"query":"котики","count":8,"aspect":"landscape"}'
+```
+
+Ожидаемый ответ в реальном режиме:
+
+- `provider: "yandex"`
+- `results[].imageUrl`
+- `results[].thumbUrl`
+- `results[].pageUrl`
+
+Ожидаемый ответ без ключей:
+
+- `provider: "mock"`
+- `results[]` на основе локальных `/mock-images/*`
+
+Замечание по `POST /api/images/fetch`:
+
+- SSRF-защита (localhost/private IP/credentials/protocol) сохраняется.
+- Host allowlist опционален: если `IMAGE_FETCH_ALLOWED_HOSTS` не задан, публичные хосты не блокируются по allowlist.
+- Если `IMAGE_FETCH_ALLOWED_HOSTS` задан, allowlist строго применяется (включая redirect hop).
+
 
 ## Nginx vhost для `editor.presentonika.ru` (готовый пример)
 

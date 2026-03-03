@@ -78,10 +78,15 @@ describe("POST /api/images/fetch", () => {
 
 describe("POST /api/images/search", () => {
   afterEach(() => {
+    delete process.env.YANDEX_SEARCH_ENABLE
+    delete process.env.YANDEX_SEARCH_API_KEY
+    delete process.env.YANDEX_SEARCH_FOLDER_ID
     vi.restoreAllMocks()
   })
 
   it("returns deterministic local mock urls", async () => {
+    process.env.YANDEX_SEARCH_ENABLE = "false"
+
     const requestA = jsonRequest("http://localhost/api/images/search", { query: "кот", count: 3 })
     const requestB = jsonRequest("http://localhost/api/images/search", { query: "кот", count: 3 })
 
@@ -99,7 +104,7 @@ describe("POST /api/images/search", () => {
     expect(first.imageUrl).toMatch(/^\/mock-images\/.+/)
     expect(first.thumbUrl).toBe(first.imageUrl)
     expect(first.pageUrl).toBe("https://picsum.photos/")
-    expect(first.contentType).toMatch(/^image\//)
-    expect(first.dimensions).toEqual({ width: 1200, height: 800 })
+    expect(payloadA.provider).toBe("mock")
+    expect(payloadA.cached).toBe(false)
   })
 })
