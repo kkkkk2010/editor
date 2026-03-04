@@ -15,7 +15,8 @@ describe("POST /api/images/fetch", () => {
 
   afterEach(() => {
     delete process.env.IMAGE_FETCH_ALLOWED_HOSTS
-    process.env.NODE_ENV = initialNodeEnv
+    const mutableEnv = process.env as Record<string, string | undefined>
+    mutableEnv.NODE_ENV = initialNodeEnv
     vi.restoreAllMocks()
   })
 
