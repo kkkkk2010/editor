@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { yandexImageSearch } from "@/src/lib/yandexSearchImages"
 
-const DEFAULT_COUNT = 6
 const MAX_COUNT = 60
 const MAX_QUERY_LENGTH = 400
 
