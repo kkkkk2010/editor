@@ -69,6 +69,16 @@ export default function SlideEditor({
   } | null>(null)
   const RESIZE_DEBUG = false
 
+  const toggleInteractionSelectionLock = useCallback((enabled: boolean) => {
+    if (enabled) {
+      document.body.classList.add("editor-interaction-active")
+      document.documentElement.classList.add("editor-interaction-active")
+      return
+    }
+    document.body.classList.remove("editor-interaction-active")
+    document.documentElement.classList.remove("editor-interaction-active")
+  }, [])
+
   useEffect(() => {
     console.log("[ui] SlideEditor render slide=", slide.id, "elements=", slide.elements.length)
   }, [slide])
@@ -153,6 +163,7 @@ export default function SlideEditor({
     }
 
     onTransformStart?.()
+    toggleInteractionSelectionLock(true)
     setDraggingElement(element)
 
     const editorRect = editorRef.current?.getBoundingClientRect()
@@ -171,6 +182,7 @@ export default function SlideEditor({
     if (element.style.locked) return
     onElementSelect(element)
     onTransformStart?.()
+    toggleInteractionSelectionLock(true)
     setResizing(true)
     setResizeDirection(direction)
     setDraggingElement(element)
@@ -187,6 +199,12 @@ export default function SlideEditor({
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!editorRef.current || (!draggingElement && !resizing)) return
+    if (window.getSelection) {
+      const selection = window.getSelection()
+      if (selection && selection.rangeCount > 0) {
+        selection.removeAllRanges()
+      }
+    }
 
     const editorRect = editorRef.current.getBoundingClientRect()
     const pointer = getPointerPosition(e, editorRect)
@@ -337,11 +355,12 @@ export default function SlideEditor({
     if (draggingElement || resizing) {
       onTransformEnd?.()
     }
+    toggleInteractionSelectionLock(false)
     setDraggingElement(null)
     setResizing(false)
     setResizeDirection("")
     resizeSessionRef.current = null
-  }, [draggingElement, resizing, onTransformEnd])
+  }, [draggingElement, resizing, onTransformEnd, toggleInteractionSelectionLock])
 
   useEffect(() => {
     if (!(draggingElement || resizing)) return
@@ -793,37 +812,37 @@ export default function SlideEditor({
   // 添加渲染调整大小手柄的函数
   const renderResizeHandles = (element: Element) => {
     return (
-      <div className="absolute inset-0 pointer-events-none">
+      <div className="absolute inset-0 overflow-visible pointer-events-none">
         <div
-          className="resize-handle absolute w-5 h-5 -top-2.5 -left-2.5 z-10 pointer-events-auto cursor-nw-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
+          className="resize-handle absolute z-20 h-4 w-4 -top-2 -left-2 rounded-full border-2 border-background bg-primary shadow ring-1 ring-primary/30 pointer-events-auto cursor-nw-resize transition-transform hover:scale-110 active:scale-95"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "nw")}
         />
         <div
-          className="resize-handle absolute w-5 h-5 -top-2.5 left-1/2 -translate-x-1/2 z-10 pointer-events-auto cursor-n-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
+          className="resize-handle absolute z-20 h-4 w-4 -top-2 left-1/2 -translate-x-1/2 rounded-full border-2 border-background bg-primary shadow ring-1 ring-primary/30 pointer-events-auto cursor-n-resize transition-transform hover:scale-110 active:scale-95"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "n")}
         />
         <div
-          className="resize-handle absolute w-5 h-5 -top-2.5 -right-2.5 z-10 pointer-events-auto cursor-ne-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
+          className="resize-handle absolute z-20 h-4 w-4 -top-2 -right-2 rounded-full border-2 border-background bg-primary shadow ring-1 ring-primary/30 pointer-events-auto cursor-ne-resize transition-transform hover:scale-110 active:scale-95"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "ne")}
         />
         <div
-          className="resize-handle absolute w-5 h-5 top-1/2 -right-2.5 -translate-y-1/2 z-10 pointer-events-auto cursor-e-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
+          className="resize-handle absolute z-20 h-4 w-4 top-1/2 -right-2 -translate-y-1/2 rounded-full border-2 border-background bg-primary shadow ring-1 ring-primary/30 pointer-events-auto cursor-e-resize transition-transform hover:scale-110 active:scale-95"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "e")}
         />
         <div
-          className="resize-handle absolute w-5 h-5 -bottom-2.5 -right-2.5 z-10 pointer-events-auto cursor-se-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
+          className="resize-handle absolute z-20 h-4 w-4 -bottom-2 -right-2 rounded-full border-2 border-background bg-primary shadow ring-1 ring-primary/30 pointer-events-auto cursor-se-resize transition-transform hover:scale-110 active:scale-95"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "se")}
         />
         <div
-          className="resize-handle absolute w-5 h-5 -bottom-2.5 left-1/2 -translate-x-1/2 z-10 pointer-events-auto cursor-s-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
+          className="resize-handle absolute z-20 h-4 w-4 -bottom-2 left-1/2 -translate-x-1/2 rounded-full border-2 border-background bg-primary shadow ring-1 ring-primary/30 pointer-events-auto cursor-s-resize transition-transform hover:scale-110 active:scale-95"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "s")}
         />
         <div
-          className="resize-handle absolute w-5 h-5 -bottom-2.5 -left-2.5 z-10 pointer-events-auto cursor-sw-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
+          className="resize-handle absolute z-20 h-4 w-4 -bottom-2 -left-2 rounded-full border-2 border-background bg-primary shadow ring-1 ring-primary/30 pointer-events-auto cursor-sw-resize transition-transform hover:scale-110 active:scale-95"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "sw")}
         />
         <div
-          className="resize-handle absolute w-5 h-5 top-1/2 -left-2.5 -translate-y-1/2 z-10 pointer-events-auto cursor-w-resize before:absolute before:inset-1 before:rounded-full before:border-2 before:border-background before:bg-primary before:shadow-sm before:transition-transform hover:before:scale-110"
+          className="resize-handle absolute z-20 h-4 w-4 top-1/2 -left-2 -translate-y-1/2 rounded-full border-2 border-background bg-primary shadow ring-1 ring-primary/30 pointer-events-auto cursor-w-resize transition-transform hover:scale-110 active:scale-95"
           onMouseDown={(e) => handleResizeMouseDown(e, element, "w")}
         />
       </div>

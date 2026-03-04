@@ -71,6 +71,12 @@
   }
 }
 
+.editor-interaction-active,
+.editor-interaction-active * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -138,4 +144,3 @@
     transform: translateY(-10px);
   }
 }
-
