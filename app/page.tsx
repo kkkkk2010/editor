@@ -287,15 +287,17 @@ export default function Home() {
   }, [selectedElementId, selectedElement])
 
   const showImportOverlay = hasPendingAutoImport || isBridgeImporting
+  const showSaveOverlay = isSavingProject
+  const showBlockingOverlay = showImportOverlay || showSaveOverlay
 
   useEffect(() => {
-    if (!showImportOverlay) return
+    if (!showBlockingOverlay) return
     const previous = document.body.style.overflow
     document.body.style.overflow = "hidden"
     return () => {
       document.body.style.overflow = previous
     }
-  }, [showImportOverlay])
+  }, [showBlockingOverlay])
 
   useEffect(() => {
     console.log("[ui] render slides=", slides.length, "first slide=", slides[0])
@@ -1909,6 +1911,15 @@ export default function Home() {
                 <p className="mt-1 text-sm text-muted-foreground">Пожалуйста, подождите. Это может занять до минуты.</p>
               </>
             )}
+          </div>
+        </div>
+      ) : null}
+      {showSaveOverlay ? (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-background/90 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-xl">
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <h2 className="mt-4 text-lg font-semibold">Сохраняем проект…</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Пожалуйста, подождите. Это может занять до минуты.</p>
           </div>
         </div>
       ) : null}
