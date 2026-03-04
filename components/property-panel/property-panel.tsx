@@ -20,11 +20,19 @@ interface PropertyPanelProps {
   currentSlide?: Slide
   currentSlideIndex?: number
   imagePlan?: ImagePlan | null
+  projectTopic?: string
+  language?: string
   hasPlaceholderReplacement?: (srcPath: string) => boolean
-  onInsertPlaceholderImage?: (payload: {
-    srcPath: string
+  onInsertImageFromSearch?: (payload: {
+    elementId: string
     currentContent: string
-    slot: { slotId: string; slide: number; element: number }
+    srcPath?: string
+    searchMeta: {
+      query: string
+      negative: string[]
+      kind: string
+      aspect: string
+    }
     selection: {
       pageUrl: string
       imageUrl: string
@@ -49,8 +57,10 @@ export default function PropertyPanel({
   currentSlide,
   currentSlideIndex,
   imagePlan,
+  projectTopic,
+  language,
   hasPlaceholderReplacement,
-  onInsertPlaceholderImage,
+  onInsertImageFromSearch,
   onResetPlaceholderImage,
   onMoveElementForward,
   onMoveElementBackward,
@@ -109,8 +119,9 @@ export default function PropertyPanel({
               hasPlaceholderReplacement={
                 selectedElement.assetPath ? hasPlaceholderReplacement?.(selectedElement.assetPath) : false
               }
-              onInsertPlaceholderImage={onInsertPlaceholderImage}
+              onInsertImageFromSearch={onInsertImageFromSearch}
               onResetPlaceholderImage={onResetPlaceholderImage}
+              projectMeta={{ topic: projectTopic, language }}
               onUpdateElement={onUpdateElement}
               onReplaceImage={onReplaceImage}
             />

@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import type { Slide } from "@/lib/types"
+import { buildImageSearchContext } from "@/src/lib/images/searchContext"
 
 interface ImagePropertyPanelProps {
   element: Element
@@ -22,10 +23,16 @@ interface ImagePropertyPanelProps {
   imagePlan?: ImagePlan | null
   onUpdateElement: (element: Element) => void
   onReplaceImage?: (imageUrl: string, file?: File) => void
-  onInsertPlaceholderImage?: (payload: {
-    srcPath: string
+  onInsertImageFromSearch?: (payload: {
+    elementId: string
     currentContent: string
-    slot: { slotId: string; slide: number; element: number }
+    srcPath?: string
+    searchMeta: {
+      query: string
+      negative: string[]
+      kind: string
+      aspect: string
+    }
     selection: {
       pageUrl: string
       imageUrl: string
@@ -36,6 +43,10 @@ interface ImagePropertyPanelProps {
   }) => Promise<void>
   onResetPlaceholderImage?: (payload: { srcPath: string }) => void
   hasPlaceholderReplacement?: boolean
+  projectMeta?: {
+    topic?: string
+    language?: string
+  }
 }
 
 type SearchResult = {
@@ -58,9 +69,10 @@ export default function ImagePropertyPanel({
   imagePlan,
   onUpdateElement,
   onReplaceImage,
-  onInsertPlaceholderImage,
+  onInsertImageFromSearch,
   onResetPlaceholderImage,
   hasPlaceholderReplacement,
+  projectMeta,
 }: ImagePropertyPanelProps) {
   const FITS = ["cover", "contain", "fill", "none", "scale-down"] as const
   type Fit = (typeof FITS)[number]
@@ -76,45 +88,75 @@ export default function ImagePropertyPanel({
   const [selectedResultId, setSelectedResultId] = useState<string | null>(null)
   const [insertStatus, setInsertStatus] = useState<"idle" | "done">("idle")
 
-  const slot = useMemo(() => {
-    if (!imagePlan || typeof currentSlideIndex !== "number") return null
-    let elementIndex = selectedElementIndex ?? null
-    if (elementIndex === null || elementIndex < 0) {
-      elementIndex = currentSlide?.elements.findIndex((item) => item === element) ?? -1
+  const elementIndex = useMemo(() => {
+    if (typeof selectedElementIndex === "number" && selectedElementIndex >= 0) {
+      return selectedElementIndex
     }
-    if (elementIndex < 0) return null
-    return imagePlan.slots.find((s) => s.slide === currentSlideIndex + 1 && s.element === elementIndex) ?? null
-  }, [imagePlan, currentSlideIndex, selectedElementIndex, currentSlide, element])
+    return currentSlide?.elements.findIndex((item) => item.id === element.id) ?? -1
+  }, [selectedElementIndex, currentSlide, element.id])
+
+  const searchContext = useMemo(
+    () =>
+      buildImageSearchContext({
+        selectedElement: element,
+        slideIndex: typeof currentSlideIndex === "number" ? currentSlideIndex : 0,
+        elementIndex,
+        slide: currentSlide,
+        projectMeta,
+        imagePlan,
+      }),
+    [element, currentSlideIndex, elementIndex, currentSlide, projectMeta, imagePlan],
+  )
+
+  const slot = useMemo(() => {
+    if (!imagePlan || typeof currentSlideIndex !== "number" || elementIndex < 0) return null
+    return (
+      imagePlan.slots.find((s) => s.elementId && s.elementId === element.id) ??
+      imagePlan.slots.find((s) => s.slide === currentSlideIndex + 1 && s.element === elementIndex) ??
+      null
+    )
+  }, [imagePlan, currentSlideIndex, elementIndex, element.id])
 
   useEffect(() => {
-    if (!slot) {
-      setActiveTab("edit")
-      setSearchQuery("")
-      setResults([])
-      setSelectedResultId(null)
-      setInsertStatus("idle")
-      setRightsChecked(false)
-      return
-    }
-    setSearchQuery(slot.query)
+    setActiveTab("search")
+    setSearchQuery(searchContext.query)
     setResults([])
     setSelectedResultId(null)
     setInsertStatus(hasPlaceholderReplacement ? "done" : "idle")
     setRightsChecked(false)
-    setActiveTab("search")
-  }, [slot?.slotId, hasPlaceholderReplacement])
+  }, [element.id, searchContext.query, hasPlaceholderReplacement])
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
       setResults([])
       return
     }
+
+    onUpdateElement({
+      ...element,
+      meta: {
+        ...element.meta,
+        search: {
+          ...(element.meta?.search ?? {}),
+          query: searchQuery.trim(),
+          negative: searchContext.negative,
+          kind: searchContext.kind,
+          aspect: searchContext.aspect,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    })
+
     setIsSearching(true)
     try {
       const response = await fetch("/api/images/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: searchQuery.trim(), count: 6 }),
+        body: JSON.stringify({
+          query: searchQuery.trim(),
+          count: searchContext.suggestedCount,
+          aspect: searchContext.aspect === "any" ? undefined : searchContext.aspect,
+        }),
       })
       if (!response.ok) {
         setResults([])
@@ -132,15 +174,21 @@ export default function ImagePropertyPanel({
   const srcPath = element.assetPath
 
   const handleInsert = async () => {
-    if (!slot || !selectedResult || !rightsChecked || !srcPath || !onInsertPlaceholderImage) {
+    if (!selectedResult || !rightsChecked || !onInsertImageFromSearch) {
       return
     }
     setIsInserting(true)
     try {
-      await onInsertPlaceholderImage({
-        srcPath,
+      await onInsertImageFromSearch({
+        elementId: element.id,
         currentContent: element.content,
-        slot: { slotId: slot.slotId, slide: slot.slide, element: slot.element },
+        srcPath,
+        searchMeta: {
+          query: searchQuery.trim(),
+          negative: searchContext.negative,
+          kind: searchContext.kind,
+          aspect: searchContext.aspect,
+        },
         selection: {
           pageUrl: selectedResult.pageUrl,
           imageUrl: selectedResult.imageUrl,
@@ -279,10 +327,6 @@ export default function ImagePropertyPanel({
     </div>
   )
 
-  if (!slot) {
-    return renderEditPanel()
-  }
-
   return (
     <Tabs
       value={activeTab}
@@ -300,8 +344,10 @@ export default function ImagePropertyPanel({
 
       <TabsContent value="search" className="mt-4 w-full min-w-0 space-y-4">
         <div>
-          <h4 className="break-all text-sm font-medium">Изображение для: {slot.slotId}</h4>
-          {slot.hint ? <p className="mt-1 break-words text-xs text-muted-foreground">{slot.hint}</p> : null}
+          <h4 className="break-all text-sm font-medium">
+            Подбор для изображения {slot?.slotId ? `(${slot.slotId})` : ""}
+          </h4>
+          <p className="mt-1 break-words text-xs text-muted-foreground">{searchContext.hint}</p>
         </div>
 
         <div className="space-y-2">
@@ -349,7 +395,7 @@ export default function ImagePropertyPanel({
           }}>
             Открыть источник
           </Button>
-          <Button onClick={handleInsert} disabled={!selectedResult || !rightsChecked || !srcPath || isInserting}>
+          <Button onClick={handleInsert} disabled={!selectedResult || !rightsChecked || isInserting}>
             {isInserting ? "Вставка..." : "Вставить"}
           </Button>
           <Button

@@ -843,11 +843,17 @@ export default function Home() {
     })
   }, [replacedAssets])
 
-  const handleInsertPlaceholderImage = useCallback(
+  const replaceImageForElement = useCallback(
     async (payload: {
-      srcPath: string
+      elementId: string
       currentContent: string
-      slot: { slotId: string; slide: number; element: number }
+      srcPath?: string
+      searchMeta: {
+        query: string
+        negative: string[]
+        kind: string
+        aspect: string
+      }
       selection: {
         pageUrl: string
         imageUrl: string
@@ -872,19 +878,33 @@ export default function Home() {
       const blob = new Blob([toArrayBuffer(bytes)], { type: contentType })
       const previewUrl = URL.createObjectURL(blob)
 
+      const location = findElementById(presentRef.current.slides, payload.elementId)
+      const targetSlideIndex = location?.slideIndex ?? currentSlideIndex
+      const targetElementIndex = location?.elementIndex ?? selectedElementIndex ?? 0
+      const targetSlide = presentRef.current.slides[targetSlideIndex]
+      const targetElement = targetSlide?.elements[targetElementIndex]
+      const resolvedSrcPath =
+        payload.srcPath ||
+        targetElement?.assetPath ||
+        `assets/images/${payload.elementId}.${getExtensionFromUrl(payload.selection.imageUrl)}`
+
       setReplacedAssets((previous) => {
-        const existing = previous[payload.srcPath]
+        const existing = previous[resolvedSrcPath]
         if (existing) {
           URL.revokeObjectURL(existing.previewUrl)
         }
         return {
             ...previous,
-            [payload.srcPath]: {
+            [resolvedSrcPath]: {
             bytesBase64,
             contentType,
             originalContent: payload.currentContent,
             previewUrl,
-            slot: payload.slot,
+            slot: {
+              slotId: `manual-${payload.elementId}`,
+              slide: targetSlideIndex + 1,
+              element: targetElementIndex,
+            },
             source: {
               pageUrl: payload.selection.pageUrl,
               imageUrl: payload.selection.imageUrl,
@@ -897,26 +917,38 @@ export default function Home() {
         }
       })
 
-      assetStoreRef.current.setAsset(payload.srcPath, bytes, contentType)
+      assetStoreRef.current.setAsset(resolvedSrcPath, bytes, contentType)
 
       setPresent((state) => {
-        const slide = state.slides[state.currentSlideIndex]
-        if (!slide) return state
-        const index = slide.elements.findIndex((el) => el.id === state.selectedElementId)
-        if (index < 0) return state
+        const found = findElementById(state.slides, payload.elementId)
+        if (!found) return state
+        const slide = state.slides[found.slideIndex]
+        const index = found.elementIndex
         const element = slide.elements[index]
-        if (element.type !== "image" || element.assetPath !== payload.srcPath) return state
+        if (element.type !== "image") return state
         const updatedElements = [...slide.elements]
         updatedElements[index] = {
           ...element,
           content: previewUrl,
+          assetPath: resolvedSrcPath,
+          meta: {
+            ...element.meta,
+            search: {
+              ...(element.meta?.search ?? {}),
+              query: payload.searchMeta.query,
+              negative: payload.searchMeta.negative,
+              kind: payload.searchMeta.kind,
+              aspect: payload.searchMeta.aspect,
+              updatedAt: new Date().toISOString(),
+            },
+          },
         }
         const updatedSlides = [...state.slides]
-        updatedSlides[state.currentSlideIndex] = { ...slide, elements: updatedElements }
+        updatedSlides[found.slideIndex] = { ...slide, elements: updatedElements }
         return { ...state, slides: updatedSlides }
       })
     },
-    [],
+    [currentSlideIndex, selectedElementIndex],
   )
 
   // 右键菜单功能
@@ -1795,7 +1827,7 @@ export default function Home() {
                 </div>
               }
               propertyPanel={
-                <PropertyPanel
+              <PropertyPanel
                   selectedElement={selectedElement}
                   selectedElementIndex={selectedElementIndex}
                   onUpdateElement={updateElement}
@@ -1804,8 +1836,10 @@ export default function Home() {
                   currentSlide={currentSlide}
                   currentSlideIndex={currentSlideIndex}
                   imagePlan={imagePlan}
+                  projectTopic={presentationTitle}
+                  language="ru"
                   hasPlaceholderReplacement={hasPlaceholderReplacement}
-                  onInsertPlaceholderImage={handleInsertPlaceholderImage}
+                  onInsertImageFromSearch={replaceImageForElement}
                   onResetPlaceholderImage={handleResetPlaceholderImage}
                   onMoveElementForward={handleMoveElementForward}
                   onMoveElementBackward={handleMoveElementBackward}
