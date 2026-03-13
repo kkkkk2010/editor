@@ -19,6 +19,7 @@ type ImageCreditItem = {
 
 type ExportOptions = {
   imageCredits?: ImageCreditItem[]
+  extraFiles?: Record<string, string | Uint8Array | ArrayBuffer>
 }
 
 const INVALID_ASSET_PREFIX = /^(blob:|data:|https?:|file:)/i
@@ -110,6 +111,12 @@ export function exportProjectZip(doc: ImporterDoc, assetStore: AssetStore, optio
           2,
         ),
       )
+    }
+
+    if (options?.extraFiles) {
+      Object.entries(options.extraFiles).forEach(([path, value]) => {
+        files[path] = toBytes(value)
+      })
     }
 
     const zipped = zipSync(files)

@@ -47,6 +47,43 @@ A PPT online editor based on the web terminal ｜ 一款基于web端的ppt在线
    - элементы не смещаются из-за потери lineHeight/letterSpacing.
 
 
+
+## Экспорт out.zip из админ-панели
+
+После включения admin-cookie (`/api/admin/enable-import?token=...`) в верхней панели появится кнопка **Export out.zip**.
+
+Доступны два действия:
+
+1. **Export current presentation**
+   - скачивает полный `out.zip` текущей презентации;
+   - используется штатный zip-export pipeline (`doc.json` + используемые assets/backgrounds + credits/meta, если есть).
+
+2. **Export current slide as layout**
+   - скачивает `layout-<slide-name-or-index>.out.zip`;
+   - внутри `doc.json` только 1 текущий слайд;
+   - ассеты в архиве только для этого слайда;
+   - дополнительно кладётся `meta.json` best-effort:
+
+```json
+{
+  "exportType": "layout",
+  "slideIndex": 0,
+  "exportedAt": "2026-01-01T00:00:00.000Z"
+}
+```
+
+### Использование layout out.zip в orchestrator
+
+```bash
+npm run layout:import -- --zip ./layout-slide-1.out.zip --id my-cover-v1 --slideType cover
+```
+
+Ручная проверка:
+1. Импортируйте/соберите презентацию в editor.
+2. В админ-режиме нажмите **Export out.zip → Export current slide as layout**.
+3. Убедитесь, что архив скачался и внутри `doc.json` ровно один слайд.
+4. Передайте архив в orchestrator командой выше.
+
 ## Docker (production)
 
 ### 1) Сборка production-образа Editor
@@ -213,6 +250,65 @@ Manual test:
 7. Переключитесь на **Свойства** — должен отображаться текущий функционал без изменений.
 8. Выберите обычную картинку (не placeholder) — вкладки не показываются.
 9. Импортируйте архив без `imagePlan.json` — всё работает по-старому.
+
+### Manual checklist: вкладка «Подобрать» для любых изображений
+
+1. Импортируйте `out.zip` без `imagePlan.json` (или с пустым `slots`).
+2. Выберите любой image element на слайде.
+3. Убедитесь, что вкладка **Подобрать** отображается всегда (не только для placeholder).
+4. Проверьте prefill поискового запроса и подсказку, затем нажмите **Искать**.
+5. Выберите результат, отметьте чекбокс подтверждения прав и нажмите **Вставить**.
+6. Убедитесь, что изображение заменилось на холсте и экспорт работает.
+7. Экспортируйте `out.zip` и проверьте, что `imageCredits.json` содержит запись об источнике.
+8. Убедитесь, что без чекбокса подтверждения кнопка вставки не выполняет замену.
+
+### Реальный поиск изображений через Yandex Search API (с fallback на mock)
+
+`POST /api/images/search` умеет работать в двух режимах:
+
+- **Yandex provider**, если заданы `YANDEX_SEARCH_API_KEY` и `YANDEX_SEARCH_FOLDER_ID` и `YANDEX_SEARCH_ENABLE=true`.
+- **Mock provider**, если ключи не заданы или `YANDEX_SEARCH_ENABLE=false`.
+
+Пример `.env.local`:
+
+```bash
+YANDEX_SEARCH_FOLDER_ID=<your-folder-id>
+YANDEX_SEARCH_API_KEY=<your-api-key>
+YANDEX_SEARCH_ENABLE=true
+
+YANDEX_SEARCH_DEFAULT_TYPE=SEARCH_TYPE_RU
+YANDEX_SEARCH_FAMILY_MODE=FAMILY_MODE_STRICT
+YANDEX_SEARCH_FIX_TYPO_MODE=FIX_TYPO_MODE_ON
+YANDEX_SEARCH_DOCS_ON_PAGE_DEFAULT=8
+YANDEX_SEARCH_TIMEOUT_MS=6000
+YANDEX_SEARCH_CACHE_TTL_MS=300000
+```
+
+Быстрый smoke test:
+
+```bash
+curl -X POST http://localhost:3000/api/images/search \
+  -H "Content-Type: application/json" \
+  -d '{"query":"котики","count":8,"aspect":"landscape"}'
+```
+
+Ожидаемый ответ в реальном режиме:
+
+- `provider: "yandex"`
+- `results[].imageUrl`
+- `results[].thumbUrl`
+- `results[].pageUrl`
+
+Ожидаемый ответ без ключей:
+
+- `provider: "mock"`
+- `results[]` на основе локальных `/mock-images/*`
+
+Замечание по `POST /api/images/fetch`:
+
+- SSRF-защита (localhost/private IP/credentials/protocol) сохраняется.
+- Host allowlist опционален: если `IMAGE_FETCH_ALLOWED_HOSTS` не задан, публичные хосты не блокируются по allowlist.
+- Если `IMAGE_FETCH_ALLOWED_HOSTS` задан, allowlist строго применяется (включая redirect hop).
 
 
 ## Nginx vhost для `editor.presentonika.ru` (готовый пример)

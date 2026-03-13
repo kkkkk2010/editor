@@ -2,14 +2,25 @@ export type ImagePlanSlot = {
   slotId: string
   slide: number
   element: number
+  elementId?: string
   kind: string
   query: string
   hint: string | null
+  aspect?: "portrait" | "landscape" | "square" | "any"
+  negative?: string[]
+  styleHint?: string
+}
+
+export type ImagePlanProjectMeta = {
+  topic?: string
+  language?: string
 }
 
 export type ImagePlan = {
   version: number
   slots: ImagePlanSlot[]
+  topic?: string
+  language?: string
 }
 
 export function parseImagePlan(raw: unknown): ImagePlan | null {
@@ -40,15 +51,28 @@ export function parseImagePlan(raw: unknown): ImagePlan | null {
       slotId: slot.slotId,
       slide: slot.slide,
       element: slot.element,
+      elementId: typeof slot.elementId === "string" ? slot.elementId : undefined,
       kind: slot.kind,
       query: slot.query,
       hint: typeof slot.hint === "string" ? slot.hint : null,
+      aspect:
+        slot.aspect === "portrait" || slot.aspect === "landscape" || slot.aspect === "square" || slot.aspect === "any"
+          ? slot.aspect
+          : undefined,
+      negative: Array.isArray(slot.negative)
+        ? slot.negative.filter((item): item is string => typeof item === "string")
+        : undefined,
+      styleHint: typeof slot.styleHint === "string" ? slot.styleHint : undefined,
     })
   }
 
   return {
     version: 1,
     slots,
+    topic: typeof (candidate as { topic?: unknown }).topic === "string" ? (candidate as { topic?: string }).topic : undefined,
+    language:
+      typeof (candidate as { language?: unknown }).language === "string"
+        ? (candidate as { language?: string }).language
+        : undefined,
   }
 }
-

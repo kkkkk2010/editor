@@ -16,6 +16,7 @@ import { type Slide, type Element, defaultSlides, defaultSlideSize, type SlideSi
 import { Button } from "@/components/ui/button"
 import { Play, PanelRight } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
+import { useIsMobile } from "@/components/ui/use-mobile"
 import { useToast } from "@/hooks/use-toast"
 import type { ImportResult } from "@/src/lib/import/importerDoc"
 import { revokeImportObjectUrls } from "@/src/lib/import/zipImport"
@@ -23,6 +24,12 @@ import { AssetStore } from "@/src/lib/assets/assetStore"
 import { mapEditorToImporter } from "@/src/lib/import/mapEditorToImporter"
 import { mapImporterToEditor } from "@/src/lib/import/mapImporterToEditor"
 import { exportProjectZip } from "@/src/lib/project/exportProjectZip"
+import {
+  buildLayoutMeta,
+  buildLayoutOutZipFilename,
+  buildPresentationOutZipFilename,
+  buildSingleSlideDoc,
+} from "@/src/lib/project/layoutExport"
 import { buildWpSavePayload } from "@/src/lib/save/wpSavePayload"
 import type { ImagePlan } from "@/src/lib/import/imagePlan"
 import html2canvas from "html2canvas"
@@ -205,6 +212,8 @@ export default function Home() {
   const textEditOriginalTextRef = useRef<string | null>(null)
   const [isBridgeImporting, setIsBridgeImporting] = useState(false)
   const [isSavingProject, setIsSavingProject] = useState(false)
+  const [isExportingOutZip, setIsExportingOutZip] = useState(false)
+  const [isExportingLayout, setIsExportingLayout] = useState(false)
   const [importRev, setImportRev] = useState(0)
   const isImportFlowRef = useRef(false)
   const currentPresentationIdRef = useRef<string | null>(null)
@@ -220,6 +229,7 @@ export default function Home() {
   })
 
   const present = history.present
+  const isMobile = useIsMobile()
   const slides = present.slides
   const currentSlideIndex = present.currentSlideIndex
   const selectedElementId = present.selectedElementId
@@ -285,15 +295,17 @@ export default function Home() {
   }, [selectedElementId, selectedElement])
 
   const showImportOverlay = hasPendingAutoImport || isBridgeImporting
+  const showSaveOverlay = isSavingProject || isExportingOutZip || isExportingLayout
+  const showBlockingOverlay = showImportOverlay || showSaveOverlay
 
   useEffect(() => {
-    if (!showImportOverlay) return
+    if (!showBlockingOverlay) return
     const previous = document.body.style.overflow
     document.body.style.overflow = "hidden"
     return () => {
       document.body.style.overflow = previous
     }
-  }, [showImportOverlay])
+  }, [showBlockingOverlay])
 
   useEffect(() => {
     console.log("[ui] render slides=", slides.length, "first slide=", slides[0])
@@ -841,11 +853,17 @@ export default function Home() {
     })
   }, [replacedAssets])
 
-  const handleInsertPlaceholderImage = useCallback(
+  const replaceImageForElement = useCallback(
     async (payload: {
-      srcPath: string
+      elementId: string
       currentContent: string
-      slot: { slotId: string; slide: number; element: number }
+      srcPath?: string
+      searchMeta: {
+        query: string
+        negative: string[]
+        kind: string
+        aspect: string
+      }
       selection: {
         pageUrl: string
         imageUrl: string
@@ -870,19 +888,33 @@ export default function Home() {
       const blob = new Blob([toArrayBuffer(bytes)], { type: contentType })
       const previewUrl = URL.createObjectURL(blob)
 
+      const location = findElementById(presentRef.current.slides, payload.elementId)
+      const targetSlideIndex = location?.slideIndex ?? currentSlideIndex
+      const targetElementIndex = location?.elementIndex ?? selectedElementIndex ?? 0
+      const targetSlide = presentRef.current.slides[targetSlideIndex]
+      const targetElement = targetSlide?.elements[targetElementIndex]
+      const resolvedSrcPath =
+        payload.srcPath ||
+        targetElement?.assetPath ||
+        `assets/images/${payload.elementId}.${getExtensionFromUrl(payload.selection.imageUrl)}`
+
       setReplacedAssets((previous) => {
-        const existing = previous[payload.srcPath]
+        const existing = previous[resolvedSrcPath]
         if (existing) {
           URL.revokeObjectURL(existing.previewUrl)
         }
         return {
             ...previous,
-            [payload.srcPath]: {
+            [resolvedSrcPath]: {
             bytesBase64,
             contentType,
             originalContent: payload.currentContent,
             previewUrl,
-            slot: payload.slot,
+            slot: {
+              slotId: `manual-${payload.elementId}`,
+              slide: targetSlideIndex + 1,
+              element: targetElementIndex,
+            },
             source: {
               pageUrl: payload.selection.pageUrl,
               imageUrl: payload.selection.imageUrl,
@@ -895,26 +927,38 @@ export default function Home() {
         }
       })
 
-      assetStoreRef.current.setAsset(payload.srcPath, bytes, contentType)
+      assetStoreRef.current.setAsset(resolvedSrcPath, bytes, contentType)
 
       setPresent((state) => {
-        const slide = state.slides[state.currentSlideIndex]
-        if (!slide) return state
-        const index = slide.elements.findIndex((el) => el.id === state.selectedElementId)
-        if (index < 0) return state
+        const found = findElementById(state.slides, payload.elementId)
+        if (!found) return state
+        const slide = state.slides[found.slideIndex]
+        const index = found.elementIndex
         const element = slide.elements[index]
-        if (element.type !== "image" || element.assetPath !== payload.srcPath) return state
+        if (element.type !== "image") return state
         const updatedElements = [...slide.elements]
         updatedElements[index] = {
           ...element,
           content: previewUrl,
+          assetPath: resolvedSrcPath,
+          meta: {
+            ...element.meta,
+            search: {
+              ...(element.meta?.search ?? {}),
+              query: payload.searchMeta.query,
+              negative: payload.searchMeta.negative,
+              kind: payload.searchMeta.kind,
+              aspect: payload.searchMeta.aspect,
+              updatedAt: new Date().toISOString(),
+            },
+          },
         }
         const updatedSlides = [...state.slides]
-        updatedSlides[state.currentSlideIndex] = { ...slide, elements: updatedElements }
+        updatedSlides[found.slideIndex] = { ...slide, elements: updatedElements }
         return { ...state, slides: updatedSlides }
       })
     },
-    [],
+    [currentSlideIndex, selectedElementIndex],
   )
 
   // 右键菜单功能
@@ -1320,10 +1364,16 @@ export default function Home() {
     return null
   }
 
-  const buildOutZipBytesFromSnapshot = async () => {
+  const buildOutZipBytesFromSnapshot = async (options?: {
+    slideIndices?: number[]
+    includeLayoutMeta?: boolean
+  }) => {
     const presentSnapshot = cloneState(presentRef.current)
     console.log("[wp-save] snapshot slides=", presentSnapshot.slides.length, "first=", presentSnapshot.slides[0]?.id)
-    const slidesSnapshot = presentSnapshot.slides
+    const requestedSlides = options?.slideIndices
+    const slidesSnapshot = (requestedSlides && requestedSlides.length > 0
+      ? requestedSlides.map((index) => presentSnapshot.slides[index]).filter((slide): slide is Slide => Boolean(slide))
+      : presentSnapshot.slides)
     const assetStore = assetStoreRef.current
     const slidesForExport = await Promise.all(
       slidesSnapshot.map(async (slide) => {
@@ -1376,6 +1426,9 @@ export default function Home() {
     )
 
     const importerDoc = mapEditorToImporter(slidesForExport, slideSize)
+    const effectiveDoc = options?.slideIndices && options.slideIndices.length === 1
+      ? buildSingleSlideDoc(importerDoc, 0)
+      : importerDoc
     const imageCredits = Object.entries(replacedAssets).map(([src, item]) => ({
       src,
       slot: item.slot,
@@ -1385,8 +1438,11 @@ export default function Home() {
       licenseUrl: item.source.licenseUrl,
       confirmedAt: item.source.confirmedAt,
     }))
-    const zipBytes = exportProjectZip(importerDoc, assetStore, {
+    const zipBytes = exportProjectZip(effectiveDoc, assetStore, {
       imageCredits: imageCredits.length > 0 ? imageCredits : undefined,
+      extraFiles: options?.includeLayoutMeta && options.slideIndices && options.slideIndices.length === 1
+        ? { "meta.json": JSON.stringify(buildLayoutMeta(options.slideIndices[0]), null, 2) }
+        : undefined,
     })
     const src = zipBytes instanceof Uint8Array ? zipBytes : new Uint8Array(zipBytes as ArrayBufferLike)
     const bytes = new Uint8Array(src.byteLength)
@@ -1468,6 +1524,52 @@ export default function Home() {
       throw new Error(`HTTP ${response.status}: ${responseText.slice(0, 200)}`)
     }
     return responseText
+  }
+
+  const downloadOutZipBlob = (blob: Blob, filename: string) => {
+    const objectUrl = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = objectUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(objectUrl)
+  }
+
+  const handleExportOutZip = async () => {
+    if (isExportingOutZip || isExportingLayout) return
+    setIsExportingOutZip(true)
+    try {
+      const { blob } = await buildOutZipBytesFromSnapshot()
+      const filename = buildPresentationOutZipFilename(presentationTitle)
+      downloadOutZipBlob(blob, filename)
+      toast({ title: "Экспорт завершён", description: `Скачан файл ${filename}` })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Не удалось экспортировать out.zip"
+      toast({ title: "Ошибка экспорта", description: message, variant: "destructive" })
+    } finally {
+      setIsExportingOutZip(false)
+    }
+  }
+
+  const handleExportCurrentSlideAsLayout = async () => {
+    if (isExportingOutZip || isExportingLayout) return
+    setIsExportingLayout(true)
+    try {
+      const { blob } = await buildOutZipBytesFromSnapshot({
+        slideIndices: [currentSlideIndex],
+        includeLayoutMeta: true,
+      })
+      const filename = buildLayoutOutZipFilename(currentSlide?.id, currentSlideIndex)
+      downloadOutZipBlob(blob, filename)
+      toast({ title: "Экспорт layout завершён", description: `Скачан файл ${filename}` })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Не удалось экспортировать layout out.zip"
+      toast({ title: "Ошибка экспорта layout", description: message, variant: "destructive" })
+    } finally {
+      setIsExportingLayout(false)
+    }
   }
 
   const handleSaveProject = async () => {
@@ -1677,7 +1779,16 @@ export default function Home() {
           onImportError={setImportOverlayError}
         />
       </Suspense>
-      {isPreviewMode ? (
+      {isMobile ? (
+        <SlidePreview
+          slides={slides}
+          initialSlide={currentSlideIndex}
+          onExit={() => {
+            // На мобильных используем режим просмотра как основной.
+          }}
+          slideSize={slideSize}
+        />
+      ) : isPreviewMode ? (
         <SlidePreview
           slides={slides}
           initialSlide={currentSlideIndex}
@@ -1702,6 +1813,10 @@ export default function Home() {
             onSaveProject={handleSaveProject}
             hasUnsavedChanges={hasUnsavedChanges}
             isSavingProject={isSavingProject}
+            onExportOutZip={handleExportOutZip}
+            onExportCurrentSlideAsLayout={handleExportCurrentSlideAsLayout}
+            isExportingOutZip={isExportingOutZip}
+            isExportingLayout={isExportingLayout}
           />
 
           <div className="flex-1 overflow-hidden">
@@ -1784,7 +1899,7 @@ export default function Home() {
                 </div>
               }
               propertyPanel={
-                <PropertyPanel
+              <PropertyPanel
                   selectedElement={selectedElement}
                   selectedElementIndex={selectedElementIndex}
                   onUpdateElement={updateElement}
@@ -1793,8 +1908,10 @@ export default function Home() {
                   currentSlide={currentSlide}
                   currentSlideIndex={currentSlideIndex}
                   imagePlan={imagePlan}
+                  projectTopic={presentationTitle}
+                  language="ru"
                   hasPlaceholderReplacement={hasPlaceholderReplacement}
-                  onInsertPlaceholderImage={handleInsertPlaceholderImage}
+                  onInsertImageFromSearch={replaceImageForElement}
                   onResetPlaceholderImage={handleResetPlaceholderImage}
                   onMoveElementForward={handleMoveElementForward}
                   onMoveElementBackward={handleMoveElementBackward}
@@ -1864,6 +1981,15 @@ export default function Home() {
                 <p className="mt-1 text-sm text-muted-foreground">Пожалуйста, подождите. Это может занять до минуты.</p>
               </>
             )}
+          </div>
+        </div>
+      ) : null}
+      {showSaveOverlay ? (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-background/90 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-xl">
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <h2 className="mt-4 text-lg font-semibold">Сохраняем проект…</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Пожалуйста, подождите. Это может занять до минуты.</p>
           </div>
         </div>
       ) : null}

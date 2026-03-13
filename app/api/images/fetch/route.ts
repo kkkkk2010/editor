@@ -149,6 +149,16 @@ function isAllowedRelativePath(imageUrl: string) {
 }
 
 function errorResponse(message: string, status: number, debug?: DebugPayload) {
+  if (!isProd() && debug) {
+    console.debug("[images/fetch] blocked-or-failed", {
+      message,
+      status,
+      stage: debug.stage,
+      redirects: debug.redirects,
+      errorMessage: debug.errorMessage,
+      finalUrl: debug.finalUrl,
+    })
+  }
   return NextResponse.json(
     {
       ok: false,

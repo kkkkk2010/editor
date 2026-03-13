@@ -49,6 +49,15 @@ export interface Element {
   type: "text" | "image" | "shape"
   content: string
   assetPath?: string
+  meta?: {
+    search?: {
+      query?: string
+      negative?: string[]
+      kind?: string
+      aspect?: string
+      updatedAt?: string
+    }
+  }
   position: Position
   size: Size
   style: TextStyle
