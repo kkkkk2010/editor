@@ -226,6 +226,16 @@ export default function SlideEditor({
       guides.push({ orientation: "vertical", position: slideCenterX })
     }
 
+    if (Math.abs(x - slideCenterX) <= SNAP_TOLERANCE) {
+      nextX = slideCenterX
+      guides.push({ orientation: "vertical", position: slideCenterX })
+    }
+
+    if (Math.abs(x + width - slideCenterX) <= SNAP_TOLERANCE) {
+      nextX = slideCenterX - width
+      guides.push({ orientation: "vertical", position: slideCenterX })
+    }
+
     if (Math.abs(y) <= SNAP_TOLERANCE) {
       nextY = 0
       guides.push({ orientation: "horizontal", position: 0 })
@@ -238,6 +248,16 @@ export default function SlideEditor({
 
     if (Math.abs(centerY - slideCenterY) <= SNAP_TOLERANCE) {
       nextY = slideCenterY - height / 2
+      guides.push({ orientation: "horizontal", position: slideCenterY })
+    }
+
+    if (Math.abs(y - slideCenterY) <= SNAP_TOLERANCE) {
+      nextY = slideCenterY
+      guides.push({ orientation: "horizontal", position: slideCenterY })
+    }
+
+    if (Math.abs(y + height - slideCenterY) <= SNAP_TOLERANCE) {
+      nextY = slideCenterY - height
       guides.push({ orientation: "horizontal", position: slideCenterY })
     }
 
