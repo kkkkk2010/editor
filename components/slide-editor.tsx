@@ -69,7 +69,8 @@ export default function SlideEditor({
     direction: string
   } | null>(null)
   const RESIZE_DEBUG = false
-  const SNAP_TOLERANCE = 6
+  // базовый допуск для snap при drag/resize ручками
+  const SNAP_TOLERANCE = 10
 
   const toggleInteractionSelectionLock = useCallback((enabled: boolean) => {
     if (enabled) {
@@ -306,6 +307,7 @@ export default function SlideEditor({
       newX = normalizePosition(newX, session.startX, "x")
       newY = normalizePosition(newY, session.startY, "y")
 
+      // smart guides для resize (когда тянут за ручки)
       const snapped = applySlideSmartGuides(newX, newY, normalizedWidth, normalizedHeight)
       const clamped = clampRectToSlide(snapped.x, snapped.y, normalizedWidth, normalizedHeight)
       setActiveGuides(snapped.guides)
