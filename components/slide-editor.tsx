@@ -306,7 +306,9 @@ export default function SlideEditor({
       newX = normalizePosition(newX, session.startX, "x")
       newY = normalizePosition(newY, session.startY, "y")
 
-      const clamped = clampRectToSlide(newX, newY, normalizedWidth, normalizedHeight)
+      const snapped = applySlideSmartGuides(newX, newY, normalizedWidth, normalizedHeight)
+      const clamped = clampRectToSlide(snapped.x, snapped.y, normalizedWidth, normalizedHeight)
+      setActiveGuides(snapped.guides)
 
       const newSize = {
         width: clamped.width,
