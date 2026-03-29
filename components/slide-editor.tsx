@@ -70,7 +70,7 @@ export default function SlideEditor({
   } | null>(null)
   const RESIZE_DEBUG = false
   // базовый допуск для snap при drag/resize ручками
-  const SNAP_TOLERANCE = 10
+  const SNAP_TOLERANCE = 14
 
   const toggleInteractionSelectionLock = useCallback((enabled: boolean) => {
     if (enabled) {
