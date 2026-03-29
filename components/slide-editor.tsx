@@ -56,6 +56,7 @@ export default function SlideEditor({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [resizing, setResizing] = useState(false)
   const [resizeDirection, setResizeDirection] = useState("")
+  const [activeGuides, setActiveGuides] = useState<Array<{ orientation: "vertical" | "horizontal"; position: number }>>([])
   const editorRef = useRef<HTMLDivElement>(null)
   const [editingElementId, setEditingElementId] = useState<string | null>(null)
   const resizeSessionRef = useRef<{
@@ -68,6 +69,7 @@ export default function SlideEditor({
     direction: string
   } | null>(null)
   const RESIZE_DEBUG = false
+  const SNAP_TOLERANCE = 6
 
   const toggleInteractionSelectionLock = useCallback((enabled: boolean) => {
     if (enabled) {
@@ -197,6 +199,50 @@ export default function SlideEditor({
     }
   }
 
+
+  const applySlideSmartGuides = useCallback((x: number, y: number, width: number, height: number) => {
+    let nextX = x
+    let nextY = y
+    const guides: Array<{ orientation: "vertical" | "horizontal"; position: number }> = []
+
+    const centerX = x + width / 2
+    const centerY = y + height / 2
+    const slideCenterX = slideSize.width / 2
+    const slideCenterY = slideSize.height / 2
+
+    if (Math.abs(x) <= SNAP_TOLERANCE) {
+      nextX = 0
+      guides.push({ orientation: "vertical", position: 0 })
+    }
+
+    if (Math.abs(x + width - slideSize.width) <= SNAP_TOLERANCE) {
+      nextX = slideSize.width - width
+      guides.push({ orientation: "vertical", position: slideSize.width })
+    }
+
+    if (Math.abs(centerX - slideCenterX) <= SNAP_TOLERANCE) {
+      nextX = slideCenterX - width / 2
+      guides.push({ orientation: "vertical", position: slideCenterX })
+    }
+
+    if (Math.abs(y) <= SNAP_TOLERANCE) {
+      nextY = 0
+      guides.push({ orientation: "horizontal", position: 0 })
+    }
+
+    if (Math.abs(y + height - slideSize.height) <= SNAP_TOLERANCE) {
+      nextY = slideSize.height - height
+      guides.push({ orientation: "horizontal", position: slideSize.height })
+    }
+
+    if (Math.abs(centerY - slideCenterY) <= SNAP_TOLERANCE) {
+      nextY = slideCenterY - height / 2
+      guides.push({ orientation: "horizontal", position: slideCenterY })
+    }
+
+    return { x: nextX, y: nextY, guides }
+  }, [slideSize.height, slideSize.width])
+
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!editorRef.current || (!draggingElement && !resizing)) return
     if (window.getSelection) {
@@ -307,6 +353,7 @@ export default function SlideEditor({
         })
       }
 
+      setActiveGuides([])
       const updatedElements = slide.elements.map((el) => (el.id === selectedElement.id ? updatedElement : el))
 
       onUpdateSlide({
@@ -318,7 +365,9 @@ export default function SlideEditor({
     } else if (draggingElement) {
       const newX = pointer.x - dragOffset.x
       const newY = pointer.y - dragOffset.y
-      const clamped = clampRectToSlide(newX, newY, draggingElement.size.width, draggingElement.size.height)
+      const snapped = applySlideSmartGuides(newX, newY, draggingElement.size.width, draggingElement.size.height)
+      const clamped = clampRectToSlide(snapped.x, snapped.y, draggingElement.size.width, draggingElement.size.height)
+      setActiveGuides(snapped.guides)
 
       const updatedElement = {
         ...draggingElement,
@@ -349,6 +398,7 @@ export default function SlideEditor({
     slideSize,
     onUpdateSlide,
     onElementSelect,
+    applySlideSmartGuides,
   ])
 
   const handleMouseUp = useCallback(() => {
@@ -359,6 +409,7 @@ export default function SlideEditor({
     setDraggingElement(null)
     setResizing(false)
     setResizeDirection("")
+    setActiveGuides([])
     resizeSessionRef.current = null
   }, [draggingElement, resizing, onTransformEnd, toggleInteractionSelectionLock])
 
@@ -871,6 +922,21 @@ export default function SlideEditor({
       }}
       onClick={handleEditorClick}
     >
+      {activeGuides.map((guide, index) =>
+        guide.orientation === "vertical" ? (
+          <div
+            key={`guide-v-${index}-${guide.position}`}
+            className="pointer-events-none absolute top-0 bottom-0 z-30 w-px bg-sky-500/80"
+            style={{ left: guide.position }}
+          />
+        ) : (
+          <div
+            key={`guide-h-${index}-${guide.position}`}
+            className="pointer-events-none absolute left-0 right-0 z-30 h-px bg-sky-500/80"
+            style={{ top: guide.position }}
+          />
+        ),
+      )}
       {slide.elements.map(renderElement)}
     </div>
   )
