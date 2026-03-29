@@ -11,6 +11,9 @@ vi.mock("@/components/import-pptx-dialog", () => ({
 vi.mock("@/components/title-editor", () => ({
   default: () => <div data-testid="title-editor" />,
 }))
+vi.mock("next-themes", () => ({
+  useTheme: () => ({ resolvedTheme: "light", setTheme: vi.fn() }),
+}))
 
 import Toolbar from "@/components/toolbar"
 

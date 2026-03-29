@@ -14,6 +14,8 @@ import {
   Undo2,
   Redo2,
   Download,
+  Moon,
+  Sun,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -22,6 +24,7 @@ import TitleEditor from "./title-editor"
 import ImportZipDialog from "@/components/import-zip-dialog"
 import ImportPptxDialog from "@/components/import-pptx-dialog"
 import { Input } from "@/components/ui/input"
+import { useTheme } from "next-themes"
 
 interface ToolbarProps {
   selectedElement: Element | null
@@ -66,6 +69,15 @@ export default function Toolbar({
   isExportingOutZip,
   isExportingLayout,
 }: ToolbarProps) {
+  const { resolvedTheme, setTheme } = useTheme()
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const isDark = mounted && resolvedTheme === "dark"
+
   const PRESET_COLORS = [
     "#000000", "#111827", "#374151", "#6b7280", "#ffffff",
     "#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4",
@@ -211,6 +223,15 @@ export default function Toolbar({
           </Button>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            className="border"
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
+          >
+            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
           {showAdminImportTools ? (
             <>
               <ImportZipDialog importOutZipFromArrayBuffer={importOutZipFromArrayBuffer} hasUnsavedChanges={hasUnsavedChanges} />
