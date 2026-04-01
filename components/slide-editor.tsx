@@ -201,67 +201,111 @@ export default function SlideEditor({
   }
 
 
-  const applySlideSmartGuides = useCallback((x: number, y: number, width: number, height: number) => {
+  const applySlideSmartGuides = useCallback((
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    options?: { mode?: "drag" | "resize"; direction?: string },
+  ) => {
     let nextX = x
     let nextY = y
+    let nextWidth = width
+    let nextHeight = height
     const guides: Array<{ orientation: "vertical" | "horizontal"; position: number }> = []
 
-    const centerX = x + width / 2
-    const centerY = y + height / 2
+    const mode = options?.mode ?? "drag"
+    const direction = options?.direction ?? ""
     const slideCenterX = slideSize.width / 2
     const slideCenterY = slideSize.height / 2
+    const targetsX = [0, slideCenterX, slideSize.width]
+    const targetsY = [0, slideCenterY, slideSize.height]
 
-    if (Math.abs(x) <= SNAP_TOLERANCE) {
-      nextX = 0
-      guides.push({ orientation: "vertical", position: 0 })
+    const pickClosest = (deltas: Array<{ delta: number; target: number }>) => {
+      let best: { delta: number; target: number } | null = null
+      deltas.forEach((item) => {
+        if (Math.abs(item.delta) > SNAP_TOLERANCE) return
+        if (!best || Math.abs(item.delta) < Math.abs(best.delta)) {
+          best = item
+        }
+      })
+      return best
     }
 
-    if (Math.abs(x + width - slideSize.width) <= SNAP_TOLERANCE) {
-      nextX = slideSize.width - width
-      guides.push({ orientation: "vertical", position: slideSize.width })
+    const buildAxisDeltas = (anchors: number[], targets: number[]) => {
+      const deltas: Array<{ delta: number; target: number }> = []
+      anchors.forEach((anchor) => {
+        targets.forEach((target) => {
+          deltas.push({ delta: target - anchor, target })
+        })
+      })
+      return deltas
     }
 
-    if (Math.abs(centerX - slideCenterX) <= SNAP_TOLERANCE) {
-      nextX = slideCenterX - width / 2
-      guides.push({ orientation: "vertical", position: slideCenterX })
+    const hasEast = direction.includes("e")
+    const hasWest = direction.includes("w")
+    const hasSouth = direction.includes("s")
+    const hasNorth = direction.includes("n")
+
+    const anchorsX =
+      mode === "resize"
+        ? hasEast && !hasWest
+          ? [x + width]
+          : hasWest && !hasEast
+            ? [x]
+            : [x, x + width / 2, x + width]
+        : [x, x + width / 2, x + width]
+
+    const anchorsY =
+      mode === "resize"
+        ? hasSouth && !hasNorth
+          ? [y + height]
+          : hasNorth && !hasSouth
+            ? [y]
+            : [y, y + height / 2, y + height]
+        : [y, y + height / 2, y + height]
+
+    const snapX = pickClosest(buildAxisDeltas(anchorsX, targetsX))
+    if (snapX) {
+      guides.push({ orientation: "vertical", position: snapX.target })
+      if (mode === "resize") {
+        if (hasEast && !hasWest) {
+          nextWidth += snapX.delta
+        } else if (hasWest && !hasEast) {
+          nextX += snapX.delta
+          nextWidth -= snapX.delta
+        } else {
+          nextX += snapX.delta
+        }
+      } else {
+        nextX += snapX.delta
+      }
     }
 
-    if (Math.abs(x - slideCenterX) <= SNAP_TOLERANCE) {
-      nextX = slideCenterX
-      guides.push({ orientation: "vertical", position: slideCenterX })
+    const snapY = pickClosest(buildAxisDeltas(anchorsY, targetsY))
+    if (snapY) {
+      guides.push({ orientation: "horizontal", position: snapY.target })
+      if (mode === "resize") {
+        if (hasSouth && !hasNorth) {
+          nextHeight += snapY.delta
+        } else if (hasNorth && !hasSouth) {
+          nextY += snapY.delta
+          nextHeight -= snapY.delta
+        } else {
+          nextY += snapY.delta
+        }
+      } else {
+        nextY += snapY.delta
+      }
     }
 
-    if (Math.abs(x + width - slideCenterX) <= SNAP_TOLERANCE) {
-      nextX = slideCenterX - width
-      guides.push({ orientation: "vertical", position: slideCenterX })
+    return {
+      x: nextX,
+      y: nextY,
+      width: Math.max(MIN_ELEMENT_WIDTH, nextWidth),
+      height: Math.max(MIN_ELEMENT_HEIGHT, nextHeight),
+      guides,
     }
-
-    if (Math.abs(y) <= SNAP_TOLERANCE) {
-      nextY = 0
-      guides.push({ orientation: "horizontal", position: 0 })
-    }
-
-    if (Math.abs(y + height - slideSize.height) <= SNAP_TOLERANCE) {
-      nextY = slideSize.height - height
-      guides.push({ orientation: "horizontal", position: slideSize.height })
-    }
-
-    if (Math.abs(centerY - slideCenterY) <= SNAP_TOLERANCE) {
-      nextY = slideCenterY - height / 2
-      guides.push({ orientation: "horizontal", position: slideCenterY })
-    }
-
-    if (Math.abs(y - slideCenterY) <= SNAP_TOLERANCE) {
-      nextY = slideCenterY
-      guides.push({ orientation: "horizontal", position: slideCenterY })
-    }
-
-    if (Math.abs(y + height - slideCenterY) <= SNAP_TOLERANCE) {
-      nextY = slideCenterY - height
-      guides.push({ orientation: "horizontal", position: slideCenterY })
-    }
-
-    return { x: nextX, y: nextY, guides }
   }, [slideSize.height, slideSize.width])
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -328,8 +372,11 @@ export default function SlideEditor({
       newY = normalizePosition(newY, session.startY, "y")
 
       // smart guides для resize (когда тянут за ручки)
-      const snapped = applySlideSmartGuides(newX, newY, normalizedWidth, normalizedHeight)
-      const clamped = clampRectToSlide(snapped.x, snapped.y, normalizedWidth, normalizedHeight)
+      const snapped = applySlideSmartGuides(newX, newY, normalizedWidth, normalizedHeight, {
+        mode: "resize",
+        direction: session.direction,
+      })
+      const clamped = clampRectToSlide(snapped.x, snapped.y, snapped.width, snapped.height)
       setActiveGuides(snapped.guides)
 
       const newSize = {
@@ -389,8 +436,10 @@ export default function SlideEditor({
     } else if (draggingElement) {
       const newX = pointer.x - dragOffset.x
       const newY = pointer.y - dragOffset.y
-      const snapped = applySlideSmartGuides(newX, newY, draggingElement.size.width, draggingElement.size.height)
-      const clamped = clampRectToSlide(snapped.x, snapped.y, draggingElement.size.width, draggingElement.size.height)
+      const snapped = applySlideSmartGuides(newX, newY, draggingElement.size.width, draggingElement.size.height, {
+        mode: "drag",
+      })
+      const clamped = clampRectToSlide(snapped.x, snapped.y, snapped.width, snapped.height)
       setActiveGuides(snapped.guides)
 
       const updatedElement = {
