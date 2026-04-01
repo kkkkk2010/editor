@@ -223,12 +223,12 @@ export default function SlideEditor({
 
     const pickClosest = (deltas: Array<{ delta: number; target: number }>) => {
       let best: { delta: number; target: number } | null = null
-      deltas.forEach((item) => {
-        if (Math.abs(item.delta) > SNAP_TOLERANCE) return
+      for (const item of deltas) {
+        if (Math.abs(item.delta) > SNAP_TOLERANCE) continue
         if (!best || Math.abs(item.delta) < Math.abs(best.delta)) {
           best = item
         }
-      })
+      }
       return best
     }
 
