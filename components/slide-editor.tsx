@@ -424,7 +424,6 @@ export default function SlideEditor({
         })
       }
 
-      setActiveGuides([])
       const updatedElements = slide.elements.map((el) => (el.id === selectedElement.id ? updatedElement : el))
 
       onUpdateSlide({
