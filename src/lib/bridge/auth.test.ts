@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 
-import { checkBridgeAuthorization, getExpectedBridgeToken, readBridgeAuth } from "./auth"
+import { checkBridgeAuthorization, getExpectedBridgeToken, readBridgeAuth, tokensEqual } from "./auth"
 
 const ORIGINAL_ENV = { ...process.env }
 
@@ -78,5 +78,12 @@ describe("checkBridgeAuthorization", () => {
       enabled: false,
       authorized: false,
     })
+  })
+})
+
+describe("tokensEqual", () => {
+  it("compares equal tokens and rejects different lengths", () => {
+    expect(tokensEqual("same-token", "same-token")).toBe(true)
+    expect(tokensEqual("short", "longer-token")).toBe(false)
   })
 })

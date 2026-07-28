@@ -1,249 +1,173 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-
-
-function maskSensitiveUrlForLog(rawUrl: string | null | undefined) {
-  if (!rawUrl) return null
-  try {
-    const parsed = new URL(rawUrl, window.location.origin)
-    ;["saveToken", "t"].forEach((key) => {
-      if (parsed.searchParams.has(key)) {
-        parsed.searchParams.set(key, "***")
-      }
-    })
-    return `${parsed.origin}${parsed.pathname}${parsed.search}`
-  } catch {
-    return "invalid-url"
-  }
-}
 
 type AutoImportOutZipProps = {
   importOutZipFromArrayBuffer: (outZip: ArrayBuffer) => Promise<void>
   currentPresentationId: string | null
+  onPresentationIdChange?: (presentationId: string) => void
   onImportStateChange?: (isImporting: boolean) => void
   onImportStart?: () => void
   onImportComplete?: (success: boolean) => void
   onImportError?: (message: string | null) => void
 }
 
-type CallbackRefs = {
-  importOutZipFromArrayBuffer: (outZip: ArrayBuffer) => Promise<void>
-  currentPresentationId: string | null
-  onImportStateChange?: (isImporting: boolean) => void
-  onImportStart?: () => void
-  onImportComplete?: (success: boolean) => void
-  onImportError?: (message: string | null) => void
-}
-
-type InitialSaveCtx = {
+type ImportContext = {
+  downloadUrl: string
+  downloadToken: string
   saveToken: string
   saveEndpoint: string
-  importOutZip: string
-  bridgeToken: string
+  presentationId: string
+}
+
+function cleanBrowserUrl() {
+  window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.hash}`)
+}
+
+async function resolveImportContext(currentPresentationId: string | null): Promise<ImportContext | null> {
+  const params = new URLSearchParams(window.location.search)
+  const launchId = params.get("launch")
+  if (launchId) {
+    cleanBrowserUrl()
+    const response = await fetch(`/api/bridge/launch/${encodeURIComponent(launchId)}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+    })
+    if (!response.ok) {
+      throw new Error(response.status === 404 ? "Ссылка на редактор истекла. Откройте презентацию из кабинета еще раз." : "Не удалось открыть презентацию.")
+    }
+    const payload = (await response.json()) as ImportContext
+    if (!payload.downloadUrl || !payload.downloadToken || !payload.saveToken || !payload.saveEndpoint || !payload.presentationId) {
+      throw new Error("Сервер вернул неполные данные для открытия презентации.")
+    }
+    return payload
+  }
+
+  const importOutZip = params.get("importOutZip")
+  if (!importOutZip) return null
+
+  const downloadToken = params.get("t") ?? ""
+  const saveToken = params.get("saveToken") ?? ""
+  const saveEndpoint = params.get("saveEndpoint") ?? ""
+  const presentationId = params.get("presentationId") ?? currentPresentationId ?? ""
+  const sourceUrl = new URL(importOutZip, window.location.origin)
+  cleanBrowserUrl()
+
+  if (!downloadToken || !saveToken || !saveEndpoint || !presentationId) {
+    throw new Error("Ссылка на редактор неполная. Откройте презентацию из кабинета еще раз.")
+  }
+
+  return {
+    downloadUrl: sourceUrl.toString(),
+    downloadToken,
+    saveToken,
+    saveEndpoint,
+    presentationId,
+  }
 }
 
 export default function AutoImportOutZip({
   importOutZipFromArrayBuffer,
   currentPresentationId,
+  onPresentationIdChange,
   onImportStateChange,
   onImportStart,
   onImportComplete,
   onImportError,
 }: AutoImportOutZipProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { toast } = useToast()
   const hasImportedRef = useRef(false)
-  const initialUrlRef = useRef<string | null>(null)
-  const initialSaveCtxRef = useRef<InitialSaveCtx | null>(null)
-  const routerRef = useRef(router)
-  const toastRef = useRef(toast)
-  const callbackRefs = useRef<CallbackRefs>({
+  const callbacksRef = useRef({
     importOutZipFromArrayBuffer,
     currentPresentationId,
+    onPresentationIdChange,
     onImportStateChange,
     onImportStart,
     onImportComplete,
     onImportError,
   })
 
-  callbackRefs.current = {
+  callbacksRef.current = {
     importOutZipFromArrayBuffer,
     currentPresentationId,
+    onPresentationIdChange,
     onImportStateChange,
     onImportStart,
     onImportComplete,
     onImportError,
   }
-  routerRef.current = router
-  toastRef.current = toast
-
-  if (!initialUrlRef.current) {
-    const importOutZip = searchParams.get("importOutZip")
-    if (importOutZip) {
-      const token = searchParams.get("t") ?? ""
-      const saveToken = searchParams.get("saveToken") ?? ""
-      const saveEndpoint = searchParams.get("saveEndpoint") ?? ""
-
-      if (saveToken && saveEndpoint) {
-        initialSaveCtxRef.current = {
-          saveToken,
-          saveEndpoint,
-          importOutZip,
-          bridgeToken: token,
-        }
-      }
-
-      console.log("[auto-import] captured save ctx", {
-        hasSaveToken: Boolean(saveToken),
-        hasSaveEndpoint: Boolean(saveEndpoint),
-        hasImportOutZip: Boolean(importOutZip),
-        hasBridgeToken: Boolean(token),
-      })
-
-      const importUrl = new URL(importOutZip, window.location.origin)
-      importUrl.searchParams.set("t", token)
-      initialUrlRef.current = importUrl.toString()
-      console.log("[auto-import] downloadUrl", importUrl.pathname)
-
-      const hasSensitiveParams = Boolean(searchParams.get("t") || searchParams.get("saveToken") || searchParams.get("saveEndpoint"))
-      if (hasSensitiveParams) {
-        const cleanUrl = `${window.location.pathname}${window.location.hash}`
-        window.history.replaceState(window.history.state, "", cleanUrl)
-      }
-    }
-  }
 
   useEffect(() => {
-    if (!initialUrlRef.current) {
-      return
-    }
-
-    if (hasImportedRef.current) {
-      return
-    }
+    if (hasImportedRef.current) return
+    const params = new URLSearchParams(window.location.search)
+    if (!params.has("launch") && !params.has("importOutZip")) return
 
     const controller = new AbortController()
-    const mountedRef = { current: true }
+    let mounted = true
 
     const run = async () => {
       let importSucceeded = false
-      callbackRefs.current.onImportStateChange?.(true)
-      callbackRefs.current.onImportStart?.()
-      callbackRefs.current.onImportError?.(null)
+      callbacksRef.current.onImportStateChange?.(true)
+      callbacksRef.current.onImportStart?.()
+      callbacksRef.current.onImportError?.(null)
+
       try {
-        console.log("[auto-import] fetch start")
-        const response = await fetch(initialUrlRef.current!, {
+        const context = await resolveImportContext(callbacksRef.current.currentPresentationId)
+        if (!context || !mounted) return
+
+        const response = await fetch(context.downloadUrl, {
           method: "GET",
           cache: "no-store",
           signal: controller.signal,
+          headers: { Authorization: `Bearer ${context.downloadToken}` },
         })
-
         if (!response.ok) {
-          const contentType = response.headers.get("content-type") ?? ""
-          let detail = ""
-          if (contentType.includes("application/json")) {
-            try {
-              const payload = (await response.json()) as { message?: string }
-              detail = payload?.message ? ` ${payload.message}` : ""
-            } catch {
-              detail = ""
-            }
-          } else {
-            try {
-              detail = ` ${await response.text()}`
-            } catch {
-              detail = ""
-            }
-          }
-          throw new Error(`Bridge import failed with status ${response.status}.${detail}`.trim())
+          throw new Error(`Не удалось загрузить презентацию: HTTP ${response.status}.`)
         }
 
         const outZip = await response.arrayBuffer()
-        console.log("[auto-import] fetch ok", response.status, outZip.byteLength)
-        if (!mountedRef.current) {
-          return
-        }
+        if (!mounted) return
+        await callbacksRef.current.importOutZipFromArrayBuffer(outZip)
+        if (!mounted) return
 
-        await callbackRefs.current.importOutZipFromArrayBuffer(outZip)
-        importSucceeded = true
+        sessionStorage.setItem(
+          "wpSaveCtx",
+          JSON.stringify({
+            saveToken: context.saveToken,
+            saveEndpoint: context.saveEndpoint,
+            presentationId: context.presentationId,
+            ts: Date.now(),
+          }),
+        )
+        callbacksRef.current.onPresentationIdChange?.(context.presentationId)
         hasImportedRef.current = true
-        callbackRefs.current.onImportError?.(null)
-        console.log("[auto-import] import done")
-        if (mountedRef.current) {
-          // WP save ctx persisted because router clean removes query params
-          const capturedCtx = initialSaveCtxRef.current
-          const saveToken = capturedCtx?.saveToken ?? null
-          const saveEndpoint = capturedCtx?.saveEndpoint ?? null
-          const presentationId = callbackRefs.current.currentPresentationId
-          const importOutZip = capturedCtx?.importOutZip ?? null
-          const bridgeToken = capturedCtx?.bridgeToken ?? ""
-          let outZipUrl: string | undefined
-          if (importOutZip) {
-            const sourceUrl = new URL(importOutZip, window.location.origin)
-            sourceUrl.searchParams.set("t", bridgeToken)
-            outZipUrl = sourceUrl.toString()
-          }
-
-          console.log("[auto-import] restore save ctx", {
-            hasCapturedCtx: Boolean(capturedCtx),
-            hasSaveToken: Boolean(saveToken),
-            hasSaveEndpoint: Boolean(saveEndpoint),
-            hasPresentationId: Boolean(presentationId),
-          })
-
-          if (saveToken && saveEndpoint && presentationId) {
-            const wpSaveCtx = {
-              saveToken,
-              saveEndpoint,
-              presentationId,
-              outZipUrl,
-              ts: Date.now(),
-            }
-            sessionStorage.setItem("wpSaveCtx", JSON.stringify(wpSaveCtx))
-            console.log("wpSaveCtx stored", {
-              presentationId,
-              saveEndpoint: maskSensitiveUrlForLog(saveEndpoint),
-            })
-          }
-
-          const cleanUrl = `${window.location.pathname}${window.location.hash}`
-          routerRef.current.replace(cleanUrl)
-          console.log("[auto-import] router clean done")
-          toastRef.current({
-            title: "Импорт завершен",
-            description: "Файл out.zip успешно загружен через bridge.",
-          })
-        }
+        importSucceeded = true
+        callbacksRef.current.onImportError?.(null)
+        router.replace(`${window.location.pathname}${window.location.hash}`)
+        toast({ title: "Презентация открыта" })
       } catch (error) {
-        if (mountedRef.current) {
-          const err = error as { name?: string; message?: string }
-          const errorMessage = err?.message ?? "Попробуйте снова."
-          console.log("[auto-import] error", err?.name, errorMessage)
-          callbackRefs.current.onImportError?.(errorMessage)
-          toastRef.current({
-            title: err?.name === "AbortError" ? "Импорт отменен" : "Не удалось импортировать out.zip",
-            description: errorMessage,
-            variant: "destructive",
-          })
-        }
+        if (!mounted) return
+        const err = error as { name?: string; message?: string }
+        const message = err.name === "AbortError" ? "Импорт отменен." : err.message ?? "Попробуйте снова."
+        callbacksRef.current.onImportError?.(message)
+        toast({ title: "Не удалось открыть презентацию", description: message, variant: "destructive" })
       } finally {
-        if (mountedRef.current) {
-          callbackRefs.current.onImportStateChange?.(false)
-          callbackRefs.current.onImportComplete?.(importSucceeded)
+        if (mounted) {
+          callbacksRef.current.onImportStateChange?.(false)
+          callbacksRef.current.onImportComplete?.(importSucceeded)
         }
       }
     }
 
     void run()
     return () => {
-      mountedRef.current = false
+      mounted = false
       controller.abort()
     }
-  }, [])
+  }, [router, toast])
 
   return null
 }

@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises"
 import { getBridgeJob, incrementBridgeDownloads, pruneBridgeJobs, readBridgeZip, removeBridgeJob } from "@/src/lib/bridge/store"
+import { tokensEqual } from "@/src/lib/bridge/auth"
 
 export const runtime = "nodejs"
 
@@ -25,7 +26,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return Response.json(errorBody("EXPIRED", "Download link expired.", job.requestId), { status: 410 })
   }
 
-  if (token !== job.token) {
+  if (!tokensEqual(token, job.token)) {
     return Response.json(errorBody("UNAUTHORIZED", "Invalid download token.", job.requestId), { status: 401 })
   }
 

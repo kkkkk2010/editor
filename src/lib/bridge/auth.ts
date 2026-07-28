@@ -32,6 +32,12 @@ export function readBridgeAuth(request: Request) {
   }
 }
 
+export function tokensEqual(left: string, right: string) {
+  const leftBuffer = Buffer.from(left)
+  const rightBuffer = Buffer.from(right)
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer)
+}
+
 export function checkBridgeAuthorization(request: Request) {
   const expectedToken = getExpectedBridgeToken()
   const auth = readBridgeAuth(request)
@@ -41,18 +47,17 @@ export function checkBridgeAuthorization(request: Request) {
   }
 
   const providedToken = auth.bearerToken || auth.fallbackToken
-  const authorized = providedToken === expectedToken || auth.cookieToken === expectedToken
+  const authorized = tokensEqual(providedToken, expectedToken) || tokensEqual(auth.cookieToken, expectedToken)
   return { enabled: true, authorized, auth, expectedToken }
 }
 
 export function logBridgeUnauthorized(scope: string, requestId: string, details: ReturnType<typeof checkBridgeAuthorization>) {
-  const providedToken = details.auth.bearerToken || details.auth.fallbackToken
   console.error(`[bridge/${scope}] unauthorized`, {
     requestId,
     hasAuthHeader: Boolean(details.auth.authHeader),
     authScheme: details.auth.authScheme,
     hasCookie: Boolean(details.auth.cookieToken),
-    tokenPrefix: providedToken ? `${providedToken.slice(0, 6)}***` : null,
-    expectedTokenPrefix: details.expectedToken ? `${details.expectedToken.slice(0, 6)}***` : null,
+    hasProvidedToken: Boolean(details.auth.bearerToken || details.auth.fallbackToken),
+    bridgeEnabled: Boolean(details.expectedToken),
   })
 }

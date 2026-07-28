@@ -10,7 +10,10 @@ export function middleware(request: NextRequest) {
 
   const requiredToken = process.env.ADMIN_IMPORT_TOKEN
   if (!requiredToken) {
-    return NextResponse.next()
+    return NextResponse.json(
+      { code: "SERVICE_DISABLED", message: "Admin import is disabled." },
+      { status: 503 },
+    )
   }
 
   const cookieValue = request.cookies.get(ADMIN_COOKIE_NAME)?.value

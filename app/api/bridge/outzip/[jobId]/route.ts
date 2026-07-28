@@ -6,6 +6,7 @@ import {
   readBridgeZip,
   removeBridgeJob,
 } from "@/src/lib/bridge/store"
+import { tokensEqual } from "@/src/lib/bridge/auth"
 
 export const runtime = "nodejs"
 
@@ -39,7 +40,9 @@ function logDebug(action: DebugAction, data: { method: string; jobId: string; do
 export async function GET(request: Request, context: { params: Promise<{ jobId: string }> }) {
   await pruneBridgeJobs()
   const { jobId } = await context.params
-  const token = new URL(request.url).searchParams.get("t")
+  const authorization = request.headers.get("authorization") ?? ""
+  const bearerToken = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : ""
+  const token = bearerToken || new URL(request.url).searchParams.get("t") || ""
   const method = request.method.toUpperCase()
 
   if (!token) {
@@ -58,7 +61,7 @@ export async function GET(request: Request, context: { params: Promise<{ jobId: 
     return Response.json(errorBody("EXPIRED", "Download link expired.", job.requestId), { status: 410 })
   }
 
-  if (token !== job.token) {
+  if (!tokensEqual(token, job.token)) {
     logDebug("unauthorized", { method, jobId, downloadsUsed: job.downloadsUsed, maxDownloads: job.maxDownloads })
     return Response.json(errorBody("UNAUTHORIZED", "Invalid download token.", job.requestId), { status: 401 })
   }

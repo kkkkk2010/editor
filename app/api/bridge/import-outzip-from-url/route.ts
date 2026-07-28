@@ -1,31 +1,23 @@
+import { downloadPublicFile, PublicDownloadError } from "@/src/lib/bridge/download"
+import { sanitizeUrlForLogs } from "@/src/lib/bridge/network"
 import { resolveBridgePolicy } from "@/src/lib/bridge/policy"
-import { assertPublicUrl, sanitizeUrlForLogs } from "@/src/lib/bridge/network"
+import { createBridgeLaunch } from "@/src/lib/bridge/launchStore"
 import { createJobFromZipBytes } from "@/src/lib/bridge/store"
 
 export const runtime = "nodejs"
 
 const DEFAULT_MAX_OUTZIP_BYTES = 50 * 1024 * 1024
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 90_000
-const MAX_REDIRECT_HOPS = 3
 
-function getMaxOutzipBytes() {
-  const raw = process.env.BRIDGE_MAX_OUTZIP_BYTES
-  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
-  if (Number.isNaN(parsed) || parsed <= 0) return DEFAULT_MAX_OUTZIP_BYTES
-  return parsed
-}
-
-function getDownloadTimeoutMs() {
-  const raw = process.env.BRIDGE_DOWNLOAD_TIMEOUT_MS
-  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
-  if (Number.isNaN(parsed) || parsed <= 0) return DEFAULT_DOWNLOAD_TIMEOUT_MS
-  return parsed
+function positiveEnvInt(name: string, fallback: number) {
+  const parsed = Number.parseInt(process.env[name] ?? "", 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
 function errorBody(
   code: string,
   message: string,
-  options?: { requestId?: string; httpStatus?: number; targetUrl?: string; details?: unknown },
+  options?: { requestId?: string; httpStatus?: number; targetUrl?: string },
 ) {
   return {
     code,
@@ -33,7 +25,7 @@ function errorBody(
     requestId: options?.requestId,
     httpStatus: options?.httpStatus,
     targetUrl: options?.targetUrl,
-    details: options?.details,
+    details: undefined,
   }
 }
 
@@ -46,112 +38,46 @@ function hasZipSignature(bytes: Buffer) {
   return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await fetch(url, { ...init, signal: controller.signal })
-  } finally {
-    clearTimeout(timer)
-  }
+type ImportRequest = {
+  outZipUrl?: string
+  presentationId?: string | number
+  saveToken?: string
+  saveEndpoint?: string
 }
 
-async function downloadOutzipWithSafeRedirects(rawUrl: string, requestId: string, maxBytes: number) {
-  let parsedUrl = await assertPublicUrl(rawUrl, "Invalid outZipUrl.")
+function parseLaunchContext(body: ImportRequest) {
+  const hasAny = body.presentationId !== undefined || body.saveToken !== undefined || body.saveEndpoint !== undefined
+  if (!hasAny) return null
 
-  for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop += 1) {
-    let response: Response
-    try {
-      response = await fetchWithTimeout(
-        parsedUrl.toString(),
-        {
-          method: "GET",
-          redirect: "manual",
-          headers: {
-            Accept: "application/zip, application/octet-stream",
-          },
-          cache: "no-store",
-        },
-        getDownloadTimeoutMs(),
-      )
-    } catch (error) {
-      throw new Response(
-        JSON.stringify(
-          errorBody("UPSTREAM_FETCH_FAILED", "Failed to download out.zip.", {
-            requestId,
-            targetUrl: sanitizeUrlForLogs(parsedUrl.toString()),
-            details: error instanceof Error ? { message: error.message } : undefined,
-          }),
-        ),
-        { status: 400 },
-      )
-    }
-
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get("location")
-      if (!location) {
-        throw new Response(
-          JSON.stringify(errorBody("UPSTREAM_FETCH_FAILED", "Redirect response without location.", { requestId })),
-          { status: 400 },
-        )
-      }
-      if (hop >= MAX_REDIRECT_HOPS) {
-        throw new Response(
-          JSON.stringify(errorBody("UPSTREAM_FETCH_FAILED", "Too many redirects while downloading out.zip.", { requestId })),
-          { status: 400 },
-        )
-      }
-      parsedUrl = await assertPublicUrl(new URL(location, parsedUrl).toString(), "Invalid outZipUrl.")
-      continue
-    }
-
-    if (!response.ok) {
-      throw new Response(
-        JSON.stringify(
-          errorBody("UPSTREAM_FETCH_FAILED", "Failed to download out.zip.", {
-            requestId,
-            targetUrl: sanitizeUrlForLogs(parsedUrl.toString()),
-            httpStatus: response.status,
-          }),
-        ),
-        { status: 400 },
-      )
-    }
-
-    const contentLength = response.headers.get("content-length")
-    if (contentLength) {
-      const parsedLength = Number.parseInt(contentLength, 10)
-      if (!Number.isNaN(parsedLength) && parsedLength > maxBytes) {
-        throw new Response(JSON.stringify(errorBody("LIMIT_EXCEEDED", "out.zip too large.", { requestId })), {
-          status: 413,
-        })
-      }
-    }
-
-    const contentType = response.headers.get("content-type") ?? ""
-    if (contentType && !isZipContentType(contentType)) {
-      throw new Response(JSON.stringify(errorBody("UNSUPPORTED_MEDIA_TYPE", "Invalid out.zip content type.", { requestId })), {
-        status: 415,
-      })
-    }
-
-    const bytes = Buffer.from(await response.arrayBuffer())
-    if (bytes.byteLength > maxBytes) {
-      throw new Response(JSON.stringify(errorBody("LIMIT_EXCEEDED", "out.zip too large.", { requestId })), { status: 413 })
-    }
-
-    if (!hasZipSignature(bytes)) {
-      throw new Response(JSON.stringify(errorBody("UNSUPPORTED_MEDIA_TYPE", "Invalid out.zip signature.", { requestId })), {
-        status: 415,
-      })
-    }
-
-    return bytes
+  const presentationId = String(body.presentationId ?? "").trim()
+  const saveToken = typeof body.saveToken === "string" ? body.saveToken.trim() : ""
+  const saveEndpoint = typeof body.saveEndpoint === "string" ? body.saveEndpoint.trim() : ""
+  if (!/^\d+$/.test(presentationId) || !saveToken || saveToken.length > 512 || !saveEndpoint) {
+    throw new Error("Invalid launch context.")
   }
 
-  throw new Response(JSON.stringify(errorBody("UPSTREAM_FETCH_FAILED", "Failed to download out.zip.", { requestId })), {
-    status: 400,
-  })
+  let parsedEndpoint: URL
+  try {
+    parsedEndpoint = new URL(saveEndpoint)
+  } catch {
+    throw new Error("Invalid launch context.")
+  }
+
+  const allowedOrigins = (process.env.BRIDGE_SAVE_ENDPOINT_ORIGINS ?? "https://www.presentonika.ru")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+  if (
+    parsedEndpoint.protocol !== "https:" ||
+    !allowedOrigins.includes(parsedEndpoint.origin) ||
+    !parsedEndpoint.pathname.startsWith("/wp-json/presentonika/v1/")
+  ) {
+    throw new Error("Invalid launch context.")
+  }
+
+  parsedEndpoint.search = ""
+  parsedEndpoint.hash = ""
+  return { presentationId, saveToken, saveEndpoint: parsedEndpoint.toString() }
 }
 
 export async function POST(request: Request) {
@@ -163,9 +89,9 @@ export async function POST(request: Request) {
     return Response.json(errorBody("UNAUTHORIZED", "Invalid bridge token.", { requestId: policy.requestId }), { status: 401 })
   }
 
-  let body: { outZipUrl?: string }
+  let body: ImportRequest
   try {
-    body = (await request.json()) as { outZipUrl?: string }
+    body = (await request.json()) as ImportRequest
   } catch {
     return Response.json(errorBody("INVALID_REQUEST", "Invalid JSON body.", { requestId: policy.requestId }), { status: 400 })
   }
@@ -174,40 +100,61 @@ export async function POST(request: Request) {
     return Response.json(errorBody("INVALID_REQUEST", "outZipUrl is required.", { requestId: policy.requestId }), { status: 400 })
   }
 
+  let launchContext: ReturnType<typeof parseLaunchContext>
   try {
-    const zipBytes = await downloadOutzipWithSafeRedirects(body.outZipUrl, policy.requestId, getMaxOutzipBytes())
-    const job = await createJobFromZipBytes(zipBytes, { requestId: policy.requestId })
-    const outZipUrl = `/api/bridge/outzip/${job.jobId}?t=${encodeURIComponent(job.token)}`
+    launchContext = parseLaunchContext(body)
+  } catch {
+    return Response.json(errorBody("INVALID_REQUEST", "Invalid launch context.", { requestId: policy.requestId }), { status: 400 })
+  }
 
-    return Response.json(
-      {
-        outZipUrl,
-        expiresAt: job.expiresAt,
-        requestId: policy.requestId,
-      },
-      { headers: { "X-Request-Id": policy.requestId } },
-    )
-  } catch (error) {
-    if (error instanceof Response) {
-      console.error("[bridge/import-outzip-from-url] request failed", {
-        requestId: policy.requestId,
-        url: sanitizeUrlForLogs(body.outZipUrl),
-        status: error.status,
-      })
-      return new Response(error.body, {
-        status: error.status,
-        headers: { "Content-Type": "application/json", "X-Request-Id": policy.requestId },
+  try {
+    const download = await downloadPublicFile(body.outZipUrl, {
+      accept: "application/zip, application/octet-stream",
+      maxBytes: positiveEnvInt("BRIDGE_MAX_OUTZIP_BYTES", DEFAULT_MAX_OUTZIP_BYTES),
+      timeoutMs: positiveEnvInt("BRIDGE_DOWNLOAD_TIMEOUT_MS", DEFAULT_DOWNLOAD_TIMEOUT_MS),
+      contentTypeAllowed: isZipContentType,
+    })
+
+    if (!hasZipSignature(download.bytes)) {
+      return Response.json(errorBody("UNSUPPORTED_MEDIA_TYPE", "Invalid out.zip signature.", { requestId: policy.requestId }), {
+        status: 415,
       })
     }
 
-    console.error("[bridge/import-outzip-from-url] unexpected error", {
+    const job = await createJobFromZipBytes(download.bytes, { requestId: policy.requestId })
+    const launch = launchContext
+      ? createBridgeLaunch({
+          jobId: job.jobId,
+          downloadToken: job.token,
+          ...launchContext,
+        })
+      : null
+    return Response.json(
+      {
+        outZipUrl: `/api/bridge/outzip/${job.jobId}?t=${encodeURIComponent(job.token)}`,
+        ...(launch ? { launchUrl: `/?launch=${encodeURIComponent(launch.id)}` } : {}),
+        expiresAt: job.expiresAt,
+        requestId: policy.requestId,
+      },
+      { headers: { "Cache-Control": "no-store", "X-Request-Id": policy.requestId } },
+    )
+  } catch (error) {
+    const downloadError = error instanceof PublicDownloadError ? error : null
+    console.error("[bridge/import-outzip-from-url] request failed", {
       requestId: policy.requestId,
       url: sanitizeUrlForLogs(body.outZipUrl),
-      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+      code: downloadError?.code ?? "INTERNAL",
     })
-    return Response.json(errorBody("INTERNAL", "Bridge import failed.", { requestId: policy.requestId }), {
-      status: 500,
-      headers: { "X-Request-Id": policy.requestId },
-    })
+    return Response.json(
+      errorBody(downloadError?.code ?? "INTERNAL", downloadError?.message ?? "Bridge import failed.", {
+        requestId: policy.requestId,
+        httpStatus: downloadError?.upstreamStatus,
+        targetUrl: downloadError?.targetUrl,
+      }),
+      {
+        status: downloadError?.status ?? 500,
+        headers: { "Cache-Control": "no-store", "X-Request-Id": policy.requestId },
+      },
+    )
   }
 }

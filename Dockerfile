@@ -21,9 +21,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-COPY --from=build /app/public ./public
-COPY --from=build /app/.next/standalone ./
-COPY --from=build /app/.next/static ./.next/static
+RUN addgroup --system --gid 1001 nextjs \
+  && adduser --system --uid 1001 --ingroup nextjs nextjs
+
+COPY --from=build --chown=nextjs:nextjs /app/public ./public
+COPY --from=build --chown=nextjs:nextjs /app/.next/standalone ./
+COPY --from=build --chown=nextjs:nextjs /app/.next/static ./.next/static
+
+USER nextjs
 
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

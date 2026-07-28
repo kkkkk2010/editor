@@ -223,10 +223,7 @@ export default function Home() {
   const [imagePlan, setImagePlan] = useState<ImagePlan | null>(null)
   const [selectedElementIndex, setSelectedElementIndex] = useState<number | null>(null)
   const [replacedAssets, setReplacedAssets] = useState<Record<string, ReplacedAsset>>({})
-  const [hasPendingAutoImport, setHasPendingAutoImport] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false
-    return new URLSearchParams(window.location.search).has("importOutZip")
-  })
+  const [hasPendingAutoImport, setHasPendingAutoImport] = useState(false)
 
   const present = history.present
   const isMobile = useIsMobile()
@@ -239,6 +236,11 @@ export default function Home() {
   useEffect(() => {
     presentRef.current = present
   }, [present])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    setHasPendingAutoImport(params.has("importOutZip") || params.has("launch"))
+  }, [])
 
   useEffect(() => {
     if (currentPresentationIdRef.current !== null) {
@@ -1773,6 +1775,10 @@ export default function Home() {
         <AutoImportOutZip
           importOutZipFromArrayBuffer={importOutZipFromArrayBuffer}
           currentPresentationId={currentPresentationId}
+          onPresentationIdChange={(presentationId) => {
+            currentPresentationIdRef.current = presentationId
+            setCurrentPresentationId(presentationId)
+          }}
           onImportStateChange={setIsBridgeImporting}
           onImportStart={handleAutoImportStart}
           onImportComplete={handleAutoImportComplete}

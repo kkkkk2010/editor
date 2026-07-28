@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server"
+import { tokensEqual } from "@/src/lib/bridge/auth"
 
 const ADMIN_COOKIE_NAME = "admin_import"
 
 export async function GET(request: Request) {
   const requiredToken = process.env.ADMIN_IMPORT_TOKEN?.trim() || ""
   if (!requiredToken) {
-    return NextResponse.json({ enabled: true })
+    return NextResponse.json({ enabled: false })
   }
 
   const cookieHeader = request.headers.get("cookie") ?? ""
@@ -16,5 +17,5 @@ export async function GET(request: Request) {
       .find((chunk) => chunk.startsWith(`${ADMIN_COOKIE_NAME}=`))
       ?.slice(`${ADMIN_COOKIE_NAME}=`.length) ?? ""
 
-  return NextResponse.json({ enabled: cookieToken === requiredToken })
+  return NextResponse.json({ enabled: tokensEqual(cookieToken, requiredToken) })
 }
