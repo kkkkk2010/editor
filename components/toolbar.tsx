@@ -194,9 +194,9 @@ export default function Toolbar({
 
   return (
     <header className="shrink-0 border-b bg-card">
-      <div className="flex h-16 items-stretch">
-        <div className="flex w-60 shrink-0 items-center border-r px-5">
-          <PresentonikaBrand />
+      <div className="flex h-14 items-stretch">
+        <div className="flex w-52 shrink-0 items-center border-r px-4">
+          <PresentonikaBrand compact />
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-3 px-4">
@@ -246,14 +246,14 @@ export default function Toolbar({
         </div>
       </div>
 
-      <div className="flex h-12 items-stretch border-t">
-        <div className="flex w-60 shrink-0 items-center border-r px-5 text-xs font-bold uppercase text-muted-foreground">
+      <div className="flex h-10 items-stretch border-t">
+        <div className="flex w-52 shrink-0 items-center border-r px-4 text-[11px] font-bold uppercase text-muted-foreground">
           Редактор слайдов
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto px-4 presentonika-scrollbar">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-9 shrink-0">
+              <Button variant="outline" size="sm" className="h-8 shrink-0">
                 <Plus className="h-4 w-4 text-primary" />
                 Добавить
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />

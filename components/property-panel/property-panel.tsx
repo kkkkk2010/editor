@@ -69,7 +69,7 @@ export default function PropertyPanel({
   if (!selectedElement) {
     return (
       <div className="flex h-full flex-col bg-card">
-        <div className="flex h-14 items-center justify-between border-b px-4">
+        <div className="flex h-12 items-center justify-between border-b px-4">
           <div>
             <p className="text-xs font-bold uppercase text-muted-foreground">Настройки</p>
             <h3 className="text-sm font-bold">Свойства элемента</h3>
@@ -91,7 +91,7 @@ export default function PropertyPanel({
 
   return (
     <div className="flex h-full flex-col bg-card">
-      <div className="flex h-14 items-center justify-between border-b px-4">
+      <div className="flex h-12 items-center justify-between border-b px-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-primary">
             {selectedElement.type === "text" && <Type className="h-4 w-4" />}

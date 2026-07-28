@@ -27,14 +27,14 @@ export default function EditorLayout({ sidebar, editor, propertyPanel, showPrope
 
   return (
     <div className="flex h-full min-h-0 min-w-0">
-      <aside className="editor-panel w-60 shrink-0 border-r" aria-label="Слайды презентации">
+      <aside className="editor-panel w-52 shrink-0 border-r" aria-label="Слайды презентации">
         {sidebar}
       </aside>
       <section className="min-w-0 flex-1 overflow-hidden" aria-label="Рабочая область">
         {editor}
       </section>
       {showPropertyPanel ? (
-        <aside className="editor-panel w-80 shrink-0 border-l" aria-label="Свойства элемента">
+        <aside className="editor-panel w-72 shrink-0 border-l" aria-label="Свойства элемента">
           {propertyPanel}
         </aside>
       ) : null}

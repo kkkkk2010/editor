@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useCallback, useMemo, useRef, useState, useEffect } from "react"
+import { Suspense, useCallback, useMemo, useRef, useState, useEffect, useLayoutEffect } from "react"
 import Sidebar from "@/components/sidebar"
 import Toolbar from "@/components/toolbar"
 import SlideEditor from "@/components/slide-editor"
@@ -455,44 +455,31 @@ export default function Home() {
     document.documentElement.style.setProperty("--slide-height", `${slideSize.height}px`)
   }, [slideSize])
 
-  // 监听属性面板变化，调整画布缩放
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const container = editorContainerRef.current
+    if (!container) return
+
     const updateEditorScale = () => {
-      if (!editorContainerRef.current) return
+      const availableWidth = Math.max(container.clientWidth - 32, 1)
+      const availableHeight = Math.max(container.clientHeight - 32, 1)
+      const nextScale = Math.max(
+        0.05,
+        Math.min(availableWidth / slideSize.width, availableHeight / slideSize.height, 1.2),
+      )
 
-      const containerWidth = editorContainerRef.current.clientWidth
-      const containerHeight = editorContainerRef.current.clientHeight
-
-      // 计算水平和垂直方向的缩放比例
-      const scaleX = (containerWidth - 80) / slideSize.width
-      const scaleY = (containerHeight - 80) / slideSize.height
-
-      // 取较小的缩放比例，确保幻灯片完全可见
-      const scale = Math.min(scaleX, scaleY, 1) // 最大缩放为1
-
-      setEditorScale(scale)
+      setEditorScale((currentScale) =>
+        Math.abs(currentScale - nextScale) > 0.001 ? nextScale : currentScale,
+      )
     }
 
     updateEditorScale()
-
-    // 监听窗口大小变化
-    window.addEventListener("resize", updateEditorScale)
-
-    // 监听属性面板变化
-    const observer = new MutationObserver(updateEditorScale)
-    if (editorContainerRef.current) {
-      observer.observe(editorContainerRef.current.parentElement as Node, {
-        attributes: true,
-        childList: true,
-        subtree: true,
-      })
-    }
+    const observer = new ResizeObserver(updateEditorScale)
+    observer.observe(container)
 
     return () => {
-      window.removeEventListener("resize", updateEditorScale)
       observer.disconnect()
     }
-  }, [slideSize, showPropertyPanel, editorContainerRef])
+  }, [slideSize.height, slideSize.width])
 
   useEffect(() => {
     return () => {
@@ -1876,33 +1863,42 @@ export default function Home() {
               editor={
                 <div
                   ref={editorContainerRef}
-                  className="editor-canvas presentonika-scrollbar flex min-h-full min-w-fit flex-col items-center justify-center overflow-auto p-6 lg:p-10"
+                  className="editor-canvas presentonika-scrollbar flex h-full min-h-0 min-w-0 items-center justify-center overflow-auto p-4"
                 >
                   <div
+                    className="relative shrink-0"
                     style={{
-                      transform: `scale(${editorScale})`,
-                      transformOrigin: "center",
-                      transition: "transform 0.2s ease",
+                      width: slideSize.width * editorScale,
+                      height: slideSize.height * editorScale,
                     }}
                   >
-                    <SlideEditor
-                      slide={currentSlide}
-                      onUpdateSlide={updateSlideLive}
-                      onBeginTextEdit={beginTextEdit}
-                      onTextEditChange={updateTextDraft}
-                      onEndTextEdit={endTextEdit}
-                      onCancelTextEdit={cancelTextEdit}
-                      selectedElement={selectedElement}
-                      onElementSelect={handleElementSelect}
-                      slideSize={slideSize}
-                      onCopyElement={handleCopyElement}
-                      onDeleteElement={handleDeleteElement}
-                      onMoveElementForward={handleMoveElementForward}
-                      onMoveElementBackward={handleMoveElementBackward}
-                      onLockToggle={handleLockToggle}
-                      onTransformStart={handleTransformStart}
-                      onTransformEnd={handleTransformEnd}
-                    />
+                    <div
+                      className="absolute left-0 top-0"
+                      style={{
+                        transform: `scale(${editorScale})`,
+                        transformOrigin: "top left",
+                        transition: "transform 0.15s ease",
+                      }}
+                    >
+                      <SlideEditor
+                        slide={currentSlide}
+                        onUpdateSlide={updateSlideLive}
+                        onBeginTextEdit={beginTextEdit}
+                        onTextEditChange={updateTextDraft}
+                        onEndTextEdit={endTextEdit}
+                        onCancelTextEdit={cancelTextEdit}
+                        selectedElement={selectedElement}
+                        onElementSelect={handleElementSelect}
+                        slideSize={slideSize}
+                        onCopyElement={handleCopyElement}
+                        onDeleteElement={handleDeleteElement}
+                        onMoveElementForward={handleMoveElementForward}
+                        onMoveElementBackward={handleMoveElementBackward}
+                        onLockToggle={handleLockToggle}
+                        onTransformStart={handleTransformStart}
+                        onTransformEnd={handleTransformEnd}
+                      />
+                    </div>
                   </div>
                 </div>
               }
@@ -1931,7 +1927,7 @@ export default function Home() {
             />
           </div>
 
-          <footer className="editor-panel flex h-14 shrink-0 items-center justify-between border-t px-4">
+          <footer className="editor-panel flex h-12 shrink-0 items-center justify-between border-t px-3">
             <div className="flex min-w-0 items-center gap-2">
               <div className="rounded-md bg-muted px-2.5 py-1.5 text-xs font-semibold text-muted-foreground">
                 Слайд <span className="text-foreground">{currentSlideIndex + 1}</span> из {slides.length}
