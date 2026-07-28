@@ -4,7 +4,7 @@ import type { CSSProperties } from "react"
 import { useState } from "react"
 import type { Slide } from "@/lib/types"
 import { Button } from "@/components/ui/button"
-import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from "lucide-react"
+import { ArrowDown, ArrowUp, Copy, Layers3, Plus, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ptToPx } from "@/lib/utils/units"
 
@@ -204,8 +204,8 @@ export default function Sidebar({
         )}
         <div
           className={cn(
-            "relative border rounded-md overflow-hidden cursor-pointer transition-all mb-3 group select-none",
-            isCurrent ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-primary/50",
+            "group relative mb-3 cursor-pointer select-none overflow-hidden rounded-md border bg-white shadow-sm transition-[border-color,box-shadow,opacity]",
+            isCurrent ? "border-primary ring-2 ring-primary/20" : "border-border hover:border-primary/50 hover:shadow-md",
             draggingSlideIndex === index && "opacity-40",
           )}
           style={{
@@ -224,7 +224,7 @@ export default function Sidebar({
               <button
                 type="button"
                 className={cn(
-                  "rounded-full bg-background/90 p-1 text-foreground shadow-sm",
+                  "rounded bg-card/95 p-1 text-foreground shadow-sm ring-1 ring-border",
                   index === 0 && "cursor-not-allowed opacity-50",
                 )}
                 onClick={(event) => {
@@ -240,7 +240,7 @@ export default function Sidebar({
               <button
                 type="button"
                 className={cn(
-                  "rounded-full bg-background/90 p-1 text-foreground shadow-sm",
+                  "rounded bg-card/95 p-1 text-foreground shadow-sm ring-1 ring-border",
                   index === slides.length - 1 && "cursor-not-allowed opacity-50",
                 )}
                 onClick={(event) => {
@@ -255,7 +255,7 @@ export default function Sidebar({
               </button>
               <button
                 type="button"
-                className="rounded-full bg-background/90 p-1 text-foreground shadow-sm"
+                className="rounded bg-card/95 p-1 text-foreground shadow-sm ring-1 ring-border"
                 onClick={(event) => {
                   event.stopPropagation()
                   onDuplicateSlide(index)
@@ -270,7 +270,7 @@ export default function Sidebar({
           <button
             type="button"
             className={cn(
-              "absolute right-1 top-1 z-10 rounded-full bg-background/90 p-1 text-foreground shadow-sm opacity-0 transition-opacity group-hover:opacity-100",
+              "absolute right-1 top-1 z-10 rounded bg-card/95 p-1 text-destructive shadow-sm opacity-0 ring-1 ring-border transition-opacity group-hover:opacity-100",
               slides.length === 1 && "cursor-not-allowed opacity-50",
             )}
             onClick={(event) => {
@@ -406,21 +406,28 @@ export default function Sidebar({
               </div>
             </div>
           </div>
-          <div className="absolute bottom-1 left-1 text-xs text-white bg-black/50 px-1 rounded">{index + 1}</div>
+          <div className="absolute bottom-1 left-1 min-w-5 rounded-sm bg-slate-950/75 px-1.5 py-0.5 text-center text-[10px] font-semibold text-white">{index + 1}</div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="w-56 border-r bg-background flex flex-col h-full overflow-x-hidden">
-      <div className="p-3 border-b">
-        <Button onClick={onAddSlide} variant="outline" className="w-full">
+    <div className="flex h-full w-full flex-col overflow-x-hidden bg-card">
+      <div className="border-b px-4 py-3">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Layers3 className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-bold">Слайды</h2>
+          </div>
+          <span className="text-xs font-medium text-muted-foreground">{slides.length}</span>
+        </div>
+        <Button onClick={onAddSlide} variant="outline" size="sm" className="w-full border-primary/25 text-primary hover:bg-accent">
           <Plus className="h-4 w-4 mr-2" />
           Добавить слайд
         </Button>
       </div>
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3">
+      <div className="presentonika-scrollbar flex-1 overflow-y-auto overflow-x-hidden p-4">
         {slides.map((slide, index) => renderSlidePreview(slide, index))}
         {dropIndicatorIndex === slides.length && draggingSlideIndex !== null && (
           <div className="h-1 rounded bg-primary" aria-hidden="true" />

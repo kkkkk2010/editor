@@ -1,7 +1,6 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { useIsMobile } from "@/components/ui/use-mobile"
 
 interface EditorLayoutProps {
@@ -16,38 +15,29 @@ export default function EditorLayout({ sidebar, editor, propertyPanel, showPrope
 
   if (isMobile) {
     return (
-      <div className="flex h-full flex-col">
-        <div className="max-h-48 shrink-0 overflow-auto border-b bg-background">
-          {sidebar}
-        </div>
-        <div className="flex-1 overflow-auto">{editor}</div>
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="editor-panel max-h-48 shrink-0 overflow-auto border-b">{sidebar}</div>
+        <div className="min-h-0 flex-1 overflow-auto">{editor}</div>
         {showPropertyPanel ? (
-          <div className="max-h-[45vh] shrink-0 overflow-hidden border-t bg-background">{propertyPanel}</div>
+          <div className="editor-panel max-h-[45vh] shrink-0 overflow-hidden border-t">{propertyPanel}</div>
         ) : null}
       </div>
     )
   }
 
   return (
-    <div className="flex h-full">
-      {/* 左侧幻灯片缩略图面板 (固定宽度) */}
-      <div className="w-[16rem] shrink-0 border-r bg-background">
+    <div className="flex h-full min-h-0 min-w-0">
+      <aside className="editor-panel w-60 shrink-0 border-r" aria-label="Слайды презентации">
         {sidebar}
-      </div>
-
-      <ResizablePanelGroup direction="horizontal" className="h-full flex-1">
-        {/* 中间编辑区域 */}
-        <ResizablePanel defaultSize={showPropertyPanel ? 60 : 85} minSize={40}>
-          <div className="h-full overflow-auto">{editor}</div>
-        </ResizablePanel>
-
-        {/* 右侧属性面板 */}
-        {showPropertyPanel && (
-          <ResizablePanel defaultSize={25} minSize={25} maxSize={25} className="bg-background border-l">
-            {propertyPanel}
-          </ResizablePanel>
-        )}
-      </ResizablePanelGroup>
+      </aside>
+      <section className="min-w-0 flex-1 overflow-hidden" aria-label="Рабочая область">
+        {editor}
+      </section>
+      {showPropertyPanel ? (
+        <aside className="editor-panel w-80 shrink-0 border-l" aria-label="Свойства элемента">
+          {propertyPanel}
+        </aside>
+      ) : null}
     </div>
   )
 }

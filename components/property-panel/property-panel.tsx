@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect } from "react"
 import type { Element, Slide } from "@/lib/types"
 import type { ImagePlan } from "@/src/lib/import/imagePlan"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -8,7 +7,7 @@ import TextPropertyPanel from "./text-property-panel"
 import ShapePropertyPanel from "./shape-property-panel"
 import ImagePropertyPanel from "./image-property-panel"
 import LayerPropertyPanel from "./layer-property-panel"
-import { X } from "lucide-react"
+import { ImageIcon, MousePointer2, Shapes, Type, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface PropertyPanelProps {
@@ -67,42 +66,54 @@ export default function PropertyPanel({
   onMoveElementToFront,
   onMoveElementToBack,
 }: PropertyPanelProps) {
-  useEffect(() => {
-    console.log("[ui] PropertyPanel render selected=", selectedElement?.id ?? null)
-  }, [selectedElement])
   if (!selectedElement) {
     return (
-      <div className="h-full flex flex-col">
-        <div className="flex justify-between items-center p-4 border-b">
-          <h3 className="font-medium">Панель свойств</h3>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+      <div className="flex h-full flex-col bg-card">
+        <div className="flex h-14 items-center justify-between border-b px-4">
+          <div>
+            <p className="text-xs font-bold uppercase text-muted-foreground">Настройки</p>
+            <h3 className="text-sm font-bold">Свойства элемента</h3>
+          </div>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} title="Закрыть свойства" aria-label="Закрыть свойства">
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex-1 flex items-center justify-center text-muted-foreground">
-          Выберите элемент для редактирования свойств
+        <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-md bg-accent text-primary">
+            <MousePointer2 className="h-5 w-5" />
+          </div>
+          <p className="text-sm font-semibold text-foreground">Выберите элемент</p>
+          <p className="mt-1 max-w-48 text-xs leading-5 text-muted-foreground">Нажмите на текст, изображение или фигуру на слайде</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="flex justify-between items-center p-4 border-b">
-        <h3 className="font-medium">
-          {selectedElement.type === "text" && "Свойства текста"}
-          {selectedElement.type === "shape" && "Свойства фигуры"}
-          {selectedElement.type === "image" && "Свойства изображения"}
-        </h3>
-        <Button variant="ghost" size="icon" onClick={onClose}>
+    <div className="flex h-full flex-col bg-card">
+      <div className="flex h-14 items-center justify-between border-b px-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-primary">
+            {selectedElement.type === "text" && <Type className="h-4 w-4" />}
+            {selectedElement.type === "shape" && <Shapes className="h-4 w-4" />}
+            {selectedElement.type === "image" && <ImageIcon className="h-4 w-4" />}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase text-muted-foreground">Выбранный элемент</p>
+            <h3 className="truncate text-sm font-bold">
+              {selectedElement.type === "text" && "Текст"}
+              {selectedElement.type === "shape" && "Фигура"}
+              {selectedElement.type === "image" && "Изображение"}
+            </h3>
+          </div>
+        </div>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} title="Закрыть свойства" aria-label="Закрыть свойства">
           <X className="h-4 w-4" />
         </Button>
       </div>
 
-      {/* STYLE ONLY */}
-      <ScrollArea className="flex-1 h-[calc(100vh-150px)]">
-        <div className="p-4">
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="p-5">
           {selectedElement.type === "text" && (
             <TextPropertyPanel element={selectedElement} onUpdateElement={onUpdateElement} />
           )}
@@ -127,7 +138,7 @@ export default function PropertyPanel({
             />
           )}
           {currentSlide && (
-            <div className="mt-6 pt-4 border-t">
+            <div className="mt-6 border-t pt-4">
               <LayerPropertyPanel
                 element={selectedElement}
                 currentSlide={currentSlide}

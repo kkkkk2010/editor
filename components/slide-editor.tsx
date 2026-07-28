@@ -975,7 +975,7 @@ export default function SlideEditor({
   return (
     <div
       ref={editorRef}
-      className="relative bg-white shadow-lg"
+      className="editor-slide-frame relative bg-white"
       style={{
         width: slideSize.width,
         height: slideSize.height,

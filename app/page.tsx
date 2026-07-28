@@ -1770,7 +1770,7 @@ export default function Home() {
   }
 
   return (
-    <main className="flex flex-col h-screen bg-background">
+    <main className="presentonika-editor flex h-dvh min-h-0 flex-col bg-background">
       <Suspense fallback={null}>
         <AutoImportOutZip
           importOutZipFromArrayBuffer={importOutZipFromArrayBuffer}
@@ -1790,9 +1790,10 @@ export default function Home() {
           slides={slides}
           initialSlide={currentSlideIndex}
           onExit={() => {
-            // На мобильных используем режим просмотра как основной.
+            window.location.href = "https://www.presentonika.ru/cabinet"
           }}
           slideSize={slideSize}
+          title={presentationTitle}
         />
       ) : isPreviewMode ? (
         <SlidePreview
@@ -1800,6 +1801,7 @@ export default function Home() {
           initialSlide={currentSlideIndex}
           onExit={() => setIsPreviewMode(false)}
           slideSize={slideSize}
+          title={presentationTitle}
         />
       ) : (
         <>
@@ -1825,7 +1827,7 @@ export default function Home() {
             isExportingLayout={isExportingLayout}
           />
 
-          <div className="flex-1 overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden">
             <EditorLayout
               key={`import-${importRev}`}
               sidebar={
@@ -1874,7 +1876,7 @@ export default function Home() {
               editor={
                 <div
                   ref={editorContainerRef}
-                  className="flex flex-col items-center justify-center min-h-full p-8 bg-muted/30"
+                  className="editor-canvas presentonika-scrollbar flex min-h-full min-w-fit flex-col items-center justify-center overflow-auto p-6 lg:p-10"
                 >
                   <div
                     style={{
@@ -1929,22 +1931,24 @@ export default function Home() {
             />
           </div>
 
-          <div className="flex justify-between items-center p-2 border-t">
-            <div className="flex items-center space-x-2">
-              <div className="text-sm text-muted-foreground">
-                Слайд {currentSlideIndex + 1} / {slides.length} {/* Перевел: "幻灯片" */}
+          <footer className="editor-panel flex h-14 shrink-0 items-center justify-between border-t px-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="rounded-md bg-muted px-2.5 py-1.5 text-xs font-semibold text-muted-foreground">
+                Слайд <span className="text-foreground">{currentSlideIndex + 1}</span> из {slides.length}
               </div>
               <Button
                 variant="ghost"
-                size="icon"
+                size="sm"
                 onClick={() => setShowPropertyPanel(!showPropertyPanel)}
-                className={showPropertyPanel ? "bg-muted" : ""}
+                className={showPropertyPanel ? "bg-accent text-accent-foreground" : ""}
+                title={showPropertyPanel ? "Скрыть свойства" : "Показать свойства"}
               >
                 <PanelRight className="h-4 w-4" />
+                <span className="hidden xl:inline">Свойства</span>
               </Button>
             </div>
 
-            <div className="flex items-center space-x-2">
+            <div className="flex min-w-0 items-center gap-2 overflow-x-auto presentonika-scrollbar">
               <SettingsDialog width={slideSize.width} height={slideSize.height} onSizeChange={handleSizeChange} />
 
               <BackgroundSettingsDialog
@@ -1952,7 +1956,12 @@ export default function Home() {
                 onBackgroundChange={handleBackgroundChange}
               />
 
-              <ImageUploadDialog onImageSelect={handleAddImage} />
+              <ImageUploadDialog
+                onImageSelect={handleAddImage}
+                triggerVariant="outline"
+                triggerSize="sm"
+                triggerClassName="h-9"
+              />
 
               <ExportDialog
                 slides={slides}
@@ -1961,17 +1970,17 @@ export default function Home() {
                 onTitleChange={setPresentationTitle}
               />
 
-              <Button size="sm" onClick={() => setIsPreviewMode(true)}>
+              <Button size="sm" className="h-9 px-4" onClick={() => setIsPreviewMode(true)}>
                 <Play className="h-4 w-4 mr-2" />
-                Презентация {/* Перевел: "演示" */}
+                Просмотр
               </Button>
             </div>
-          </div>
+          </footer>
         </>
       )}
       {showImportOverlay ? (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-background/90 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-xl">
+          <div className="mx-4 w-full max-w-md rounded-md border bg-card p-6 text-center shadow-xl">
             {importOverlayError ? (
               <>
                 <h2 className="text-lg font-semibold">Не удалось импортировать проект</h2>
@@ -1992,7 +2001,7 @@ export default function Home() {
       ) : null}
       {showSaveOverlay ? (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-background/90 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-xl">
+          <div className="mx-4 w-full max-w-md rounded-md border bg-card p-6 text-center shadow-xl">
             <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             <h2 className="mt-4 text-lg font-semibold">Сохраняем проект…</h2>
             <p className="mt-1 text-sm text-muted-foreground">Пожалуйста, подождите. Это может занять до минуты.</p>

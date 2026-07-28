@@ -3,9 +3,8 @@ import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 
 export const metadata: Metadata = {
-  title: 'PPTX',
-  description: 'Веб-редактор презентаций', // Перевел: "一款基于web端的PPT编辑器，开箱即用"
-  generator: '徐小夕', // Имя автора оставил без изменений
+  title: 'Редактор презентаций | Presentonika',
+  description: 'Редактор учебных презентаций Presentonika',
 }
 
 export default function RootLayout({
@@ -14,9 +13,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="ru" suppressHydrationWarning>
       <body>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
           {children}
         </ThemeProvider>
       </body>

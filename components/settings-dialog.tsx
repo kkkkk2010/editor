@@ -30,7 +30,7 @@ export default function SettingsDialog({ width, height, onSizeChange }: Settings
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="icon">
+        <Button variant="outline" size="icon" className="h-9 w-9" title="Размер слайда" aria-label="Размер слайда">
           <Settings className="h-4 w-4" />
         </Button>
       </DialogTrigger>

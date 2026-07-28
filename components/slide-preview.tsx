@@ -5,15 +5,17 @@ import type { Element, Slide, SlideSize } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight, X } from "lucide-react"
 import TextElementView from "@/components/text-element-view"
+import PresentonikaBrand from "@/components/presentonika-brand"
 
 interface SlidePreviewProps {
   slides: Slide[]
   initialSlide: number
   onExit: () => void
   slideSize: SlideSize
+  title?: string
 }
 
-export default function SlidePreview({ slides, initialSlide, onExit, slideSize }: SlidePreviewProps) {
+export default function SlidePreview({ slides, initialSlide, onExit, slideSize, title = "Презентация" }: SlidePreviewProps) {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(initialSlide)
   const [viewport, setViewport] = useState({ width: 0, height: 0 })
   const previewRef = useRef<HTMLDivElement>(null)
@@ -67,14 +69,25 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
 
   const previewScale =
     viewport.width > 0 && viewport.height > 0
-      ? Math.min((viewport.width - 24) / slideSize.width, (viewport.height - 96) / slideSize.height, 1)
+      ? Math.min((viewport.width - 32) / slideSize.width, (viewport.height - 152) / slideSize.height, 1)
       : 1
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#17191f] pt-16 pb-16">
+      <div className="absolute inset-x-0 top-0 flex h-16 items-center justify-between border-b border-white/10 bg-card px-4 sm:px-6">
+        <PresentonikaBrand compact />
+        <div className="min-w-0 flex-1 px-4 text-center">
+          <p className="truncate text-sm font-semibold text-foreground">{title}</p>
+          <p className="text-[11px] text-muted-foreground">Режим просмотра</p>
+        </div>
+        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={onExit} title="Закрыть просмотр" aria-label="Закрыть просмотр">
+          <X className="h-5 w-5" />
+        </Button>
+      </div>
+
       <div
         ref={previewRef}
-        className="relative bg-white shadow-lg"
+        className="relative bg-white shadow-2xl ring-1 ring-white/10"
         style={{
           width: slideSize.width,
           height: slideSize.height,
@@ -199,38 +212,31 @@ export default function SlidePreview({ slides, initialSlide, onExit, slideSize }
         })}
       </div>
 
-      <Button
-        className="absolute top-4 right-4 text-white hover:text-gray-300"
-        variant="ghost"
-        size="icon"
-        onClick={onExit}
-      >
-        <X className="h-6 w-6" />
-      </Button>
-
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white bg-black/50 px-4 py-2 rounded-full">
-        {currentSlideIndex + 1} / {slides.length}
+      <div className="absolute inset-x-0 bottom-0 flex h-16 items-center justify-center gap-3 border-t border-white/10 bg-[#1d2027] px-4 text-white">
+        <Button
+          className="h-9 w-9 border-white/15 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+          variant="outline"
+          size="icon"
+          onClick={goToPreviousSlide}
+          disabled={isFirstSlide}
+          title="Предыдущий слайд"
+          aria-label="Предыдущий слайд"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
+        <div className="min-w-20 text-center text-sm font-semibold">{currentSlideIndex + 1} / {slides.length}</div>
+        <Button
+          className="h-9 w-9 border-white/15 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+          variant="outline"
+          size="icon"
+          onClick={goToNextSlide}
+          disabled={isLastSlide}
+          title="Следующий слайд"
+          aria-label="Следующий слайд"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </Button>
       </div>
-
-      <Button
-        className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white rounded-full h-12 w-12 flex items-center justify-center"
-        variant="ghost"
-        size="icon"
-        onClick={goToPreviousSlide}
-        disabled={isFirstSlide}
-      >
-        <ChevronLeft className="h-8 w-8" />
-      </Button>
-
-      <Button
-        className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white rounded-full h-12 w-12 flex items-center justify-center"
-        variant="ghost"
-        size="icon"
-        onClick={goToNextSlide}
-        disabled={isLastSlide}
-      >
-        <ChevronRight className="h-8 w-8" />
-      </Button>
     </div>
   )
 }

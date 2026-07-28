@@ -46,7 +46,7 @@ export default function TitleEditor({ title, onTitleChange }: TitleEditorProps) 
   }
 
   return (
-    <div className="flex items-center">
+    <div className="flex min-w-0 items-center">
       {isEditing ? (
         <input
           ref={inputRef}
@@ -55,14 +55,15 @@ export default function TitleEditor({ title, onTitleChange }: TitleEditorProps) 
           onChange={(e) => setEditedTitle(e.target.value)}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
-          className="font-medium border-b border-primary bg-transparent outline-none px-1 mr-4"
+          className="h-8 min-w-0 w-full max-w-md border-b border-primary bg-transparent px-1 font-semibold text-foreground outline-none"
+          aria-label="Название презентации"
         />
       ) : (
-        <div className="flex items-center">
-          <div className="font-medium mr-2" onDoubleClick={handleDoubleClick}>
+        <div className="flex min-w-0 items-center gap-1">
+          <div className="truncate font-semibold text-foreground" onDoubleClick={handleDoubleClick} title={title}>
             {title}
           </div>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsEditing(true)}>
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground" onClick={() => setIsEditing(true)} title="Переименовать" aria-label="Переименовать презентацию">
             <Pencil className="h-3 w-3" />
           </Button>
         </div>
