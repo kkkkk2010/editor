@@ -1950,6 +1950,7 @@ export default function Home() {
               <BackgroundSettingsDialog
                 background={currentSlide.background}
                 onBackgroundChange={handleBackgroundChange}
+                compactTrigger
               />
 
               <ImageUploadDialog
@@ -1957,6 +1958,7 @@ export default function Home() {
                 triggerVariant="outline"
                 triggerSize="sm"
                 triggerClassName="h-9"
+                compactTrigger
               />
 
               <ExportDialog
@@ -1964,11 +1966,18 @@ export default function Home() {
                 slideSize={slideSize}
                 title={presentationTitle}
                 onTitleChange={setPresentationTitle}
+                compactTrigger
               />
 
-              <Button size="sm" className="h-9 px-4" onClick={() => setIsPreviewMode(true)}>
-                <Play className="h-4 w-4 mr-2" />
-                Просмотр
+              <Button
+                size="sm"
+                className="h-9 w-9 px-0 lg:w-auto lg:px-4"
+                onClick={() => setIsPreviewMode(true)}
+                title="Просмотр"
+                aria-label="Просмотр"
+              >
+                <Play className="h-4 w-4" />
+                <span className="hidden lg:inline">Просмотр</span>
               </Button>
             </div>
           </footer>

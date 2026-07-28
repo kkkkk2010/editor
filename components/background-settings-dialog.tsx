@@ -12,9 +12,14 @@ import type { Background } from "@/lib/types"
 interface BackgroundSettingsDialogProps {
   background: Background
   onBackgroundChange: (background: Background) => void
+  compactTrigger?: boolean
 }
 
-export default function BackgroundSettingsDialog({ background, onBackgroundChange }: BackgroundSettingsDialogProps) {
+export default function BackgroundSettingsDialog({
+  background,
+  onBackgroundChange,
+  compactTrigger = false,
+}: BackgroundSettingsDialogProps) {
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<"color" | "gradient" | "image">(background.type)
   const [colorValue, setColorValue] = useState(background.type === "color" ? background.value : "#ffffff")
@@ -76,9 +81,15 @@ export default function BackgroundSettingsDialog({ background, onBackgroundChang
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Paintbrush className="h-4 w-4 mr-2" />
-          Настройка фона {/* Перевел: "背景设置" */}
+        <Button
+          variant="outline"
+          size="sm"
+          className={compactTrigger ? "h-9 w-9 px-0 lg:w-auto lg:px-3" : undefined}
+          title="Настройка фона"
+          aria-label="Настройка фона"
+        >
+          <Paintbrush className="h-4 w-4" />
+          <span className={compactTrigger ? "hidden lg:inline" : undefined}>Настройка фона</span>{/* Перевел: "背景设置" */}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">

@@ -33,16 +33,11 @@ export default function Sidebar({
   onReorderSlides,
   slideSize,
 }: SidebarProps) {
-  const thumbnailWidth = 192
-  const thumbnailHeight = 108
+  const thumbnailFrameWidth = 180
+  const thumbnailContentWidth = thumbnailFrameWidth - 2
   const DEBUG_THUMBNAIL = false
   const [draggingSlideIndex, setDraggingSlideIndex] = useState<number | null>(null)
   const [dropIndicatorIndex, setDropIndicatorIndex] = useState<number | null>(null)
-
-  const getFitScale = (containerWidth: number, containerHeight: number, slideWidth: number, slideHeight: number) => {
-    if (slideWidth <= 0 || slideHeight <= 0) return 1
-    return Math.min(containerWidth / slideWidth, containerHeight / slideHeight)
-  }
 
   const handleDragStart = (index: number, event: React.DragEvent<HTMLDivElement>) => {
     event.dataTransfer.effectAllowed = "move"
@@ -184,13 +179,14 @@ export default function Sidebar({
   }
 
   const renderSlidePreview = (slide: Slide, index: number) => {
-    const scale = getFitScale(thumbnailWidth, thumbnailHeight, slideSize.width, slideSize.height)
+    const scale = slideSize.width > 0 ? thumbnailContentWidth / slideSize.width : 1
+    const thumbnailContentHeight = Math.max(1, slideSize.height * scale)
     const isCurrent = index === currentSlideIndex
 
     if (DEBUG_THUMBNAIL) {
       console.debug("Thumbnail scale", {
-        containerW: thumbnailWidth,
-        containerH: thumbnailHeight,
+        containerW: thumbnailContentWidth,
+        containerH: thumbnailContentHeight,
         baseW: slideSize.width,
         baseH: slideSize.height,
         scale,
@@ -209,8 +205,8 @@ export default function Sidebar({
             draggingSlideIndex === index && "opacity-40",
           )}
           style={{
-            width: thumbnailWidth,
-            height: thumbnailHeight,
+            width: thumbnailFrameWidth,
+            height: thumbnailContentHeight + 2,
           }}
           onClick={() => onSlideSelect(index)}
           draggable
@@ -414,7 +410,7 @@ export default function Sidebar({
 
   return (
     <div className="flex h-full w-full flex-col overflow-x-hidden bg-card">
-      <div className="border-b px-4 py-3">
+      <div className="border-b px-3 py-3">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Layers3 className="h-4 w-4 text-primary" />
@@ -427,7 +423,7 @@ export default function Sidebar({
           Добавить слайд
         </Button>
       </div>
-      <div className="presentonika-scrollbar flex-1 overflow-y-auto overflow-x-hidden p-4">
+      <div className="presentonika-scrollbar flex-1 overflow-y-auto overflow-x-hidden p-3">
         {slides.map((slide, index) => renderSlidePreview(slide, index))}
         {dropIndicatorIndex === slides.length && draggingSlideIndex !== null && (
           <div className="h-1 rounded bg-primary" aria-hidden="true" />

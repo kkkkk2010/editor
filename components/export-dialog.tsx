@@ -13,9 +13,16 @@ interface ExportDialogProps {
   slideSize: SlideSize
   title?: string
   onTitleChange: (title: string) => void
+  compactTrigger?: boolean
 }
 
-export default function ExportDialog({ slides, slideSize, title, onTitleChange }: ExportDialogProps) {
+export default function ExportDialog({
+  slides,
+  slideSize,
+  title,
+  onTitleChange,
+  compactTrigger = false,
+}: ExportDialogProps) {
   const [open, setOpen] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
@@ -36,9 +43,15 @@ export default function ExportDialog({ slides, slideSize, title, onTitleChange }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Download className="h-4 w-4 mr-2" />
-          Экспорт PPT {/* Перевел: "导出PPT" */}
+        <Button
+          variant="outline"
+          size="sm"
+          className={compactTrigger ? "h-9 w-9 px-0 lg:w-auto lg:px-3" : undefined}
+          title="Экспорт PPT"
+          aria-label="Экспорт PPT"
+        >
+          <Download className="h-4 w-4" />
+          <span className={compactTrigger ? "hidden lg:inline" : undefined}>Экспорт PPT</span>{/* Перевел: "导出PPT" */}
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -80,7 +93,7 @@ export default function ExportDialog({ slides, slideSize, title, onTitleChange }
               </>
             ) : (
               <>
-                <Download className="h-4 w-4 mr-2" />
+                <Download className="h-4 w-4" />
                 Экспорт PPT {/* Перевел: "导出PPT" */}
               </>
             )}

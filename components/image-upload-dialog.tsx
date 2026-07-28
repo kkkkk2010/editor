@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useRef } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Image, Upload, X } from "lucide-react"
+import { ImageIcon, Upload, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ImageUploadDialogProps {
@@ -15,6 +15,7 @@ interface ImageUploadDialogProps {
   triggerVariant?: "default" | "secondary" | "destructive" | "outline" | "ghost" | "link"
   triggerSize?: "default" | "sm" | "lg" | "icon"
   triggerClassName?: string
+  compactTrigger?: boolean
 }
 
 export default function ImageUploadDialog({
@@ -24,6 +25,7 @@ export default function ImageUploadDialog({
   triggerVariant = "outline",
   triggerSize = "sm",
   triggerClassName,
+  compactTrigger = false,
 }: ImageUploadDialogProps) {
   const [open, setOpen] = useState(false)
   const [dragActive, setDragActive] = useState(false)
@@ -100,9 +102,15 @@ export default function ImageUploadDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant={triggerVariant} size={triggerSize} className={triggerClassName}>
-          {triggerIcon ?? <Image className="h-4 w-4 mr-2" />}
-          {triggerLabel} {/* Перевел: "上传图片" */}
+        <Button
+          variant={triggerVariant}
+          size={triggerSize}
+          className={cn(compactTrigger && "h-9 w-9 px-0 lg:w-auto lg:px-3", triggerClassName)}
+          title={triggerLabel}
+          aria-label={triggerLabel}
+        >
+          {triggerIcon ?? <ImageIcon className="h-4 w-4" />}
+          <span className={compactTrigger ? "hidden lg:inline" : undefined}>{triggerLabel}</span>{/* Перевел: "上传图片" */}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">

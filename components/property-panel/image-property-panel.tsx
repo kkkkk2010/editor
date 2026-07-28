@@ -214,7 +214,7 @@ export default function ImagePropertyPanel({
   }
 
   const renderEditPanel = () => (
-    <div className="space-y-4">
+    <div className="space-y-3 text-xs [&_input]:h-8 [&_input]:text-xs [&_label]:text-xs [&_label]:font-semibold [&_[role=combobox]]:h-8 [&_[role=combobox]]:text-xs">
       <div>
         <Label>Изображение</Label>
         <div className="mt-2">
@@ -232,7 +232,7 @@ export default function ImagePropertyPanel({
             triggerLabel="Заменить изображение"
             triggerVariant="secondary"
             triggerSize="sm"
-            triggerIcon={<ImageIcon className="h-4 w-4 mr-2" />}
+            triggerIcon={<ImageIcon className="h-4 w-4" />}
           />
         </div>
       </div>
@@ -252,7 +252,7 @@ export default function ImagePropertyPanel({
             type="number"
             value={element.style.borderRadius || 0}
             onChange={(e) => updateStyle("borderRadius", Number(e.target.value))}
-            className="w-16"
+            className="w-14"
             min={0}
             max={50}
           />
@@ -275,7 +275,7 @@ export default function ImagePropertyPanel({
             type="number"
             value={Math.round((element.style.opacity || 1) * 100)}
             onChange={(e) => updateStyle("opacity", Number(e.target.value) / 100)}
-            className="w-16"
+            className="w-14"
             min={0}
             max={100}
           />
@@ -333,18 +333,18 @@ export default function ImagePropertyPanel({
       onValueChange={(value) => setActiveTab(value === "search" ? "search" : "edit")}
       className="w-full min-w-0"
     >
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="edit" className="w-full min-w-0 px-2 text-xs sm:text-sm">Свойства</TabsTrigger>
-        <TabsTrigger value="search" className="w-full min-w-0 px-2 text-xs sm:text-sm">Подобрать</TabsTrigger>
+      <TabsList className="grid h-8 w-full grid-cols-2">
+        <TabsTrigger value="edit" className="h-7 w-full min-w-0 px-2 text-xs">Свойства</TabsTrigger>
+        <TabsTrigger value="search" className="h-7 w-full min-w-0 px-2 text-xs">Подобрать</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="edit" className="mt-4">
+      <TabsContent value="edit" className="mt-3">
         {renderEditPanel()}
       </TabsContent>
 
-      <TabsContent value="search" className="mt-4 w-full min-w-0 space-y-4">
+      <TabsContent value="search" className="mt-3 w-full min-w-0 space-y-3 text-xs [&_input]:h-8 [&_input]:text-xs [&_label]:text-xs">
         <div>
-          <h4 className="break-all text-sm font-medium">
+          <h4 className="break-all text-xs font-semibold">
             Подбор для изображения {slot?.slotId ? `(${slot.slotId})` : ""}
           </h4>
           <p className="mt-1 break-words text-xs text-muted-foreground">{searchContext.hint}</p>
@@ -366,12 +366,12 @@ export default function ImagePropertyPanel({
             checked={rightsChecked}
             onCheckedChange={(value) => setRightsChecked(value === true)}
           />
-          <Label htmlFor="rights-check" className="text-sm font-normal">
+          <Label htmlFor="rights-check" className="text-xs font-normal">
             Я проверил права
           </Label>
         </div>
 
-        <Button onClick={handleSearch} disabled={isSearching || !searchQuery.trim()}>
+        <Button size="sm" className="h-8 text-xs" onClick={handleSearch} disabled={isSearching || !searchQuery.trim()}>
           {isSearching ? "Поиск..." : "Искать"}
         </Button>
 
@@ -383,23 +383,25 @@ export default function ImagePropertyPanel({
               onClick={() => setSelectedResultId(item.id)}
               className={`rounded border p-1 text-left ${selectedResultId === item.id ? "ring-2 ring-primary" : ""}`}
             >
-              <img src={item.thumbUrl} alt={item.id} className="h-24 w-full object-cover rounded" />
+              <img src={item.thumbUrl} alt={item.id} className="h-20 w-full rounded object-cover" />
             </button>
           ))}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" disabled={!selectedResult} onClick={() => {
+          <Button size="sm" className="h-8 text-xs" variant="outline" disabled={!selectedResult} onClick={() => {
             if (!selectedResult) return
             window.open(selectedResult.pageUrl, "_blank", "noopener,noreferrer")
           }}>
             Открыть источник
           </Button>
-          <Button onClick={handleInsert} disabled={!selectedResult || !rightsChecked || isInserting}>
+          <Button size="sm" className="h-8 text-xs" onClick={handleInsert} disabled={!selectedResult || !rightsChecked || isInserting}>
             {isInserting ? "Вставка..." : "Вставить"}
           </Button>
           <Button
             variant="ghost"
+            size="sm"
+            className="h-8 text-xs"
             disabled={!srcPath || !hasPlaceholderReplacement}
             onClick={() => {
               if (!srcPath) return

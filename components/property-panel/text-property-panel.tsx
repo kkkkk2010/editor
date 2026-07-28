@@ -89,7 +89,7 @@ export default function TextPropertyPanel({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 text-xs [&_input]:h-8 [&_input]:text-xs [&_label]:text-xs [&_label]:font-semibold [&_[role=combobox]]:h-8 [&_[role=combobox]]:text-xs">
       <div>
         <Label htmlFor="fontFamily">Шрифт</Label>
         <Select value={currentFont} onValueChange={(value) => updateStyle("fontFamily", value)}>
@@ -121,7 +121,7 @@ export default function TextPropertyPanel({
             type="number"
             value={selectedFontSizePt}
             onChange={(e) => updateStyle("fontSizePt", clampFontSize(Number(e.target.value)))}
-            className="w-16"
+            className="w-14"
             min={MIN_TEXT_FONT_SIZE_PT}
             max={MAX_TEXT_FONT_SIZE_PT}
             step={0.5}
@@ -135,7 +135,7 @@ export default function TextPropertyPanel({
           <Button
             variant="outline"
             size="sm"
-            className={cn(element.style.fontWeight === "bold" && "bg-muted")}
+            className={cn("h-8 w-8 p-0", element.style.fontWeight === "bold" && "bg-muted")}
             onClick={() => updateStyle("fontWeight", element.style.fontWeight === "bold" ? "normal" : "bold")}
           >
             <Bold className="h-4 w-4" />
@@ -143,7 +143,7 @@ export default function TextPropertyPanel({
           <Button
             variant="outline"
             size="sm"
-            className={cn(element.style.fontStyle === "italic" && "bg-muted")}
+            className={cn("h-8 w-8 p-0", element.style.fontStyle === "italic" && "bg-muted")}
             onClick={() => updateStyle("fontStyle", element.style.fontStyle === "italic" ? "normal" : "italic")}
           >
             <Italic className="h-4 w-4" />
@@ -151,7 +151,7 @@ export default function TextPropertyPanel({
           <Button
             variant="outline"
             size="sm"
-            className={cn(element.style.textDecoration === "underline" && "bg-muted")}
+            className={cn("h-8 w-8 p-0", element.style.textDecoration === "underline" && "bg-muted")}
             onClick={() =>
               updateStyle("textDecoration", element.style.textDecoration === "underline" ? "none" : "underline")
             }
@@ -167,7 +167,7 @@ export default function TextPropertyPanel({
           <Button
             variant="outline"
             size="sm"
-            className={cn(element.style.textAlign === "left" && "bg-muted")}
+            className={cn("h-8 w-8 p-0", element.style.textAlign === "left" && "bg-muted")}
             onClick={() => updateStyle("textAlign", "left")}
           >
             <AlignLeft className="h-4 w-4" />
@@ -175,7 +175,7 @@ export default function TextPropertyPanel({
           <Button
             variant="outline"
             size="sm"
-            className={cn(element.style.textAlign === "center" && "bg-muted")}
+            className={cn("h-8 w-8 p-0", element.style.textAlign === "center" && "bg-muted")}
             onClick={() => updateStyle("textAlign", "center")}
           >
             <AlignCenter className="h-4 w-4" />
@@ -183,7 +183,7 @@ export default function TextPropertyPanel({
           <Button
             variant="outline"
             size="sm"
-            className={cn(element.style.textAlign === "right" && "bg-muted")}
+            className={cn("h-8 w-8 p-0", element.style.textAlign === "right" && "bg-muted")}
             onClick={() => updateStyle("textAlign", "right")}
           >
             <AlignRight className="h-4 w-4" />
@@ -195,7 +195,7 @@ export default function TextPropertyPanel({
         <Label htmlFor="color">Цвет текста</Label>
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" className="mt-1 w-full justify-start gap-2">
+            <Button variant="outline" className="mt-1 h-8 w-full justify-start gap-2 text-xs">
               <span className="inline-block h-4 w-4 rounded border" style={{ backgroundColor: currentColor }} />
               <span>{currentColor}</span>
             </Button>
@@ -228,7 +228,7 @@ export default function TextPropertyPanel({
                 type="color"
                 value={currentColor}
                 onChange={(e) => applyColor(e.target.value)}
-                className="h-10 w-12 p-1"
+                className="h-8 w-10 p-1"
               />
             </div>
           </PopoverContent>
@@ -251,7 +251,7 @@ export default function TextPropertyPanel({
             type="number"
             value={element.style.lineHeight ?? 1}
             onChange={(e) => updateStyle("lineHeight", Number(e.target.value))}
-            className="w-16"
+            className="w-14"
             min={1}
             max={3}
             step={0.1}

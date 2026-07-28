@@ -27,49 +27,53 @@ export default function LayerPropertyPanel({
   const isBottomElement = elementIndex === 0
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
-        <h4 className="text-sm font-medium mb-2">Управление слоями</h4>
-        <div className="grid grid-cols-2 gap-2">
+        <h4 className="mb-2 text-xs font-semibold">Управление слоями</h4>
+        <div className="grid grid-cols-4 gap-1.5">
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={() => onMoveElementToFront?.(element)}
             disabled={isTopElement}
-            className="flex h-auto items-start justify-start gap-2 whitespace-normal break-words py-2 text-left leading-tight"
+            className="h-8 w-full"
+            title="На передний план"
+            aria-label="На передний план"
           >
-            <ArrowUpToLine className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>На передний план</span>
+            <ArrowUpToLine className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={() => onMoveElementToBack?.(element)}
             disabled={isBottomElement}
-            className="flex h-auto items-start justify-start gap-2 whitespace-normal break-words py-2 text-left leading-tight"
+            className="h-8 w-full"
+            title="На задний план"
+            aria-label="На задний план"
           >
-            <ArrowDownToLine className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>На задний план</span>
+            <ArrowDownToLine className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={() => onMoveElementForward?.(element)}
             disabled={isTopElement}
-            className="flex h-auto items-start justify-start gap-2 whitespace-normal break-words py-2 text-left leading-tight"
+            className="h-8 w-full"
+            title="Поднять на один слой"
+            aria-label="Поднять на один слой"
           >
-            <MoveUp className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>Поднять на один слой</span>
+            <MoveUp className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
             onClick={() => onMoveElementBackward?.(element)}
             disabled={isBottomElement}
-            className="flex h-auto items-start justify-start gap-2 whitespace-normal break-words py-2 text-left leading-tight"
+            className="h-8 w-full"
+            title="Опустить на один слой"
+            aria-label="Опустить на один слой"
           >
-            <MoveDown className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>Опустить на один слой</span>
+            <MoveDown className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -77,8 +81,8 @@ export default function LayerPropertyPanel({
       <Separator />
 
       <div>
-        <h4 className="text-sm font-medium mb-2">Информация о слое</h4>
-        <div className="text-sm text-muted-foreground">
+        <h4 className="mb-1 text-xs font-semibold">Положение</h4>
+        <div className="text-xs text-muted-foreground">
           <p>
             Положение слоя: {elementIndex + 1} / {currentSlide.elements.length}
           </p>

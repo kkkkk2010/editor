@@ -30,7 +30,7 @@ export default function ShapePropertyPanel({ element, onUpdateElement }: ShapePr
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 text-xs [&_input]:h-8 [&_input]:text-xs [&_label]:text-xs [&_label]:font-semibold [&_[role=combobox]]:h-8 [&_[role=combobox]]:text-xs">
       <div>
         <Label htmlFor="shapeType">Тип фигуры</Label>
         <Select value={element.content} onValueChange={updateContent}>
@@ -59,7 +59,7 @@ export default function ShapePropertyPanel({ element, onUpdateElement }: ShapePr
             type="color"
             value={element.style.fill || "#ffffff"}
             onChange={(e) => updateStyle("fill", e.target.value)}
-            className="w-10 h-10 p-1"
+            className="h-8 w-9 p-1"
           />
           <Input
             type="text"
@@ -78,7 +78,7 @@ export default function ShapePropertyPanel({ element, onUpdateElement }: ShapePr
             type="color"
             value={element.style.stroke || "#000000"}
             onChange={(e) => updateStyle("stroke", e.target.value)}
-            className="w-10 h-10 p-1"
+            className="h-8 w-9 p-1"
           />
           <Input
             type="text"
@@ -105,7 +105,7 @@ export default function ShapePropertyPanel({ element, onUpdateElement }: ShapePr
             type="number"
             value={element.style.strokeWidth || 1}
             onChange={(e) => updateStyle("strokeWidth", Number(e.target.value))}
-            className="w-16"
+            className="w-14"
             min={0}
             max={20}
           />
@@ -128,7 +128,7 @@ export default function ShapePropertyPanel({ element, onUpdateElement }: ShapePr
             type="number"
             value={Math.round((element.style.opacity || 1) * 100)}
             onChange={(e) => updateStyle("opacity", Number(e.target.value) / 100)}
-            className="w-16"
+            className="w-14"
             min={0}
             max={100}
           />

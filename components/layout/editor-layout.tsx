@@ -34,7 +34,7 @@ export default function EditorLayout({ sidebar, editor, propertyPanel, showPrope
         {editor}
       </section>
       {showPropertyPanel ? (
-        <aside className="editor-panel w-72 shrink-0 border-l" aria-label="Свойства элемента">
+        <aside className="editor-panel w-64 shrink-0 border-l" aria-label="Свойства элемента">
           {propertyPanel}
         </aside>
       ) : null}
