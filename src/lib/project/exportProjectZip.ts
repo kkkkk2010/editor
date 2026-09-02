@@ -1,0 +1,136 @@
+import { zipSync } from "fflate"
+import type { ImporterDoc } from "@/src/lib/import/importerDoc"
+import type { AssetStore } from "@/src/lib/assets/assetStore"
+import { logStructuredError, reportError } from "@/src/lib/monitoring"
+
+type ImageCreditItem = {
+  src: string
+  slot: {
+    slotId: string
+    slide: number
+    element: number
+  }
+  pageUrl: string
+  imageUrl: string
+  licenseLabel?: string
+  licenseUrl?: string
+  confirmedAt: string
+}
+
+type ExportOptions = {
+  imageCredits?: ImageCreditItem[]
+  extraFiles?: Record<string, string | Uint8Array | ArrayBuffer>
+}
+
+const INVALID_ASSET_PREFIX = /^(blob:|data:|https?:|file:)/i
+
+function assertRelativeAssetPath(path: string) {
+  if (!path.trim()) {
+    throw new Error("Пустой путь ассета для экспорта")
+  }
+  if (INVALID_ASSET_PREFIX.test(path)) {
+    throw new Error(`Недопустимый URL ассета для экспорта: ${path}`)
+  }
+  if (path.startsWith("/") || path.startsWith("\\")) {
+    throw new Error(`Абсолютные пути ассетов не поддерживаются: ${path}`)
+  }
+  if (path.includes("..")) {
+    throw new Error(`Небезопасный путь ассета для экспорта: ${path}`)
+  }
+}
+
+function collectAssetPaths(doc: ImporterDoc): string[] {
+  const paths = new Set<string>()
+
+  doc.slides.forEach((slide) => {
+    if (slide.background?.type === "image") {
+      assertRelativeAssetPath(slide.background.src)
+      paths.add(slide.background.src)
+    }
+    slide.elements.forEach((element) => {
+      if (element.type === "image") {
+        assertRelativeAssetPath(element.src)
+        paths.add(element.src)
+      }
+    })
+  })
+
+  return Array.from(paths)
+}
+
+function normalizeDocEntry(files: Record<string, Uint8Array>) {
+  const docEntry = files["doc.json"] ?? files["/doc.json"] ?? files["./doc.json"]
+  if (docEntry) {
+    files["doc.json"] = docEntry
+    delete files["/doc.json"]
+    delete files["./doc.json"]
+  }
+}
+
+export function exportProjectZip(doc: ImporterDoc, assetStore: AssetStore, options?: ExportOptions): Uint8Array {
+  const startTime = Date.now()
+  try {
+    const encoder = new TextEncoder()
+    const toBytes = (value: unknown): Uint8Array => {
+      if (ArrayBuffer.isView(value)) {
+        return new Uint8Array(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength))
+      }
+      if (value instanceof ArrayBuffer) {
+        return new Uint8Array(value)
+      }
+      if (typeof value === "string") {
+        return new Uint8Array(encoder.encode(value))
+      }
+      return new Uint8Array(encoder.encode(JSON.stringify(value, null, 2)))
+    }
+    const files: Record<string, Uint8Array> = {
+      "doc.json": toBytes(JSON.stringify(doc, null, 2)),
+    }
+    normalizeDocEntry(files)
+    if (!ArrayBuffer.isView(files["doc.json"])) {
+      throw new Error("Экспорт doc.json должен быть сериализован в байты")
+    }
+
+    const assetPaths = collectAssetPaths(doc)
+    assetPaths.forEach((path) => {
+      const asset = assetStore.getAsset(path)
+      if (!asset) {
+        throw new Error(`Не найден ассет для экспорта: ${path}`)
+      }
+      files[path] = asset.bytes
+    })
+
+    if (options?.imageCredits && options.imageCredits.length > 0) {
+      files["imageCredits.json"] = toBytes(
+        JSON.stringify(
+          {
+            version: 1,
+            items: options.imageCredits,
+          },
+          null,
+          2,
+        ),
+      )
+    }
+
+    if (options?.extraFiles) {
+      Object.entries(options.extraFiles).forEach(([path, value]) => {
+        files[path] = toBytes(value)
+      })
+    }
+
+    const zipped = zipSync(files)
+    const src = zipped instanceof Uint8Array ? zipped : new Uint8Array(zipped)
+    const bytes = new Uint8Array(src.byteLength)
+    bytes.set(src)
+    return bytes
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown export error"
+    logStructuredError("zip_export_failed", {
+      message,
+      durationMs: Date.now() - startTime,
+    })
+    reportError(error, { scope: "zip_export" })
+    throw error
+  }
+}

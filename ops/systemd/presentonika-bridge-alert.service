@@ -1,0 +1,11 @@
+[Unit]
+Description=Presentonika bridge log alert check
+After=docker.service
+
+[Service]
+Type=oneshot
+Environment=CONTAINER_NAME=editor-editor-1
+Environment=WINDOW=5m
+Environment=THRESHOLD=3
+Environment=ALERT_LOG=/var/log/presentonika-alerts.log
+ExecStart=/bin/bash /opt/presentonika/editor/ops/alerts/bridge-log-alert.sh

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Presentonika bridge alert check every 2 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Unit=presentonika-bridge-alert.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,50 @@
+services:
+  editor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      CONVERTER_URL: ${CONVERTER_URL:-http://converter:3001}
+      PRESENTONIKA_BRIDGE_TOKEN: ${PRESENTONIKA_BRIDGE_TOKEN:?PRESENTONIKA_BRIDGE_TOKEN is required}
+      BRIDGE_SAVE_TOKEN_VALIDATE_URL: ${BRIDGE_SAVE_TOKEN_VALIDATE_URL:-https://www.presentonika.ru/wp-json/presentonika/v1/validate-save-token}
+      BRIDGE_SAVE_TOKEN_VALIDATE_BEARER: ${BRIDGE_SAVE_TOKEN_VALIDATE_BEARER:?BRIDGE_SAVE_TOKEN_VALIDATE_BEARER is required}
+      BRIDGE_TMP_DIR: ${BRIDGE_TMP_DIR:-/tmp/outzips}
+      BRIDGE_MAX_STAGE_OUTZIP_BYTES: ${BRIDGE_MAX_STAGE_OUTZIP_BYTES:-62914560}
+      BRIDGE_TTL_SECONDS: ${BRIDGE_TTL_SECONDS:-1800}
+      BRIDGE_MAX_DOWNLOADS: ${BRIDGE_MAX_DOWNLOADS:-5}
+      ADMIN_IMPORT_TOKEN: ${ADMIN_IMPORT_TOKEN:-}
+      CONVERTER_MAX_PPTX_BYTES: ${CONVERTER_MAX_PPTX_BYTES:-31457280}
+      NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT: ${NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT:-0}
+      NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-https://editor.presentonika.ru}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://editor.presentonika.ru}
+      NODE_ENV: production
+    depends_on:
+      - converter
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=536870912,uid=1001,gid=1001
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: 2.0
+    restart: unless-stopped
+
+  converter:
+    image: ${CONVERTER_IMAGE:?CONVERTER_IMAGE must reference a pinned converter image}
+    expose:
+      - "3001"
+    environment:
+      PPTX_IMPORTER_PORT: ${PPTX_IMPORTER_PORT:-3001}
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: 2.0
+    restart: unless-stopped

@@ -1,0 +1,168 @@
+"use client"
+
+import type React from "react"
+
+import { useState, useRef } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { ImageIcon, Upload, X } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+interface ImageUploadDialogProps {
+  onImageSelect: (imageUrl: string, file?: File) => void
+  triggerLabel?: string
+  triggerIcon?: React.ReactNode
+  triggerVariant?: "default" | "secondary" | "destructive" | "outline" | "ghost" | "link"
+  triggerSize?: "default" | "sm" | "lg" | "icon"
+  triggerClassName?: string
+  compactTrigger?: boolean
+}
+
+export default function ImageUploadDialog({
+  onImageSelect,
+  triggerLabel = "Загрузить изображение",
+  triggerIcon,
+  triggerVariant = "outline",
+  triggerSize = "sm",
+  triggerClassName,
+  compactTrigger = false,
+}: ImageUploadDialogProps) {
+  const [open, setOpen] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true)
+    } else if (e.type === "dragleave") {
+      setDragActive(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFile(e.dataTransfer.files[0])
+    }
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault()
+
+    if (e.target.files && e.target.files[0]) {
+      handleFile(e.target.files[0])
+    }
+  }
+
+  const handleFile = (file: File) => {
+    // 检查文件类型
+    if (!file.type.match("image.*")) {
+      alert("Пожалуйста, выберите файл изображения") // Перевел: "请选择图片文件"
+      return
+    }
+
+    // 创建预览URL
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      if (e.target && typeof e.target.result === "string") {
+        setPreview(e.target.result)
+        setSelectedFile(file)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleConfirm = () => {
+    if (preview) {
+      onImageSelect(preview, selectedFile || undefined)
+      setOpen(false)
+      setPreview(null)
+      setSelectedFile(null)
+    }
+  }
+
+  const handleCancel = () => {
+    setPreview(null)
+    setSelectedFile(null)
+    setOpen(false)
+  }
+
+  const handleButtonClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant={triggerVariant}
+          size={triggerSize}
+          className={cn(compactTrigger && "h-9 w-9 px-0 lg:w-auto lg:px-3", triggerClassName)}
+          title={triggerLabel}
+          aria-label={triggerLabel}
+        >
+          {triggerIcon ?? <ImageIcon className="h-4 w-4" />}
+          <span className={compactTrigger ? "hidden lg:inline" : undefined}>{triggerLabel}</span>{/* Перевел: "上传图片" */}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Загрузить изображение</DialogTitle> {/* Перевел: "上传图片" */}
+        </DialogHeader>
+
+        {!preview ? (
+          <div
+            className={cn(
+              "flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-12",
+              "hover:bg-muted/50 transition-colors",
+              dragActive && "border-primary bg-muted/50",
+            )}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+          >
+            <Upload className="h-10 w-10 text-muted-foreground mb-4" />
+            <p className="text-sm text-muted-foreground mb-2">Перетащите изображение сюда или</p> {/* Перевел: "拖放图片到此处，或" */}
+            <Button onClick={handleButtonClick} variant="secondary" size="sm">
+              Выбрать изображение {/* Перевел: "选择图片" */}
+            </Button>
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleChange} className="hidden" />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="relative border rounded-lg overflow-hidden">
+              <img
+                src={preview || "/placeholder.svg"}
+                alt="Preview" /* Превью - оставил на английском, так как это alt-текст */
+                className="w-full h-auto max-h-[300px] object-contain"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-2 right-2 bg-background/80 hover:bg-background"
+                onClick={() => setPreview(null)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={handleCancel}>
+                Отмена {/* Перевел: "取消" */}
+              </Button>
+              <Button onClick={handleConfirm}>Подтвердить использование</Button> {/* Перевел: "确认使用" */}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
