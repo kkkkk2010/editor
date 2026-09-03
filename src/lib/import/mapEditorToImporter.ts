@@ -17,6 +17,7 @@ function mapTextElement(element: import("@/lib/types").Element): ImporterElement
     width: element.size.width,
     height: element.size.height,
     rotation: element.style.rotation,
+    meta: element.meta,
     style: {
       ...restStyle,
       fontSizePt: fontSizePt ?? 18,
@@ -34,7 +35,13 @@ function mapImageElement(element: import("@/lib/types").Element): ImporterElemen
     width: element.size.width,
     height: element.size.height,
     rotation: element.style.rotation,
+    meta: element.meta,
     objectFit: element.style.objectFit,
+    style: {
+      borderRadius: element.style.borderRadius,
+      opacity: element.style.opacity,
+      locked: element.style.locked,
+    },
   }
 }
 
@@ -53,12 +60,14 @@ function mapShapeElement(element: import("@/lib/types").Element): ImporterElemen
     width: element.size.width,
     height: element.size.height,
     rotation: element.style.rotation,
+    meta: element.meta,
     style: {
       fill: element.style.fill,
       stroke: element.style.stroke,
       strokeWidth: element.style.strokeWidth,
       opacity: element.style.opacity,
       cornerRadius: element.style.borderRadius,
+      locked: element.style.locked,
     },
   }
 }

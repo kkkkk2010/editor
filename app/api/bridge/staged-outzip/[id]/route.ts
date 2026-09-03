@@ -17,7 +17,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return Response.json(errorBody("UNAUTHORIZED", "Missing download token."), { status: 401 })
   }
 
-  const job = getBridgeJob(id)
+  const job = await getBridgeJob(id)
   if (!job) {
     return Response.json(errorBody("NOT_FOUND", "Job not found."), { status: 404 })
   }
@@ -50,7 +50,10 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }
 
   try {
-    incrementBridgeDownloads(job)
+    const downloadsUsed = await incrementBridgeDownloads(job)
+    if (downloadsUsed === null) {
+      return Response.json(errorBody("ALREADY_USED", "Download limit reached.", job.requestId), { status: 410 })
+    }
     const bytes = await readBridgeZip(job)
     return new Response(bytes, {
       status: 200,

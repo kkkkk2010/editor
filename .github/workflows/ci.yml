@@ -12,6 +12,10 @@ jobs:
       NODE_VERSION: "20"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -34,5 +38,8 @@ jobs:
           BRIDGE_SAVE_TOKEN_VALIDATE_BEARER: ci-only-validation-token
           CONVERTER_IMAGE: presentonika/pptx-importer:ci
         run: docker compose config --quiet
+      - name: Reject private build artifacts
+        run: |
+          test -z "$(find . -path ./node_modules -prune -o -type f \( -name '*.out.zip' -o -name '*.sql' -o -name '*.dump' -o -name '*.bak' -o -name '*.backup' -o -name '*.before-*' \) -print -quit)"
       - name: Build production image
         run: docker build .

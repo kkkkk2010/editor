@@ -1,6 +1,8 @@
 import { XMLParser } from "fast-xml-parser"
 
 const YANDEX_IMAGE_SEARCH_ENDPOINT = "https://searchapi.api.cloud.yandex.net/v2/image/search"
+const MAX_UPSTREAM_ATTEMPTS = 2
+const MAX_RETRY_DELAY_MS = 1_500
 
 export type YandexImageSearchParams = {
   queryText: string
@@ -26,6 +28,18 @@ export type NormalizedImageSearchResult = {
   height?: number
   sourceHost?: string
   sourceTitle?: string
+}
+
+export class YandexImageSearchError extends Error {
+  status?: number
+  upstreamDetails?: string
+
+  constructor(message: string, options?: { status?: number; upstreamDetails?: string }) {
+    super(message)
+    this.name = "YandexImageSearchError"
+    this.status = options?.status
+    this.upstreamDetails = options?.upstreamDetails
+  }
 }
 
 function toArray<T>(value: T | T[] | undefined | null): T[] {
@@ -62,6 +76,71 @@ function resolveHost(urlRaw: string): string | undefined {
   }
 }
 
+function normalizeHttpUrl(value: unknown, options?: { preferHttps?: boolean }): string {
+  const raw = pickText(value).trim()
+  if (!raw) return ""
+
+  const candidate = raw.startsWith("//")
+    ? `https:${raw}`
+    : /^[a-z][a-z\d+.-]*:/i.test(raw)
+      ? raw
+      : `https://${raw}`
+
+  try {
+    const parsed = new URL(candidate)
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return ""
+    if (options?.preferHttps && parsed.protocol === "http:") {
+      parsed.protocol = "https:"
+    }
+    return parsed.toString()
+  } catch {
+    return ""
+  }
+}
+
+function preferLargerYandexThumbnail(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl)
+    if (url.hostname === "avatars.mds.yandex.net") {
+      url.searchParams.set("n", "13")
+    }
+    return url.toString()
+  } catch {
+    return rawUrl
+  }
+}
+
+function hashString(input: string) {
+  let hash = 2166136261
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(36)
+}
+
+function getRetryDelayMs(response: Response) {
+  const retryAfter = response.headers.get("retry-after")?.trim()
+  if (!retryAfter) return 300
+
+  const seconds = Number.parseFloat(retryAfter)
+  if (Number.isFinite(seconds)) {
+    return Math.min(MAX_RETRY_DELAY_MS, Math.max(0, seconds * 1_000))
+  }
+
+  const retryAt = Date.parse(retryAfter)
+  if (Number.isNaN(retryAt)) return 300
+  return Math.min(MAX_RETRY_DELAY_MS, Math.max(0, retryAt - Date.now()))
+}
+
+function isRetryableStatus(status: number) {
+  return status === 429 || status >= 500
+}
+
+function sleep(delayMs: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+}
+
 function makeImageSpec(
   orientation: YandexImageSearchParams["orientation"],
 ): Record<string, string> | undefined {
@@ -69,6 +148,91 @@ function makeImageSpec(
   return {
     orientation,
   }
+}
+
+export function parseYandexImageSearchXml(xmlString: string, limit: number): NormalizedImageSearchResult[] {
+  if (!xmlString.trim()) return []
+
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "",
+    trimValues: true,
+  })
+  const parsed = parser.parse(xmlString) as Record<string, unknown>
+
+  const possibleRoots = [parsed["yandexsearch"], parsed["response"], parsed]
+  let docs: unknown[] = []
+
+  for (const root of possibleRoots) {
+    if (!root || typeof root !== "object") continue
+    const record = root as Record<string, unknown>
+    const response = record.response as Record<string, unknown> | undefined
+    const results =
+      (response?.results as Record<string, unknown> | undefined) ||
+      (record.results as Record<string, unknown> | undefined)
+    const grouping =
+      (results?.grouping as Record<string, unknown> | undefined) ||
+      (record.grouping as Record<string, unknown> | undefined)
+    const groups = toArray(grouping?.group as Record<string, unknown> | Record<string, unknown>[] | undefined)
+
+    if (groups.length > 0) {
+      docs = groups
+        .flatMap((group) => toArray((group as Record<string, unknown>).doc))
+        .filter(Boolean)
+      if (docs.length > 0) break
+    }
+
+    const directDocs = toArray(results?.doc)
+    if (directDocs.length > 0) {
+      docs = directDocs
+      break
+    }
+  }
+
+  const normalized: NormalizedImageSearchResult[] = []
+  const seenImageUrls = new Set<string>()
+
+  for (const docRaw of docs) {
+    if (!docRaw || typeof docRaw !== "object") continue
+    const doc = docRaw as Record<string, unknown>
+    const imagePropertiesRaw = toArray(doc["image-properties"])[0]
+    const imageProperties =
+      imagePropertiesRaw && typeof imagePropertiesRaw === "object"
+        ? (imagePropertiesRaw as Record<string, unknown>)
+        : doc
+
+    const normalizedThumbUrl = normalizeHttpUrl(imageProperties["thumbnail-link"] || imageProperties.thumb, {
+      preferHttps: true,
+    })
+    const imageUrl = normalizeHttpUrl(imageProperties["image-link"] || imageProperties.url || doc.url)
+    const pageUrl =
+      normalizeHttpUrl(imageProperties["html-link"] || doc.url) || imageUrl
+
+    if (!normalizedThumbUrl || !imageUrl || seenImageUrls.has(imageUrl)) continue
+    const thumbUrl = preferLargerYandexThumbnail(normalizedThumbUrl)
+    seenImageUrls.add(imageUrl)
+
+    const width = asNumber(imageProperties["original-width"] ?? imageProperties.width)
+    const height = asNumber(imageProperties["original-height"] ?? imageProperties.height)
+    const sourceTitle = pickText(doc.title || imageProperties.title)
+    const sourceHost = resolveHost(pageUrl)
+    const upstreamId = pickText(imageProperties.id)
+
+    normalized.push({
+      id: upstreamId || `yandex-${hashString(`${imageUrl}|${pageUrl}`)}`,
+      thumbUrl,
+      imageUrl,
+      pageUrl,
+      width,
+      height,
+      sourceHost,
+      sourceTitle,
+    })
+
+    if (normalized.length >= limit) break
+  }
+
+  return normalized
 }
 
 export async function yandexImageSearch(params: YandexImageSearchParams): Promise<NormalizedImageSearchResult[]> {
@@ -108,103 +272,40 @@ export async function yandexImageSearch(params: YandexImageSearchParams): Promis
       requestBody.site = params.site
     }
 
-    const response = await fetch(YANDEX_IMAGE_SEARCH_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Api-Key ${params.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
-      cache: "no-store",
-    })
+    let response: Response | null = null
+    for (let attempt = 0; attempt < MAX_UPSTREAM_ATTEMPTS; attempt += 1) {
+      response = await fetch(YANDEX_IMAGE_SEARCH_ENDPOINT, {
+        method: "POST",
+        headers: {
+          Authorization: `Api-Key ${params.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+        cache: "no-store",
+      })
 
-    if (!response.ok) {
-      const bodyText = await response.text().catch(() => "")
-      throw new Error(`Yandex upstream error: ${response.status}${bodyText ? ` ${bodyText.slice(0, 300)}` : ""}`)
+      if (response.ok || !isRetryableStatus(response.status) || attempt === MAX_UPSTREAM_ATTEMPTS - 1) {
+        break
+      }
+      await sleep(getRetryDelayMs(response))
+    }
+
+    if (!response?.ok) {
+      const bodyText = response ? await response.text().catch(() => "") : ""
+      throw new YandexImageSearchError("Yandex image search request failed", {
+        status: response?.status,
+        upstreamDetails: bodyText.slice(0, 500),
+      })
     }
 
     const payload = (await response.json()) as { rawData?: string }
     if (!payload.rawData || typeof payload.rawData !== "string") {
-      throw new Error("Yandex response missing rawData")
+      throw new YandexImageSearchError("Yandex response missing rawData")
     }
 
     const xmlString = Buffer.from(payload.rawData, "base64").toString("utf-8")
-    if (!xmlString.trim()) {
-      return []
-    }
-
-    const parser = new XMLParser({
-      ignoreAttributes: false,
-      attributeNamePrefix: "",
-      trimValues: true,
-    })
-    const parsed = parser.parse(xmlString) as Record<string, unknown>
-
-    const possibleRoots = [
-      parsed["yandexsearch"],
-      parsed["response"],
-      parsed,
-    ]
-
-    let docs: unknown[] = []
-    for (const root of possibleRoots) {
-      if (!root || typeof root !== "object") continue
-      const record = root as Record<string, unknown>
-      const response = record.response as Record<string, unknown> | undefined
-      const results = (response?.results as Record<string, unknown> | undefined) ||
-        (record.results as Record<string, unknown> | undefined)
-      const grouping = (results?.grouping as Record<string, unknown> | undefined) ||
-        (record.grouping as Record<string, unknown> | undefined)
-      const groups = toArray(grouping?.group as Record<string, unknown> | Record<string, unknown>[] | undefined)
-
-      if (groups.length > 0) {
-        docs = groups
-          .map((group) => {
-            const doc = (group as Record<string, unknown>).doc
-            const firstDoc = Array.isArray(doc) ? doc[0] : doc
-            return firstDoc
-          })
-          .filter(Boolean)
-        if (docs.length > 0) break
-      }
-
-      const directDocs = toArray(results?.doc as unknown[] | unknown)
-      if (directDocs.length > 0) {
-        docs = directDocs
-        break
-      }
-    }
-
-    const normalized: NormalizedImageSearchResult[] = []
-
-    docs.forEach((docRaw, index) => {
-      if (!docRaw || typeof docRaw !== "object") return
-      const doc = docRaw as Record<string, unknown>
-
-      const thumbUrl = pickText(doc["thumbnail-link"] || doc["thumb"])
-      const imageUrl = pickText(doc["image-link"] || doc["url"])
-      const pageUrl = pickText(doc["html-link"] || doc["url"] || imageUrl)
-      if (!thumbUrl || !imageUrl) return
-
-      const width = asNumber(doc.width)
-      const height = asNumber(doc.height)
-      const sourceTitle = pickText(doc.title)
-      const sourceHost = resolveHost(pageUrl)
-
-      normalized.push({
-        id: `${index + 1}-${thumbUrl}`,
-        thumbUrl,
-        imageUrl,
-        pageUrl,
-        width,
-        height,
-        sourceHost,
-        sourceTitle,
-      })
-    })
-
-    return normalized.slice(0, params.docsOnPage)
+    return parseYandexImageSearchXml(xmlString, params.docsOnPage)
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error("Yandex upstream timeout")

@@ -31,6 +31,7 @@ export interface ImporterBaseElement {
   width: number
   height: number
   rotation?: number
+  meta?: Record<string, unknown>
 }
 
 export interface ImporterTextStyle {
@@ -57,6 +58,12 @@ export interface ImporterImageElement extends ImporterBaseElement {
   type: "image"
   src: string
   objectFit?: string
+  style?: {
+    borderRadius?: number
+    opacity?: number
+    locked?: boolean
+    [key: string]: unknown
+  }
 }
 
 export type ImporterShapeType =

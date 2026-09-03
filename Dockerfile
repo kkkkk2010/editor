@@ -22,7 +22,9 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
 RUN addgroup --system --gid 1001 nextjs \
-  && adduser --system --uid 1001 --ingroup nextjs nextjs
+  && adduser --system --uid 1001 --ingroup nextjs nextjs \
+  && mkdir -p /var/lib/presentonika-yandex-search \
+  && chown nextjs:nextjs /var/lib/presentonika-yandex-search
 
 COPY --from=build --chown=nextjs:nextjs /app/public ./public
 COPY --from=build --chown=nextjs:nextjs /app/.next/standalone ./

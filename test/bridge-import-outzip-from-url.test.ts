@@ -8,6 +8,10 @@ vi.mock("@/src/lib/net/dnsLookup", () => ({
   dnsLookupAll: hoisted.dnsLookupAllMock,
 }))
 
+vi.mock("@/src/lib/net/pinnedFetch", () => ({
+  fetchPinnedPublicUrl: vi.fn((url: URL, options: RequestInit) => globalThis.fetch(url, options)),
+}))
+
 import { POST } from "@/app/api/bridge/import-outzip-from-url/route"
 import { GET as GET_LAUNCH } from "@/app/api/bridge/launch/[launchId]/route"
 
@@ -72,6 +76,7 @@ describe("POST /api/bridge/import-outzip-from-url", () => {
       makeRequest({
         outZipUrl: "https://presentonika.ru/wp-content/uploads/latest.out.zip",
         presentationId: "75",
+        presentationTitle: "  Закон Архимеда  ",
         saveToken: "a-valid-save-token-with-enough-entropy",
         saveEndpoint: "https://www.presentonika.ru/wp-json/presentonika/v1/save-outzip",
       }),
@@ -86,7 +91,7 @@ describe("POST /api/bridge/import-outzip-from-url", () => {
     })
     expect(firstRead.status).toBe(200)
     const launch = await firstRead.json()
-    expect(launch).toMatchObject({ presentationId: "75" })
+    expect(launch).toMatchObject({ presentationId: "75", presentationTitle: "Закон Архимеда" })
     expect(launch.downloadUrl).not.toContain("?")
     expect(launch.downloadToken).toBeTypeOf("string")
 
@@ -94,6 +99,21 @@ describe("POST /api/bridge/import-outzip-from-url", () => {
       params: Promise.resolve({ launchId }),
     })
     expect(secondRead.status).toBe(404)
+  })
+
+  it("rejects an oversized presentation title", async () => {
+    const response = await POST(
+      makeRequest({
+        outZipUrl: "https://presentonika.ru/wp-content/uploads/latest.out.zip",
+        presentationId: "75",
+        presentationTitle: "a".repeat(201),
+        saveToken: "a-valid-save-token-with-enough-entropy",
+        saveEndpoint: "https://www.presentonika.ru/wp-json/presentonika/v1/save-outzip",
+      }),
+    )
+
+    expect(response.status).toBe(400)
+    expect((await response.json()).code).toBe("INVALID_REQUEST")
   })
 
   it("rejects redirects to private addresses", async () => {

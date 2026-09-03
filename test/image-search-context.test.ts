@@ -86,7 +86,104 @@ describe("buildImageSearchContext", () => {
     expect(context.aspect).toBe("portrait")
   })
 
-  it("falls back to topic + slide number + inferred aspect when no meta and no slot", () => {
+  it("replaces an English generated query with Russian slide context for a Russian presentation", () => {
+    const imagePlan: ImagePlan = {
+      version: 1,
+      language: "ru",
+      topic: "Клеточное дыхание",
+      slots: [
+        {
+          slotId: "s1",
+          slide: 1,
+          element: 1,
+          kind: "photo",
+          query: "cellular respiration mitochondria diagram",
+          hint: "A student taking a quiz, with mitochondria and respiration symbols",
+        },
+      ],
+    }
+
+    const context = buildImageSearchContext({
+      selectedElement: baseImageElement,
+      slideIndex: 0,
+      elementIndex: 1,
+      slide: baseSlide,
+      projectMeta: { topic: "Презентация", language: "ru" },
+      imagePlan,
+    })
+
+    expect(context.query).toMatch(/[А-Яа-яЁё]/)
+    expect(context.query).not.toMatch(/[A-Za-z]/)
+    expect(context.query).toContain("ученик решает тест")
+    expect(context.query).toContain("Клеточное дыхание")
+    expect(context.query).toContain("биология класс")
+    expect(context.query).not.toContain("Презентация")
+    expect(context.hint).toBe(`Сюжет для поиска: ${context.query}`)
+    expect(context.debug.used).toContain("fallback.query.language")
+  })
+
+  it("keeps a Russian generated query for a Russian presentation", () => {
+    const imagePlan: ImagePlan = {
+      version: 1,
+      language: "ru",
+      slots: [
+        {
+          slotId: "s1",
+          slide: 1,
+          element: 1,
+          kind: "photo",
+          query: "митохондрия клеточное дыхание схема",
+          hint: "slot hint",
+        },
+      ],
+    }
+
+    const context = buildImageSearchContext({
+      selectedElement: baseImageElement,
+      slideIndex: 0,
+      elementIndex: 1,
+      slide: baseSlide,
+      projectMeta: { language: "ru" },
+      imagePlan,
+    })
+
+    expect(context.query).toBe("митохондрия клеточное дыхание схема")
+    expect(context.debug.used).toContain("imagePlan.slot.query")
+  })
+
+  it("replaces a generic Russian query before it can be sent to search", () => {
+    const imagePlan: ImagePlan = {
+      version: 1,
+      language: "ru",
+      topic: "Клеточное дыхание",
+      slots: [
+        {
+          slotId: "s1",
+          slide: 1,
+          element: 1,
+          kind: "photo",
+          query: "Презентация Проверка знаний фото",
+          hint: "Ученик выполняет тест по биологии",
+        },
+      ],
+    }
+
+    const context = buildImageSearchContext({
+      selectedElement: baseImageElement,
+      slideIndex: 0,
+      elementIndex: 1,
+      slide: baseSlide,
+      projectMeta: { topic: "Презентация", language: "ru" },
+      imagePlan,
+    })
+
+    expect(context.query).not.toContain("Презентация")
+    expect(context.query).not.toContain("Проверка знаний")
+    expect(context.query).toContain("Клеточное дыхание")
+    expect(context.debug.used).toContain("fallback.query.quality")
+  })
+
+  it("falls back to topic + concrete slide context without search-noise words", () => {
     const context = buildImageSearchContext({
       selectedElement: baseImageElement,
       slideIndex: 2,
@@ -97,7 +194,9 @@ describe("buildImageSearchContext", () => {
     })
 
     expect(context.query).toContain("Космос")
-    expect(context.query).toContain("слайд 3")
+    expect(context.query).toContain("биологию")
+    expect(context.query).not.toContain("слайд")
+    expect(context.query).not.toContain("презентация")
     expect(context.aspect).toBe("landscape")
   })
 })

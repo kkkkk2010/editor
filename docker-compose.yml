@@ -1,4 +1,62 @@
 services:
+  redis-storage-init:
+    image: redis:7-alpine
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["chown -R $$(id -u redis):$$(id -g redis) /data"]
+    volumes:
+      - bridge-redis:/data
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
+  redis:
+    image: redis:7-alpine
+    user: redis
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    expose:
+      - "6379"
+    volumes:
+      - bridge-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      redis-storage-init:
+        condition: service_completed_successfully
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
+    restart: unless-stopped
+
+  bridge-storage-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["mkdir -p /data/outzips && chown -R 1001:1001 /data"]
+    volumes:
+      - bridge-storage:/data
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
   editor:
     build:
       context: .
@@ -10,7 +68,10 @@ services:
       PRESENTONIKA_BRIDGE_TOKEN: ${PRESENTONIKA_BRIDGE_TOKEN:?PRESENTONIKA_BRIDGE_TOKEN is required}
       BRIDGE_SAVE_TOKEN_VALIDATE_URL: ${BRIDGE_SAVE_TOKEN_VALIDATE_URL:-https://www.presentonika.ru/wp-json/presentonika/v1/validate-save-token}
       BRIDGE_SAVE_TOKEN_VALIDATE_BEARER: ${BRIDGE_SAVE_TOKEN_VALIDATE_BEARER:?BRIDGE_SAVE_TOKEN_VALIDATE_BEARER is required}
-      BRIDGE_TMP_DIR: ${BRIDGE_TMP_DIR:-/tmp/outzips}
+      BRIDGE_OBSERVABILITY_URL: ${BRIDGE_OBSERVABILITY_URL:-https://www.presentonika.ru/wp-json/presentonika/v1/editor-observability}
+      BRIDGE_TMP_DIR: ${BRIDGE_TMP_DIR:-/var/lib/presentonika-bridge/outzips}
+      BRIDGE_STATE_BACKEND: redis
+      BRIDGE_REDIS_URL: redis://redis:6379
       BRIDGE_MAX_STAGE_OUTZIP_BYTES: ${BRIDGE_MAX_STAGE_OUTZIP_BYTES:-62914560}
       BRIDGE_TTL_SECONDS: ${BRIDGE_TTL_SECONDS:-1800}
       BRIDGE_MAX_DOWNLOADS: ${BRIDGE_MAX_DOWNLOADS:-5}
@@ -19,12 +80,40 @@ services:
       NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT: ${NEXT_PUBLIC_ENABLE_ADMIN_PPTX_IMPORT:-0}
       NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-https://editor.presentonika.ru}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://editor.presentonika.ru}
+      YANDEX_SEARCH_ENABLE: ${YANDEX_SEARCH_ENABLE:-true}
+      YANDEX_SEARCH_FOLDER_ID: ${YANDEX_SEARCH_FOLDER_ID:-}
+      YANDEX_SEARCH_API_KEY: ${YANDEX_SEARCH_API_KEY:-}
+      YANDEX_SEARCH_DEFAULT_TYPE: ${YANDEX_SEARCH_DEFAULT_TYPE:-SEARCH_TYPE_RU}
+      YANDEX_SEARCH_FAMILY_MODE: ${YANDEX_SEARCH_FAMILY_MODE:-FAMILY_MODE_STRICT}
+      YANDEX_SEARCH_FIX_TYPO_MODE: ${YANDEX_SEARCH_FIX_TYPO_MODE:-FIX_TYPO_MODE_ON}
+      YANDEX_SEARCH_DOCS_ON_PAGE_DEFAULT: ${YANDEX_SEARCH_DOCS_ON_PAGE_DEFAULT:-8}
+      YANDEX_SEARCH_TIMEOUT_MS: ${YANDEX_SEARCH_TIMEOUT_MS:-6000}
+      YANDEX_SEARCH_CACHE_TTL_MS: ${YANDEX_SEARCH_CACHE_TTL_MS:-300000}
+      YANDEX_SEARCH_MOCK_FALLBACK: ${YANDEX_SEARCH_MOCK_FALLBACK:-true}
+      YANDEX_SEARCH_RATE_LIMIT_PER_MINUTE: ${YANDEX_SEARCH_RATE_LIMIT_PER_MINUTE:-30}
+      YANDEX_SEARCH_GLOBAL_RATE_LIMIT_PER_SECOND: ${YANDEX_SEARCH_GLOBAL_RATE_LIMIT_PER_SECOND:-8}
+      YANDEX_SEARCH_DAILY_BILLED_LIMIT: ${YANDEX_SEARCH_DAILY_BILLED_LIMIT:-50}
+      YANDEX_SEARCH_PRESENTATION_BILLED_LIMIT: ${YANDEX_SEARCH_PRESENTATION_BILLED_LIMIT:-20}
+      YANDEX_SEARCH_SPEND_LEDGER_PATH: /var/lib/presentonika-yandex-search/spend-ledger.json
+      IMAGE_FETCH_MAX_BYTES: ${IMAGE_FETCH_MAX_BYTES:-8388608}
+      IMAGE_FETCH_TIMEOUT_MS: ${IMAGE_FETCH_TIMEOUT_MS:-12000}
+      IMAGE_FETCH_ALLOWED_HOSTS: ${IMAGE_FETCH_ALLOWED_HOSTS:-}
+      IMAGE_FETCH_RATE_LIMIT_PER_MINUTE: ${IMAGE_FETCH_RATE_LIMIT_PER_MINUTE:-30}
+      IMAGE_FETCH_GLOBAL_RATE_LIMIT_PER_SECOND: ${IMAGE_FETCH_GLOBAL_RATE_LIMIT_PER_SECOND:-8}
       NODE_ENV: production
     depends_on:
-      - converter
+      redis:
+        condition: service_healthy
+      bridge-storage-init:
+        condition: service_completed_successfully
+      converter:
+        condition: service_started
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=536870912,uid=1001,gid=1001
+    volumes:
+      - yandex-search-guard:/var/lib/presentonika-yandex-search
+      - bridge-storage:/var/lib/presentonika-bridge
     cap_drop:
       - ALL
     security_opt:
@@ -48,3 +137,8 @@ services:
     mem_limit: 2g
     cpus: 2.0
     restart: unless-stopped
+
+volumes:
+  yandex-search-guard:
+  bridge-redis:
+  bridge-storage:

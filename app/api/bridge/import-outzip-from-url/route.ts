@@ -3,6 +3,7 @@ import { sanitizeUrlForLogs } from "@/src/lib/bridge/network"
 import { resolveBridgePolicy } from "@/src/lib/bridge/policy"
 import { createBridgeLaunch } from "@/src/lib/bridge/launchStore"
 import { createJobFromZipBytes } from "@/src/lib/bridge/store"
+import { reportOperationalEvent } from "@/src/lib/serverObservability"
 
 export const runtime = "nodejs"
 
@@ -41,18 +42,33 @@ function hasZipSignature(bytes: Buffer) {
 type ImportRequest = {
   outZipUrl?: string
   presentationId?: string | number
+  presentationTitle?: string
   saveToken?: string
   saveEndpoint?: string
 }
 
 function parseLaunchContext(body: ImportRequest) {
-  const hasAny = body.presentationId !== undefined || body.saveToken !== undefined || body.saveEndpoint !== undefined
+  const hasAny =
+    body.presentationId !== undefined ||
+    body.presentationTitle !== undefined ||
+    body.saveToken !== undefined ||
+    body.saveEndpoint !== undefined
   if (!hasAny) return null
 
   const presentationId = String(body.presentationId ?? "").trim()
+  const presentationTitle = typeof body.presentationTitle === "string"
+    ? body.presentationTitle.trim().replace(/\s+/g, " ")
+    : ""
   const saveToken = typeof body.saveToken === "string" ? body.saveToken.trim() : ""
   const saveEndpoint = typeof body.saveEndpoint === "string" ? body.saveEndpoint.trim() : ""
-  if (!/^\d+$/.test(presentationId) || !saveToken || saveToken.length > 512 || !saveEndpoint) {
+  if (
+    !/^\d+$/.test(presentationId) ||
+    !saveToken ||
+    saveToken.length > 512 ||
+    !saveEndpoint ||
+    (body.presentationTitle !== undefined && typeof body.presentationTitle !== "string") ||
+    presentationTitle.length > 200
+  ) {
     throw new Error("Invalid launch context.")
   }
 
@@ -77,7 +93,12 @@ function parseLaunchContext(body: ImportRequest) {
 
   parsedEndpoint.search = ""
   parsedEndpoint.hash = ""
-  return { presentationId, saveToken, saveEndpoint: parsedEndpoint.toString() }
+  return {
+    presentationId,
+    ...(presentationTitle ? { presentationTitle } : {}),
+    saveToken,
+    saveEndpoint: parsedEndpoint.toString(),
+  }
 }
 
 export async function POST(request: Request) {
@@ -123,7 +144,7 @@ export async function POST(request: Request) {
 
     const job = await createJobFromZipBytes(download.bytes, { requestId: policy.requestId })
     const launch = launchContext
-      ? createBridgeLaunch({
+      ? await createBridgeLaunch({
           jobId: job.jobId,
           downloadToken: job.token,
           ...launchContext,
@@ -139,6 +160,13 @@ export async function POST(request: Request) {
       { headers: { "Cache-Control": "no-store", "X-Request-Id": policy.requestId } },
     )
   } catch (error) {
+    void reportOperationalEvent({
+      event: "bridge.import_failed",
+      level: "error",
+      requestId: policy.requestId,
+      presentationId: launchContext?.presentationId,
+      errorCode: error instanceof Error ? error.name : "import_failed",
+    })
     const downloadError = error instanceof PublicDownloadError ? error : null
     console.error("[bridge/import-outzip-from-url] request failed", {
       requestId: policy.requestId,

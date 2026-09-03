@@ -1,21 +1,8 @@
 import { zipSync } from "fflate"
 import type { ImporterDoc } from "@/src/lib/import/importerDoc"
 import type { AssetStore } from "@/src/lib/assets/assetStore"
+import type { ImageCreditItem } from "@/src/lib/images/imageCredits"
 import { logStructuredError, reportError } from "@/src/lib/monitoring"
-
-type ImageCreditItem = {
-  src: string
-  slot: {
-    slotId: string
-    slide: number
-    element: number
-  }
-  pageUrl: string
-  imageUrl: string
-  licenseLabel?: string
-  licenseUrl?: string
-  confirmedAt: string
-}
 
 type ExportOptions = {
   imageCredits?: ImageCreditItem[]
@@ -100,12 +87,13 @@ export function exportProjectZip(doc: ImporterDoc, assetStore: AssetStore, optio
       files[path] = asset.bytes
     })
 
-    if (options?.imageCredits && options.imageCredits.length > 0) {
+    const usedImageCredits = options?.imageCredits?.filter((item) => assetPaths.includes(item.src)) ?? []
+    if (usedImageCredits.length > 0) {
       files["imageCredits.json"] = toBytes(
         JSON.stringify(
           {
             version: 1,
-            items: options.imageCredits,
+            items: usedImageCredits,
           },
           null,
           2,

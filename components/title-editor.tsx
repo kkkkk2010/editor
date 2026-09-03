@@ -5,6 +5,7 @@ import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Pencil } from "lucide-react"
+import { MAX_PRESENTATION_TITLE_LENGTH } from "@/src/lib/presentation/title"
 
 interface TitleEditorProps {
   title: string
@@ -15,6 +16,12 @@ export default function TitleEditor({ title, onTitleChange }: TitleEditorProps) 
   const [isEditing, setIsEditing] = useState(false)
   const [editedTitle, setEditedTitle] = useState(title)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!isEditing) {
+      setEditedTitle(title)
+    }
+  }, [isEditing, title])
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -52,6 +59,7 @@ export default function TitleEditor({ title, onTitleChange }: TitleEditorProps) 
           ref={inputRef}
           type="text"
           value={editedTitle}
+          maxLength={MAX_PRESENTATION_TITLE_LENGTH}
           onChange={(e) => setEditedTitle(e.target.value)}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
@@ -71,4 +79,3 @@ export default function TitleEditor({ title, onTitleChange }: TitleEditorProps) 
     </div>
   )
 }
-

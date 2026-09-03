@@ -134,3 +134,13 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Presentonika private/runtime artifacts
+*.out.zip
+*.before-*
+*.sql
+*.dump
+*.bak
+*.backup
+runtime/
+presentonika-private/

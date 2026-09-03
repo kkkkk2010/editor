@@ -79,6 +79,10 @@ function getFallbackCanvasSize(doc: ImporterDoc): { width: number; height: numbe
 }
 
 export function computeSourceSlideSize(doc: ImporterDoc): { width: number; height: number } {
+  if (doc.slideSize && doc.slideSize.width > 0 && doc.slideSize.height > 0) {
+    return getFallbackCanvasSize(doc)
+  }
+
   const canvasSize = getCanvasSize(doc.slides)
   if (canvasSize.width > 0 && canvasSize.height > 0) {
     return canvasSize
@@ -124,6 +128,10 @@ function mapElement(
   scale: number,
   baseUrl?: string,
 ): Element {
+  const isDecorative = element.meta?.layoutRole === "decorative"
+    || element.meta?.adaptiveRole === "shadow"
+    || element.meta?.layoutThemeRole === "shadow"
+  const locked = element.style?.locked === true || isDecorative
   const position = {
     x: element.x * scale,
     y: element.y * scale,
@@ -146,6 +154,7 @@ function mapElement(
       id: createId("text"),
       type: "text",
       content: element.text,
+      meta: element.meta,
       position,
       size,
       style: {
@@ -158,6 +167,7 @@ function mapElement(
         textDecoration: normalizedStyle.textDecoration,
         textAlign: normalizedStyle.textAlign,
         rotation: element.rotation,
+        locked,
       },
     }
   }
@@ -172,6 +182,7 @@ function mapElement(
       id: createId("shape"),
       type: "shape",
       content: shapeType,
+      meta: element.meta,
       position,
       size,
       style: {
@@ -182,6 +193,7 @@ function mapElement(
         opacity: shapeStyle.opacity,
         borderRadius: cornerRadius,
         rotation: element.rotation,
+        locked,
       },
     }
   }
@@ -191,13 +203,17 @@ function mapElement(
     type: "image",
     content: element.runtimeSrc ?? resolveAssetUrl(element.src, baseUrl),
     assetPath: element.assetPath,
+    meta: element.meta,
     position,
     size,
     style: {
       objectFit: allowedObjectFits.has(element.objectFit as ObjectFitValue)
         ? (element.objectFit as ObjectFitValue)
         : "cover",
+      borderRadius: typeof element.style?.borderRadius === "number" ? element.style.borderRadius * scale : undefined,
+      opacity: element.style?.opacity,
       rotation: element.rotation,
+      locked,
     },
   }
 }

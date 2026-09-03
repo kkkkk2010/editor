@@ -1,6 +1,7 @@
 import { mkdir, readdir, rm, stat, writeFile, readFile } from "node:fs/promises"
 import path from "node:path"
 import crypto from "node:crypto"
+import { bridgeRedisKey, ensureBridgeRedis } from "./redis"
 
 export type BridgeJob = {
   id: string
@@ -58,6 +59,8 @@ function makeToken() {
 
 async function removeJob(job: BridgeJob) {
   jobs.delete(job.id)
+  const redis = await ensureBridgeRedis()
+  if (redis) await redis.del(bridgeRedisKey("job", job.id))
   await rm(job.filePath, { force: true }).catch(() => undefined)
 }
 
@@ -66,7 +69,9 @@ async function cleanupExpiredJobs() {
   const retentionMs = getExpiredRetentionSeconds() * 1000
   const jobsToDelete: BridgeJob[] = []
 
-  for (const job of jobs.values()) {
+  const redis = await ensureBridgeRedis()
+
+  for (const job of redis ? [] : jobs.values()) {
     if (job.expiresAt + retentionMs <= now) {
       jobsToDelete.push(job)
       continue
@@ -133,7 +138,18 @@ export async function createJobFromZipBytes(
     downloadsUsed: 0,
     requestId: meta?.requestId,
   }
-  jobs.set(id, job)
+  const redis = await ensureBridgeRedis()
+  if (redis) {
+    const retentionMs = getExpiredRetentionSeconds() * 1000
+    await redis.set(
+      bridgeRedisKey("job", id),
+      JSON.stringify(job),
+      "PX",
+      getTtlSeconds() * 1000 + retentionMs,
+    )
+  } else {
+    jobs.set(id, job)
+  }
 
   return {
     jobId: id,
@@ -146,17 +162,42 @@ export async function createBridgeJob(zipBytes: ArrayBuffer, requestId?: string)
   return createJobFromZipBytes(Buffer.from(zipBytes), { requestId })
 }
 
-export function getBridgeJob(jobId: string) {
-  return jobs.get(jobId)
+export async function getBridgeJob(jobId: string) {
+  const redis = await ensureBridgeRedis()
+  if (!redis) return jobs.get(jobId)
+  const raw = await redis.get(bridgeRedisKey("job", jobId))
+  return raw ? JSON.parse(raw) as BridgeJob : undefined
 }
 
 export async function readBridgeZip(job: BridgeJob) {
   return readFile(job.filePath)
 }
 
-export function incrementBridgeDownloads(job: BridgeJob) {
-  job.downloadsUsed += 1
-  return job.downloadsUsed
+export async function incrementBridgeDownloads(job: BridgeJob) {
+  const redis = await ensureBridgeRedis()
+  if (!redis) {
+    if (job.downloadsUsed >= job.maxDownloads) return null
+    job.downloadsUsed += 1
+    return job.downloadsUsed
+  }
+
+  const result = await redis.eval(
+    `local raw=redis.call('GET',KEYS[1])
+     if not raw then return -2 end
+     local job=cjson.decode(raw)
+     if tonumber(job.expiresAt) <= tonumber(ARGV[1]) then return -3 end
+     if tonumber(job.downloadsUsed) >= tonumber(job.maxDownloads) then return -1 end
+     job.downloadsUsed=tonumber(job.downloadsUsed)+1
+     local ttl=redis.call('PTTL',KEYS[1])
+     if ttl > 0 then redis.call('SET',KEYS[1],cjson.encode(job),'PX',ttl) end
+     return job.downloadsUsed`,
+    1,
+    bridgeRedisKey("job", job.id),
+    Date.now(),
+  )
+  if (typeof result !== "number" || result < 0) return null
+  job.downloadsUsed = result
+  return result
 }
 
 export async function removeBridgeJob(job: BridgeJob) {

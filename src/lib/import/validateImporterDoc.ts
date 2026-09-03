@@ -17,8 +17,13 @@ const textStyleSchema = z
   })
   .passthrough()
 
+const MAX_SLIDES = 200
+const MAX_ELEMENTS_PER_SLIDE = 500
+const MAX_TOTAL_ELEMENTS = 5_000
+const MAX_TEXT_LENGTH = 20_000
+
 const baseElementSchema = z.object({
-  id: z.string(),
+  id: z.string().min(1).max(256),
   x: finiteNumber,
   y: finiteNumber,
   width: finiteNumber.positive(),
@@ -28,14 +33,18 @@ const baseElementSchema = z.object({
 
 const textElementSchema = baseElementSchema.extend({
   type: z.literal("text"),
-  text: z.string(),
+  text: z.string().max(MAX_TEXT_LENGTH),
   style: textStyleSchema.optional(),
 })
 
 const imageElementSchema = baseElementSchema.extend({
   type: z.literal("image"),
-  src: z.string(),
+  src: z.string().min(1).max(512),
   objectFit: z.enum(["cover", "contain", "fill", "none", "scale-down"]).optional(),
+  style: z.object({
+    borderRadius: finiteNumber.min(0).max(500).optional(),
+    opacity: finiteNumber.min(0).max(1).optional(),
+  }).optional(),
 })
 
 const shapeStyleSchema = z
@@ -68,14 +77,14 @@ const shapeElementSchema = baseElementSchema.extend({
 const backgroundSchema = z
   .object({
     type: z.literal("image"),
-    src: z.string(),
+    src: z.string().min(1).max(512),
   })
   .passthrough()
 
 const slideSchema = z.object({
-  id: z.string(),
+  id: z.string().min(1).max(256),
   background: backgroundSchema.optional(),
-  elements: z.array(z.union([textElementSchema, imageElementSchema, shapeElementSchema])),
+  elements: z.array(z.union([textElementSchema, imageElementSchema, shapeElementSchema])).max(MAX_ELEMENTS_PER_SLIDE),
 })
 
 const importerDocSchema = z.object({
@@ -87,7 +96,16 @@ const importerDocSchema = z.object({
       unit: z.string(),
     })
     .optional(),
-  slides: z.array(slideSchema),
+  slides: z.array(slideSchema).min(1).max(MAX_SLIDES),
+}).superRefine((doc, ctx) => {
+  const totalElements = doc.slides.reduce((total, slide) => total + slide.elements.length, 0)
+  if (totalElements > MAX_TOTAL_ELEMENTS) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["slides"],
+      message: `Слишком много элементов: ${totalElements}, максимум ${MAX_TOTAL_ELEMENTS}`,
+    })
+  }
 })
 
 const INVALID_ASSET_PREFIX = /^(blob:|data:|https?:|file:)/i

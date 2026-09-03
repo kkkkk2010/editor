@@ -21,7 +21,10 @@ interface PropertyPanelProps {
   imagePlan?: ImagePlan | null
   projectTopic?: string
   language?: string
+  presentationId?: string | null
+  saveToken?: string
   hasPlaceholderReplacement?: (srcPath: string) => boolean
+  onPreviewImageFromSearch?: (payload: { elementId: string; previewUrl: string; fallbackUrl?: string }) => void
   onInsertImageFromSearch?: (payload: {
     elementId: string
     currentContent: string
@@ -35,6 +38,7 @@ interface PropertyPanelProps {
     selection: {
       pageUrl: string
       imageUrl: string
+      fallbackImageUrl?: string
       licenseLabel?: string
       licenseUrl?: string
       source?: string
@@ -58,7 +62,10 @@ export default function PropertyPanel({
   imagePlan,
   projectTopic,
   language,
+  presentationId,
+  saveToken,
   hasPlaceholderReplacement,
+  onPreviewImageFromSearch,
   onInsertImageFromSearch,
   onResetPlaceholderImage,
   onMoveElementForward,
@@ -68,13 +75,13 @@ export default function PropertyPanel({
 }: PropertyPanelProps) {
   if (!selectedElement) {
     return (
-      <div className="flex h-full flex-col bg-card">
+      <div className="flex h-full min-w-0 flex-col overflow-hidden bg-card">
         <div className="flex h-11 items-center justify-between border-b px-3">
           <div>
             <p className="text-xs font-bold uppercase text-muted-foreground">Настройки</p>
             <h3 className="text-sm font-bold">Свойства элемента</h3>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} title="Закрыть свойства" aria-label="Закрыть свойства">
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose} title="Закрыть свойства" aria-label="Закрыть свойства">
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -90,7 +97,7 @@ export default function PropertyPanel({
   }
 
   return (
-    <div className="flex h-full flex-col bg-card">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-card">
       <div className="flex h-11 items-center justify-between border-b px-3">
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent text-primary">
@@ -107,13 +114,13 @@ export default function PropertyPanel({
             </h3>
           </div>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose} title="Закрыть свойства" aria-label="Закрыть свойства">
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose} title="Закрыть свойства" aria-label="Закрыть свойства">
           <X className="h-4 w-4" />
         </Button>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="p-3">
+      <ScrollArea className="min-h-0 min-w-0 flex-1 overflow-hidden [&_[data-radix-scroll-area-viewport]>div]:!block [&_[data-radix-scroll-area-viewport]>div]:!min-w-0 [&_[data-radix-scroll-area-viewport]>div]:!w-full">
+        <div className="w-full min-w-0 max-w-full overflow-x-hidden p-3 pr-4">
           {selectedElement.type === "text" && (
             <TextPropertyPanel element={selectedElement} onUpdateElement={onUpdateElement} />
           )}
@@ -130,9 +137,12 @@ export default function PropertyPanel({
               hasPlaceholderReplacement={
                 selectedElement.assetPath ? hasPlaceholderReplacement?.(selectedElement.assetPath) : false
               }
+              onPreviewImageFromSearch={onPreviewImageFromSearch}
               onInsertImageFromSearch={onInsertImageFromSearch}
               onResetPlaceholderImage={onResetPlaceholderImage}
               projectMeta={{ topic: projectTopic, language }}
+              presentationId={presentationId}
+              saveToken={saveToken}
               onUpdateElement={onUpdateElement}
               onReplaceImage={onReplaceImage}
             />

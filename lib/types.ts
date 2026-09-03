@@ -56,7 +56,21 @@ export interface Element {
       kind?: string
       aspect?: string
       updatedAt?: string
+      requestUsedAt?: string
+      results?: Array<{
+        id: string
+        thumbUrl: string
+        pageUrl: string
+        imageUrl: string
+        width?: number
+        height?: number
+        sourceHost?: string
+        sourceTitle?: string
+        licenseLabel?: string
+        licenseUrl?: string
+      }>
     }
+    [key: string]: unknown
   }
   position: Position
   size: Size

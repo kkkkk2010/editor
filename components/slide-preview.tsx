@@ -246,7 +246,7 @@ const renderShape = (element: Element) => {
   const shapeType = element.content
   const fill = element.style.fill || "#ffffff"
   const stroke = element.style.stroke || "#000000"
-  const strokeWidth = element.style.strokeWidth || 2
+  const strokeWidth = element.style.strokeWidth ?? 0
 
   if (shapeType === "rectangle") {
     return (
@@ -256,6 +256,7 @@ const renderShape = (element: Element) => {
           height: "100%",
           backgroundColor: fill,
           border: `${strokeWidth}px solid ${stroke}`,
+          borderRadius: `${element.style.borderRadius || 0}px`,
         }}
       />
     )

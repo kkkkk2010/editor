@@ -46,6 +46,7 @@ interface ToolbarProps {
   canUndo: boolean
   canRedo: boolean
   onSaveProject: () => void
+  onRequestExit?: () => void
   hasUnsavedChanges?: boolean
   isSavingProject?: boolean
   onExportOutZip?: () => void
@@ -73,6 +74,7 @@ export default function Toolbar({
   canUndo,
   canRedo,
   onSaveProject,
+  onRequestExit = () => { window.location.href = "https://www.presentonika.ru/cabinet" },
   hasUnsavedChanges,
   isSavingProject,
   onExportOutZip,
@@ -204,7 +206,7 @@ export default function Toolbar({
             variant="ghost"
             size="icon"
             className="h-9 w-9 shrink-0"
-            onClick={() => { window.location.href = "https://www.presentonika.ru/cabinet" }}
+            onClick={onRequestExit}
             title="Вернуться в кабинет"
             aria-label="Вернуться в кабинет"
           >

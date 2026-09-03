@@ -1,4 +1,5 @@
 import { assertPublicUrl, sanitizeUrlForLogs } from "@/src/lib/bridge/network"
+import { fetchPinnedPublicUrl } from "@/src/lib/net/pinnedFetch"
 
 export class PublicDownloadError extends Error {
   constructor(
@@ -36,11 +37,9 @@ export async function downloadPublicFile(rawUrl: string, options: PublicDownload
     let response: Response
 
     try {
-      response = await fetch(parsedUrl, {
+      response = await fetchPinnedPublicUrl(parsedUrl, {
         method: "GET",
-        redirect: "manual",
         headers: { Accept: options.accept },
-        cache: "no-store",
         signal: controller.signal,
       })
 

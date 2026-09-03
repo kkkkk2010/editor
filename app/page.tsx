@@ -16,6 +16,16 @@ import { type Slide, type Element, defaultSlides, defaultSlideSize, type SlideSi
 import { Button } from "@/components/ui/button"
 import { Play, PanelRight } from "lucide-react"
 import { Toaster } from "@/components/ui/toaster"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useIsMobile } from "@/components/ui/use-mobile"
 import { useToast } from "@/hooks/use-toast"
 import type { ImportResult } from "@/src/lib/import/importerDoc"
@@ -32,7 +42,12 @@ import {
 } from "@/src/lib/project/layoutExport"
 import { buildWpSavePayload } from "@/src/lib/save/wpSavePayload"
 import type { ImagePlan } from "@/src/lib/import/imagePlan"
+import type { ImageCreditItem } from "@/src/lib/images/imageCredits"
+import { normalizeImageAssetPath } from "@/src/lib/images/assetPath"
+import { calculateEditorScale } from "@/lib/editor-scale"
 import html2canvas from "html2canvas"
+import { cachePresentationSession } from "@/src/lib/browser/presentationSessionCache"
+import { clampPresentationTitle } from "@/src/lib/presentation/title"
 
 type EditorState = {
   slides: Slide[]
@@ -61,6 +76,7 @@ type ReplacedAsset = {
   bytesBase64: string
   contentType: string
   originalContent: string
+  originalAssetPath: string
   source: {
     pageUrl: string
     imageUrl: string
@@ -199,6 +215,9 @@ export default function Home() {
   const [showPropertyPanel, setShowPropertyPanel] = useState(false)
   const [presentationTitle, setPresentationTitle] = useState("Презентация") // Перевел: "flowmix多模态产品系列"
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [exitPromptOpen, setExitPromptOpen] = useState(false)
+  const [isSavingBeforeExit, setIsSavingBeforeExit] = useState(false)
+  const allowNavigationRef = useRef(false)
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [editorScale, setEditorScale] = useState(1)
   const importedAssetUrlsRef = useRef<string[]>([])
@@ -223,7 +242,14 @@ export default function Home() {
   const [imagePlan, setImagePlan] = useState<ImagePlan | null>(null)
   const [selectedElementIndex, setSelectedElementIndex] = useState<number | null>(null)
   const [replacedAssets, setReplacedAssets] = useState<Record<string, ReplacedAsset>>({})
+  const [imageCreditsBySrc, setImageCreditsBySrc] = useState<Record<string, ImageCreditItem>>({})
+  const [imageSearchPreview, setImageSearchPreview] = useState<{
+    elementId: string
+    url: string
+    fallbackUrl?: string
+  } | null>(null)
   const [hasPendingAutoImport, setHasPendingAutoImport] = useState(false)
+  const [imageSearchSaveToken, setImageSearchSaveToken] = useState("")
 
   const present = history.present
   const isMobile = useIsMobile()
@@ -238,6 +264,16 @@ export default function Home() {
   }, [present])
 
   useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedChanges || allowNavigationRef.current) return
+      event.preventDefault()
+      event.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [hasUnsavedChanges])
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     setHasPendingAutoImport(params.has("importOutZip") || params.has("launch"))
   }, [])
@@ -250,6 +286,22 @@ export default function Home() {
     const presentationIdFromUrl = params.get("presentationId")
     currentPresentationIdRef.current = presentationIdFromUrl
     setCurrentPresentationId(presentationIdFromUrl)
+    let resolvedImageSearchSaveToken = ""
+    const savedCtxRaw = sessionStorage.getItem("wpSaveCtx")
+    if (savedCtxRaw) {
+      try {
+        const parsed = JSON.parse(savedCtxRaw) as { presentationId?: string; saveToken?: string }
+        if (parsed.presentationId === presentationIdFromUrl && parsed.saveToken) {
+          resolvedImageSearchSaveToken = parsed.saveToken
+        }
+      } catch {
+        // The regular save flow will handle and clear invalid session state.
+      }
+    }
+    if (presentationIdFromUrl && !resolvedImageSearchSaveToken) {
+      resolvedImageSearchSaveToken = params.get("saveToken") || ""
+    }
+    setImageSearchSaveToken(resolvedImageSearchSaveToken)
     console.log("[wp] currentPresentationIdRef=", presentationIdFromUrl)
   }, [])
 
@@ -295,6 +347,16 @@ export default function Home() {
       setPresent((state) => ({ ...state, selectedElementId: null }))
     }
   }, [selectedElementId, selectedElement])
+
+  useEffect(() => {
+    setImageSearchPreview((preview) => {
+      if (!preview) return null
+      const previewElementIsStillSelected =
+        preview.elementId === selectedElementId &&
+        currentSlide?.elements.some((element) => element.id === preview.elementId)
+      return previewElementIsStillSelected ? preview : null
+    })
+  }, [currentSlide, selectedElementId])
 
   const showImportOverlay = hasPendingAutoImport || isBridgeImporting
   const showSaveOverlay = isSavingProject || isExportingOutZip || isExportingLayout
@@ -456,30 +518,41 @@ export default function Home() {
   }, [slideSize])
 
   useLayoutEffect(() => {
+    if (isPreviewMode) return
+
     const container = editorContainerRef.current
     if (!container) return
+    let frameId: number | null = null
 
     const updateEditorScale = () => {
-      const availableWidth = Math.max(container.clientWidth - 32, 1)
-      const availableHeight = Math.max(container.clientHeight - 32, 1)
-      const nextScale = Math.max(
-        0.05,
-        Math.min(availableWidth / slideSize.width, availableHeight / slideSize.height, 1.2),
-      )
+      const nextScale = calculateEditorScale({
+        containerWidth: container.clientWidth,
+        containerHeight: container.clientHeight,
+        slideWidth: slideSize.width,
+        slideHeight: slideSize.height,
+      })
+      if (nextScale === null) return
 
       setEditorScale((currentScale) =>
         Math.abs(currentScale - nextScale) > 0.001 ? nextScale : currentScale,
       )
     }
 
+    const scheduleEditorScaleUpdate = () => {
+      if (frameId !== null) cancelAnimationFrame(frameId)
+      frameId = requestAnimationFrame(updateEditorScale)
+    }
+
     updateEditorScale()
-    const observer = new ResizeObserver(updateEditorScale)
+    scheduleEditorScaleUpdate()
+    const observer = new ResizeObserver(scheduleEditorScaleUpdate)
     observer.observe(container)
 
     return () => {
       observer.disconnect()
+      if (frameId !== null) cancelAnimationFrame(frameId)
     }
-  }, [slideSize.height, slideSize.width])
+  }, [isPreviewMode, slideSize.height, slideSize.width])
 
   useEffect(() => {
     return () => {
@@ -795,7 +868,9 @@ export default function Home() {
     if (!selectedElement || selectedElement.type !== "image") {
       return
     }
-    let assetPath = selectedElement.assetPath
+    setImageSearchPreview(null)
+    const previousAssetPath = selectedElement.assetPath
+    let assetPath = previousAssetPath
     if (file) {
       assetPath = await storeAssetFromFile(file)
     } else if (!assetPath) {
@@ -806,6 +881,22 @@ export default function Home() {
       content: imageUrl,
       assetPath,
     })
+    if (previousAssetPath) {
+      setReplacedAssets((previous) => {
+        const existing = previous[previousAssetPath]
+        if (!existing) return previous
+        URL.revokeObjectURL(existing.previewUrl)
+        const next = { ...previous }
+        delete next[previousAssetPath]
+        return next
+      })
+      setImageCreditsBySrc((previous) => {
+        if (!previous[previousAssetPath]) return previous
+        const next = { ...previous }
+        delete next[previousAssetPath]
+        return next
+      })
+    }
   }
 
   const hasPlaceholderReplacement = useCallback(
@@ -813,12 +904,25 @@ export default function Home() {
     [replacedAssets],
   )
 
+  const previewImageFromSearch = useCallback((payload: { elementId: string; previewUrl: string; fallbackUrl?: string }) => {
+    setImageSearchPreview({ elementId: payload.elementId, url: payload.previewUrl, fallbackUrl: payload.fallbackUrl })
+  }, [])
+
   const handleResetPlaceholderImage = useCallback(({ srcPath }: { srcPath: string }) => {
-    const originalContent = replacedAssets[srcPath]?.originalContent
+    setImageSearchPreview(null)
+    const replacement = replacedAssets[srcPath]
+    const originalContent = replacement?.originalContent
+    const originalAssetPath = replacement?.originalAssetPath || srcPath
     setReplacedAssets((previous) => {
       const existing = previous[srcPath]
       if (!existing) return previous
       URL.revokeObjectURL(existing.previewUrl)
+      const next = { ...previous }
+      delete next[srcPath]
+      return next
+    })
+    setImageCreditsBySrc((previous) => {
+      if (!previous[srcPath]) return previous
       const next = { ...previous }
       delete next[srcPath]
       return next
@@ -835,6 +939,7 @@ export default function Home() {
       updatedElements[index] = {
         ...element,
         content: originalContent || element.assetPath || element.content,
+        assetPath: originalAssetPath,
       }
       const updatedSlides = [...state.slides]
       updatedSlides[state.currentSlideIndex] = { ...slide, elements: updatedElements }
@@ -856,17 +961,40 @@ export default function Home() {
       selection: {
         pageUrl: string
         imageUrl: string
+        fallbackImageUrl?: string
         licenseLabel?: string
         licenseUrl?: string
         source?: string
       }
     }) => {
-      const response = await fetch("/api/images/fetch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl: payload.selection.imageUrl }),
-      })
-      const body = (await response.json()) as { ok?: boolean; bytesBase64?: string; contentType?: string; message?: string }
+      const downloadImage = async (imageUrl: string) => {
+        const response = await fetch("/api/images/fetch", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-presentation-id": currentPresentationId || "",
+            "x-save-token": imageSearchSaveToken,
+          },
+          body: JSON.stringify({ imageUrl, pageUrl: payload.selection.pageUrl }),
+        })
+        const body = (await response.json()) as {
+          ok?: boolean
+          bytesBase64?: string
+          contentType?: string
+          message?: string
+        }
+        return { response, body }
+      }
+
+      let download = await downloadImage(payload.selection.imageUrl)
+      if (
+        (!download.response.ok || !download.body.ok || !download.body.bytesBase64 || !download.body.contentType) &&
+        payload.selection.fallbackImageUrl &&
+        payload.selection.fallbackImageUrl !== payload.selection.imageUrl
+      ) {
+        download = await downloadImage(payload.selection.fallbackImageUrl)
+      }
+      const { response, body } = download
       if (!response.ok || !body.ok || !body.bytesBase64 || !body.contentType) {
         throw new Error(body?.message || "Не удалось получить изображение")
       }
@@ -882,38 +1010,66 @@ export default function Home() {
       const targetElementIndex = location?.elementIndex ?? selectedElementIndex ?? 0
       const targetSlide = presentRef.current.slides[targetSlideIndex]
       const targetElement = targetSlide?.elements[targetElementIndex]
-      const resolvedSrcPath =
+      const sourceAssetPath =
         payload.srcPath ||
-        targetElement?.assetPath ||
-        `assets/images/${payload.elementId}.${getExtensionFromUrl(payload.selection.imageUrl)}`
+        targetElement?.assetPath
+      const previousReplacement = sourceAssetPath ? replacedAssets[sourceAssetPath] : undefined
+      const originalAssetPath = previousReplacement?.originalAssetPath || sourceAssetPath || `assets/images/${payload.elementId}`
+      const resolvedSrcPath = normalizeImageAssetPath(originalAssetPath, payload.elementId, contentType)
+      const originalContent = previousReplacement?.originalContent || payload.currentContent
+
+      const confirmedAt = new Date().toISOString()
+      const credit: ImageCreditItem = {
+        src: resolvedSrcPath,
+        slot: {
+          slotId: `manual-${payload.elementId}`,
+          slide: targetSlideIndex + 1,
+          element: targetElementIndex,
+        },
+        pageUrl: payload.selection.pageUrl,
+        imageUrl: payload.selection.imageUrl,
+        licenseLabel: payload.selection.licenseLabel,
+        licenseUrl: payload.selection.licenseUrl,
+        source: payload.selection.source,
+        confirmedAt,
+      }
 
       setReplacedAssets((previous) => {
-        const existing = previous[resolvedSrcPath]
+        const next = { ...previous }
+        if (sourceAssetPath && sourceAssetPath !== resolvedSrcPath) {
+          const previousAtSource = next[sourceAssetPath]
+          if (previousAtSource) URL.revokeObjectURL(previousAtSource.previewUrl)
+          delete next[sourceAssetPath]
+        }
+        const existing = next[resolvedSrcPath]
         if (existing) {
           URL.revokeObjectURL(existing.previewUrl)
         }
         return {
-            ...previous,
+            ...next,
             [resolvedSrcPath]: {
             bytesBase64,
             contentType,
-            originalContent: payload.currentContent,
+            originalContent,
+            originalAssetPath,
             previewUrl,
-            slot: {
-              slotId: `manual-${payload.elementId}`,
-              slide: targetSlideIndex + 1,
-              element: targetElementIndex,
-            },
+            slot: credit.slot,
             source: {
-              pageUrl: payload.selection.pageUrl,
-              imageUrl: payload.selection.imageUrl,
-              licenseLabel: payload.selection.licenseLabel,
-              licenseUrl: payload.selection.licenseUrl,
-              source: payload.selection.source,
-              confirmedAt: new Date().toISOString(),
+              pageUrl: credit.pageUrl,
+              imageUrl: credit.imageUrl,
+              licenseLabel: credit.licenseLabel,
+              licenseUrl: credit.licenseUrl,
+              source: credit.source,
+              confirmedAt: credit.confirmedAt,
             },
           },
         }
+      })
+      setImageCreditsBySrc((previous) => {
+        const next = { ...previous }
+        if (sourceAssetPath && sourceAssetPath !== resolvedSrcPath) delete next[sourceAssetPath]
+        next[resolvedSrcPath] = credit
+        return next
       })
 
       assetStoreRef.current.setAsset(resolvedSrcPath, bytes, contentType)
@@ -946,8 +1102,9 @@ export default function Home() {
         updatedSlides[found.slideIndex] = { ...slide, elements: updatedElements }
         return { ...state, slides: updatedSlides }
       })
+      setImageSearchPreview((preview) => (preview?.elementId === payload.elementId ? null : preview))
     },
-    [currentSlideIndex, selectedElementIndex],
+    [currentPresentationId, currentSlideIndex, imageSearchSaveToken, replacedAssets, selectedElementIndex],
   )
 
   // 右键菜单功能
@@ -1166,6 +1323,7 @@ export default function Home() {
   }
 
   const handleImport = (result: ImportResult) => {
+    setImageSearchPreview(null)
     const importedSlides = result.slides.map((slide) => ({
       ...slide,
       background: { ...slide.background },
@@ -1187,6 +1345,7 @@ export default function Home() {
       Object.values(previous).forEach((item) => URL.revokeObjectURL(item.previewUrl))
       return {}
     })
+    setImageCreditsBySrc({})
     setSelectedElementIndex(null)
     setImportRev((value) => value + 1)
     console.log("[auto-import] after import slides=", importedSlides.length)
@@ -1222,10 +1381,14 @@ export default function Home() {
     async (outZip: ArrayBuffer) => {
       assetStoreRef.current.clear()
       const { importZipFile } = await import("@/src/lib/import/zipImport")
-      const { doc, createdUrls, sourceSlideSize, imagePlan } = await importZipFile(outZip, assetStoreRef.current)
+      const { doc, createdUrls, sourceSlideSize, imagePlan, imageCredits } = await importZipFile(
+        outZip,
+        assetStoreRef.current,
+      )
       setImagePlan(imagePlan)
       const mapped = mapImporterToEditor(doc, { sourceSlideSize, allowResize: true })
       handleImportZip(mapped, createdUrls)
+      setImageCreditsBySrc(Object.fromEntries(imageCredits.map((item) => [item.src, item])))
     },
     [handleImportZip],
   )
@@ -1239,6 +1402,7 @@ export default function Home() {
       Object.values(previous).forEach((item) => URL.revokeObjectURL(item.previewUrl))
       return {}
     })
+    setImageCreditsBySrc({})
     revokeImportObjectUrls(importedAssetUrlsRef.current)
     importedAssetUrlsRef.current = []
     resetHistory({
@@ -1303,12 +1467,7 @@ export default function Home() {
     if (!rawUrl) return null
     try {
       const parsed = new URL(rawUrl, window.location.origin)
-      ;["saveToken", "t"].forEach((key) => {
-        if (parsed.searchParams.has(key)) {
-          parsed.searchParams.set(key, "***")
-        }
-      })
-      return `${parsed.origin}${parsed.pathname}${parsed.search}`
+      return `${parsed.origin}${parsed.pathname}`
     } catch {
       return "invalid-url"
     }
@@ -1320,15 +1479,6 @@ export default function Home() {
       try {
         const parsed = JSON.parse(savedCtxRaw) as WpSaveCtx
         if (parsed.saveEndpoint && parsed.saveToken && parsed.presentationId) {
-          if (typeof parsed.ts === "number" && Date.now() - parsed.ts > 30 * 60 * 1000) {
-            sessionStorage.removeItem("wpSaveCtx")
-            toast({
-              title: "Save unavailable",
-              description: "Token expired, reopen from cabinet",
-              variant: "destructive",
-            })
-            return null
-          }
           return parsed
         }
       } catch {
@@ -1418,15 +1568,7 @@ export default function Home() {
     const effectiveDoc = options?.slideIndices && options.slideIndices.length === 1
       ? buildSingleSlideDoc(importerDoc, 0)
       : importerDoc
-    const imageCredits = Object.entries(replacedAssets).map(([src, item]) => ({
-      src,
-      slot: item.slot,
-      pageUrl: item.source.pageUrl,
-      imageUrl: item.source.imageUrl,
-      licenseLabel: item.source.licenseLabel,
-      licenseUrl: item.source.licenseUrl,
-      confirmedAt: item.source.confirmedAt,
-    }))
+    const imageCredits = Object.values(imageCreditsBySrc)
     const zipBytes = exportProjectZip(effectiveDoc, assetStore, {
       imageCredits: imageCredits.length > 0 ? imageCredits : undefined,
       extraFiles: options?.includeLayoutMeta && options.slideIndices && options.slideIndices.length === 1
@@ -1474,7 +1616,7 @@ export default function Home() {
       throw new Error("Staging failed: missing outZipUrl")
     }
     const stagedOutZipUrl = new URL(stageJson.outZipUrl, window.location.origin).toString()
-    console.log("[wp-save] staged outZipUrl=", stagedOutZipUrl, "size=", params.blobSize, "requestId=", params.requestId)
+    console.log("[wp-save] staged outZipUrl=", maskSensitiveUrl(stagedOutZipUrl), "size=", params.blobSize, "requestId=", params.requestId)
     return stagedOutZipUrl
   }
 
@@ -1482,18 +1624,20 @@ export default function Home() {
     saveEndpoint: string
     saveToken: string
     presentationId: string
+    presentationTitle: string
     stagedOutZipUrl: string
     requestId: string
   }) => {
     const payload = buildWpSavePayload({
       stagedOutZipUrl: params.stagedOutZipUrl,
       presentationId: params.presentationId,
+      presentationTitle: params.presentationTitle,
       saveToken: params.saveToken,
       requestId: params.requestId,
     })
     console.log("[wp-save] payload", {
       presentationId: payload.presentationId,
-      outZipUrl: payload.outZipUrl,
+      outZipUrl: maskSensitiveUrl(payload.outZipUrl),
       requestId: payload.requestId,
     })
 
@@ -1561,9 +1705,9 @@ export default function Home() {
     }
   }
 
-  const handleSaveProject = async () => {
+  const handleSaveProject = async (): Promise<boolean> => {
     if (isSavingProject) {
-      return
+      return false
     }
 
     setIsSavingProject(true)
@@ -1587,7 +1731,7 @@ export default function Home() {
           description: "Save unavailable: open from cabinet",
           variant: "destructive",
         })
-        return
+        return false
       }
 
       if (!currentPresentationIdValue) {
@@ -1596,7 +1740,7 @@ export default function Home() {
           description: "Ошибка сохранения: не найден presentationId в URL. Обнови страницу и попробуй снова.",
           variant: "destructive",
         })
-        return
+        return false
       }
 
       const { saveEndpoint, saveToken, presentationId } = ctx
@@ -1643,13 +1787,14 @@ export default function Home() {
           description: mismatchMessage,
           variant: "destructive",
         })
-        return
+        return false
       }
 
       const responseText = await saveOutZipUrlToWp({
         saveEndpoint,
         saveToken,
         presentationId,
+        presentationTitle,
         stagedOutZipUrl,
         requestId,
       })
@@ -1665,14 +1810,30 @@ export default function Home() {
         throw new Error(responseJson?.message || "Save failed")
       }
 
-      console.log("[wp-save] from-url success", responseJson.url ?? null)
+      console.log("[wp-save] from-url success", maskSensitiveUrl(responseJson.url))
+
+      await cachePresentationSession(presentationId, toArrayBuffer(bytes)).catch((cacheError) => {
+        console.warn("[wp-save] failed to update local presentation session", cacheError)
+      })
+      try {
+        const rawSession = sessionStorage.getItem("wpSaveCtx")
+        const savedSession = rawSession ? JSON.parse(rawSession) as Record<string, unknown> : {}
+        sessionStorage.setItem("wpSaveCtx", JSON.stringify({
+          ...savedSession,
+          presentationTitle,
+          ts: Date.now(),
+        }))
+      } catch (sessionError) {
+        console.warn("[wp-save] failed to update local presentation title", sessionError)
+      }
 
       toast({
         title: "Saved",
-        description: "Проект сохранен в WordPress.",
+        description: "Презентация сохранена.",
       })
 
       setHasUnsavedChanges(false)
+      return true
     } catch (error) {
       console.error("Save project failed:", error)
       toast({
@@ -1680,9 +1841,38 @@ export default function Home() {
         description: error instanceof Error ? error.message : "Попробуйте снова.",
         variant: "destructive",
       })
+      return false
     } finally {
       setIsSavingProject(false)
     }
+  }
+
+  const leaveToCabinet = () => {
+    allowNavigationRef.current = true
+    window.location.href = "https://www.presentonika.ru/cabinet"
+  }
+
+  const handleRequestExit = () => {
+    if (!hasUnsavedChanges) {
+      leaveToCabinet()
+      return
+    }
+    setExitPromptOpen(true)
+  }
+
+  const handlePresentationTitleChange = (nextTitle: string) => {
+    const boundedTitle = clampPresentationTitle(nextTitle)
+    if (boundedTitle === presentationTitle) return
+    setPresentationTitle(boundedTitle)
+    setHasUnsavedChanges(true)
+  }
+
+  const handleSaveAndExit = async () => {
+    setExitPromptOpen(false)
+    setIsSavingBeforeExit(true)
+    const saved = await handleSaveProject()
+    setIsSavingBeforeExit(false)
+    if (saved) leaveToCabinet()
   }
 
   const handleTransformStart = () => {
@@ -1766,6 +1956,12 @@ export default function Home() {
             currentPresentationIdRef.current = presentationId
             setCurrentPresentationId(presentationId)
           }}
+          onPresentationTitleChange={(title) => setPresentationTitle(clampPresentationTitle(title))}
+          onSaveContextChange={({ presentationId, saveToken }) => {
+            currentPresentationIdRef.current = presentationId
+            setCurrentPresentationId(presentationId)
+            setImageSearchSaveToken(saveToken)
+          }}
           onImportStateChange={setIsBridgeImporting}
           onImportStart={handleAutoImportStart}
           onImportComplete={handleAutoImportComplete}
@@ -1798,7 +1994,7 @@ export default function Home() {
             onAddShape={handleAddShape}
             onAddText={handleAddText}
             title={presentationTitle}
-            onTitleChange={setPresentationTitle}
+            onTitleChange={handlePresentationTitleChange}
             importOutZipFromArrayBuffer={importOutZipFromArrayBuffer}
             showAdminImportTools={isManualImportEnabled}
             onUndo={undo}
@@ -1806,6 +2002,7 @@ export default function Home() {
             canUndo={canUndo}
             canRedo={canRedo}
             onSaveProject={handleSaveProject}
+            onRequestExit={handleRequestExit}
             hasUnsavedChanges={hasUnsavedChanges}
             isSavingProject={isSavingProject}
             onExportOutZip={handleExportOutZip}
@@ -1882,6 +2079,7 @@ export default function Home() {
                     >
                       <SlideEditor
                         slide={currentSlide}
+                        imagePreview={imageSearchPreview}
                         onUpdateSlide={updateSlideLive}
                         onBeginTextEdit={beginTextEdit}
                         onTextEditChange={updateTextDraft}
@@ -1914,7 +2112,10 @@ export default function Home() {
                   imagePlan={imagePlan}
                   projectTopic={presentationTitle}
                   language="ru"
+                  presentationId={currentPresentationId}
+                  saveToken={imageSearchSaveToken}
                   hasPlaceholderReplacement={hasPlaceholderReplacement}
+                  onPreviewImageFromSearch={previewImageFromSearch}
                   onInsertImageFromSearch={replaceImageForElement}
                   onResetPlaceholderImage={handleResetPlaceholderImage}
                   onMoveElementForward={handleMoveElementForward}
@@ -1965,7 +2166,7 @@ export default function Home() {
                 slides={slides}
                 slideSize={slideSize}
                 title={presentationTitle}
-                onTitleChange={setPresentationTitle}
+                onTitleChange={handlePresentationTitleChange}
                 compactTrigger
               />
 
@@ -2013,6 +2214,32 @@ export default function Home() {
           </div>
         </div>
       ) : null}
+      <AlertDialog open={exitPromptOpen} onOpenChange={setExitPromptOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Сохранить изменения перед выходом?</AlertDialogTitle>
+            <AlertDialogDescription>
+              В презентации есть несохранённые изменения. Сохраните их или явно выйдите без сохранения.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSavingBeforeExit}>Отмена</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSavingBeforeExit}
+              onClick={leaveToCabinet}
+            >
+              Выйти без сохранения
+            </Button>
+            <AlertDialogAction disabled={isSavingBeforeExit} onClick={() => {
+              void handleSaveAndExit()
+            }}>
+              {isSavingBeforeExit ? "Сохраняем…" : "Сохранить и выйти"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Toaster />
     </main>
   )

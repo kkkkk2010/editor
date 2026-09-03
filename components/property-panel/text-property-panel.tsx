@@ -24,7 +24,7 @@ interface TextPropertyPanelProps {
   onUpdateElement: (element: Element) => void
 }
 
-const baseFontFamilies = ["Times New Roman", "Arial", "Georgia", "Verdana", "Courier New"]
+const baseFontFamilies = ["Manrope", "Inter", "Arial", "Georgia", "Times New Roman", "Verdana", "Courier New"]
 const seenFontFamilies = new Set(baseFontFamilies)
 const PRESET_COLORS = [
   "#000000",
@@ -61,7 +61,7 @@ export default function TextPropertyPanel({
     })
   }
 
-  const currentFont = element.style.fontFamily ?? "Arial"
+  const currentFont = element.style.fontFamily ?? "Inter"
   const normalizedFontFamily = normalizeFontFamily(currentFont)
   if (currentFont.trim()) {
     seenFontFamilies.add(currentFont)

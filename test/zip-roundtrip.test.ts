@@ -17,6 +17,15 @@ function getDocFromZip(bytes: Uint8Array): ImporterDoc {
   return JSON.parse(new TextDecoder("utf-8").decode(docBytes)) as ImporterDoc
 }
 
+function getImageCreditsFromZip(bytes: Uint8Array) {
+  const entries = unzipSync(bytes)
+  const creditsBytes = entries["imageCredits.json"]
+  if (!creditsBytes) {
+    throw new Error("imageCredits.json missing")
+  }
+  return JSON.parse(new TextDecoder("utf-8").decode(creditsBytes)) as unknown
+}
+
 describe("zip import/export", () => {
   it("imports fixture zip and keeps custom style fields", async () => {
     const importerDoc: ImporterDoc = {
@@ -155,5 +164,74 @@ describe("zip import/export", () => {
     expect(exportedEntries["doc.json"]).toBeDefined()
     const parsed = getDocFromZip(exported)
     expect(parsed.schemaVersion).toBe(1)
+  })
+
+  it("preserves image credits across an out.zip import/export roundtrip", async () => {
+    const assetPath = "assets/images/yandex-result.jpg"
+    const doc: ImporterDoc = {
+      schemaVersion: 1,
+      slideSize: { width: 960, height: 540, unit: "px" },
+      slides: [
+        {
+          id: "slide-1",
+          elements: [
+            {
+              id: "image-1",
+              type: "image",
+              src: assetPath,
+              x: 20,
+              y: 20,
+              width: 300,
+              height: 200,
+            },
+          ],
+        },
+      ],
+    }
+    const credits = [
+      {
+        src: assetPath,
+        slot: { slotId: "manual-image-1", slide: 1, element: 0 },
+        pageUrl: "https://example.com/source-page",
+        imageUrl: "https://cdn.example.com/result.jpg",
+        source: "example.com",
+        confirmedAt: "2026-08-11T00:00:00.000Z",
+      },
+    ]
+    const initialAssets = new AssetStore()
+    initialAssets.setAsset(assetPath, new Uint8Array([0xff, 0xd8, 0xff]), "image/jpeg")
+
+    const firstExport = exportProjectZip(doc, initialAssets, { imageCredits: credits })
+    const importedAssets = new AssetStore()
+    const imported = await importZipFileWithDebug(firstExport, importedAssets)
+    const secondExport = exportProjectZip(imported.doc, importedAssets, {
+      imageCredits: imported.imageCredits,
+    })
+
+    expect(imported.imageCredits).toEqual(credits)
+    expect(getImageCreditsFromZip(secondExport)).toEqual({ version: 1, items: credits })
+  })
+
+  it("does not export credits for image assets that are no longer used", () => {
+    const assetStore = new AssetStore()
+    const doc: ImporterDoc = {
+      schemaVersion: 1,
+      slideSize: { width: 960, height: 540, unit: "px" },
+      slides: [{ id: "slide-1", elements: [] }],
+    }
+
+    const exported = exportProjectZip(doc, assetStore, {
+      imageCredits: [
+        {
+          src: "assets/images/deleted.jpg",
+          slot: { slotId: "manual-deleted", slide: 1, element: 0 },
+          pageUrl: "https://example.com/source-page",
+          imageUrl: "https://cdn.example.com/deleted.jpg",
+          confirmedAt: "2026-08-11T00:00:00.000Z",
+        },
+      ],
+    })
+
+    expect(unzipSync(exported)["imageCredits.json"]).toBeUndefined()
   })
 })

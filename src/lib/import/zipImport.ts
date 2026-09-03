@@ -4,6 +4,8 @@ import { computeSourceSlideSize } from "@/src/lib/import/mapImporterToEditor"
 import type { AssetStore } from "@/src/lib/assets/assetStore"
 import { reportError } from "@/src/lib/monitoring"
 import { parseImagePlan, type ImagePlan } from "@/src/lib/import/imagePlan"
+import { parseImageCredits, type ImageCreditItem } from "@/src/lib/images/imageCredits"
+import { validateImporterDoc } from "@/src/lib/import/validateImporterDoc"
 
 const MIME_TYPES: Record<string, string> = {
   png: "image/png",
@@ -13,9 +15,120 @@ const MIME_TYPES: Record<string, string> = {
 }
 const ALLOWED_ASSET_EXTENSIONS = new Set(Object.keys(MIME_TYPES))
 const MAX_ZIP_BYTES = 50 * 1024 * 1024
+const MAX_ZIP_ENTRIES = 512
+const MAX_ENTRY_BYTES = 64 * 1024 * 1024
+const MAX_DOC_JSON_BYTES = 10 * 1024 * 1024
+const MAX_TOTAL_UNCOMPRESSED_BYTES = 150 * 1024 * 1024
+const MAX_COMPRESSION_RATIO = 100
+const ZIP_EOCD_SIGNATURE = 0x06054b50
+const ZIP_CENTRAL_ENTRY_SIGNATURE = 0x02014b50
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+}
+
+function assertSafeZipEntryPath(entryPath: string) {
+  if (!entryPath || entryPath.length > 512 || entryPath.includes("\0") || entryPath.includes("\\")) {
+    throw new Error("ZIP содержит некорректное имя файла")
+  }
+  if (entryPath.startsWith("/") || /^[a-zA-Z]:\//.test(entryPath)) {
+    throw new Error(`ZIP содержит абсолютный путь: ${entryPath}`)
+  }
+  if (entryPath.split("/").some((segment) => segment === "..")) {
+    throw new Error(`ZIP содержит небезопасный путь: ${entryPath}`)
+  }
+}
+
+function preflightZipDirectory(bytes: Uint8Array) {
+  if (bytes.byteLength < 22) throw new Error("Некорректный ZIP архив")
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const minOffset = Math.max(0, bytes.byteLength - 22 - 65_535)
+  let eocdOffset = -1
+  for (let offset = bytes.byteLength - 22; offset >= minOffset; offset -= 1) {
+    if (view.getUint32(offset, true) === ZIP_EOCD_SIGNATURE) {
+      eocdOffset = offset
+      break
+    }
+  }
+  if (eocdOffset < 0) throw new Error("В ZIP не найден центральный каталог")
+
+  const diskNumber = view.getUint16(eocdOffset + 4, true)
+  const centralDisk = view.getUint16(eocdOffset + 6, true)
+  const entriesOnDisk = view.getUint16(eocdOffset + 8, true)
+  const totalEntries = view.getUint16(eocdOffset + 10, true)
+  const centralSize = view.getUint32(eocdOffset + 12, true)
+  const centralOffset = view.getUint32(eocdOffset + 16, true)
+  if (
+    diskNumber !== 0 ||
+    centralDisk !== 0 ||
+    entriesOnDisk !== totalEntries ||
+    totalEntries === 0xffff ||
+    centralSize === 0xffffffff ||
+    centralOffset === 0xffffffff
+  ) {
+    throw new Error("Многотомные и ZIP64 архивы не поддерживаются")
+  }
+  if (totalEntries === 0 || totalEntries > MAX_ZIP_ENTRIES) {
+    throw new Error(`Недопустимое количество файлов в ZIP: ${totalEntries}`)
+  }
+  if (centralOffset + centralSize > eocdOffset || centralOffset < 0) {
+    throw new Error("Поврежден центральный каталог ZIP")
+  }
+
+  const decoder = new TextDecoder("utf-8", { fatal: true })
+  const names = new Set<string>()
+  let totalUncompressedBytes = 0
+  let offset = centralOffset
+  for (let index = 0; index < totalEntries; index += 1) {
+    if (offset + 46 > bytes.byteLength || view.getUint32(offset, true) !== ZIP_CENTRAL_ENTRY_SIGNATURE) {
+      throw new Error("Повреждена запись центрального каталога ZIP")
+    }
+    const flags = view.getUint16(offset + 8, true)
+    const compressedBytes = view.getUint32(offset + 20, true)
+    const uncompressedBytes = view.getUint32(offset + 24, true)
+    const nameLength = view.getUint16(offset + 28, true)
+    const extraLength = view.getUint16(offset + 30, true)
+    const commentLength = view.getUint16(offset + 32, true)
+    const entryEnd = offset + 46 + nameLength + extraLength + commentLength
+    if (entryEnd > bytes.byteLength || nameLength === 0) {
+      throw new Error("Повреждена длина записи ZIP")
+    }
+    if ((flags & 0x1) !== 0) throw new Error("Зашифрованные ZIP файлы не поддерживаются")
+    if (compressedBytes === 0xffffffff || uncompressedBytes === 0xffffffff) {
+      throw new Error("ZIP64 записи не поддерживаются")
+    }
+
+    let entryPath: string
+    try {
+      entryPath = decoder.decode(bytes.subarray(offset + 46, offset + 46 + nameLength))
+    } catch {
+      throw new Error("ZIP содержит невалидное UTF-8 имя файла")
+    }
+    assertSafeZipEntryPath(entryPath)
+    if (names.has(entryPath)) throw new Error(`ZIP содержит повторяющийся файл: ${entryPath}`)
+    names.add(entryPath)
+
+    if (!entryPath.endsWith("/")) {
+      if (uncompressedBytes > MAX_ENTRY_BYTES) {
+        throw new Error(`Файл в ZIP превышает лимит: ${entryPath}`)
+      }
+      if (entryPath === "doc.json" && uncompressedBytes > MAX_DOC_JSON_BYTES) {
+        throw new Error("doc.json превышает допустимый размер")
+      }
+      totalUncompressedBytes += uncompressedBytes
+      if (totalUncompressedBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+        throw new Error("Распакованный ZIP превышает допустимый общий размер")
+      }
+      if (
+        uncompressedBytes > 1024 * 1024 &&
+        (compressedBytes === 0 || uncompressedBytes / compressedBytes > MAX_COMPRESSION_RATIO)
+      ) {
+        throw new Error(`Подозрительная степень сжатия ZIP: ${entryPath}`)
+      }
+    }
+    offset = entryEnd
+  }
+  if (offset > centralOffset + centralSize) throw new Error("Поврежден размер центрального каталога ZIP")
 }
 
 export interface ZipImportResult {
@@ -23,6 +136,7 @@ export interface ZipImportResult {
   createdUrls: string[]
   sourceSlideSize: { width: number; height: number }
   imagePlan: ImagePlan | null
+  imageCredits: ImageCreditItem[]
 }
 
 export function revokeImportObjectUrls(urls: string[]) {
@@ -132,8 +246,13 @@ export async function importZipFile(input: ZipImportInput, assetStore?: AssetSto
     if (zipBytes.byteLength > MAX_ZIP_BYTES) {
       throw new Error(`ZIP архив превышает лимит размера: ${zipBytes.byteLength} байт`)
     }
+    preflightZipDirectory(zipBytes)
     const zipContents = unzipSync(zipBytes)
     const entries = new Map(Object.entries(zipContents))
+    const actualUncompressedBytes = [...entries.values()].reduce((total, entry) => total + entry.byteLength, 0)
+    if (actualUncompressedBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+      throw new Error("Распакованный ZIP превышает допустимый общий размер")
+    }
 
     if (!entries.has("doc.json")) {
       throw new Error("В архиве отсутствует doc.json в корне")
@@ -170,6 +289,16 @@ export async function importZipFile(input: ZipImportInput, assetStore?: AssetSto
       }
     }
 
+    let imageCredits: ImageCreditItem[] = []
+    const imageCreditsBytes = entries.get("imageCredits.json")
+    if (imageCreditsBytes) {
+      try {
+        imageCredits = parseImageCredits(buildDocJson(imageCreditsBytes))
+      } catch {
+        imageCredits = []
+      }
+    }
+
     const createdUrls: string[] = []
     let droppedElements = 0
     const doc: ImporterDoc = {
@@ -192,6 +321,10 @@ export async function importZipFile(input: ZipImportInput, assetStore?: AssetSto
         }
       }),
     } as ImporterDoc
+    const validation = validateImporterDoc(doc)
+    if (!validation.ok) {
+      throw new Error(`Некорректный doc.json: ${validation.error}`)
+    }
     console.warn("[import] relaxed doc.json: droppedElements=", droppedElements)
     const elementBounds = computeSourceSlideSize(doc)
     let sourceSlideSize = elementBounds
@@ -260,7 +393,7 @@ export async function importZipFile(input: ZipImportInput, assetStore?: AssetSto
       throw error
     }
 
-    return { doc, createdUrls, sourceSlideSize, imagePlan }
+    return { doc, createdUrls, sourceSlideSize, imagePlan, imageCredits }
   } catch (error) {
     reportError(error, { scope: "zip_import" })
     throw error

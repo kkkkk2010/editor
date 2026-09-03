@@ -492,6 +492,45 @@ function waitForImageLoad(image: HTMLImageElement) {
   })
 }
 
+export function applyBaseExportElementStyles(
+  target: HTMLDivElement,
+  element: Slide["elements"][number],
+) {
+  target.style.position = "absolute"
+  target.style.left = `${element.position.x}px`
+  target.style.top = `${element.position.y}px`
+  target.style.width = `${element.size.width}px`
+  target.style.height = `${element.size.height}px`
+  target.style.boxSizing = "border-box"
+  target.style.margin = "0"
+  target.style.padding = "0"
+  target.style.opacity = `${element.style.opacity ?? 1}`
+  target.style.transform = element.style.rotation ? `rotate(${element.style.rotation}deg)` : "none"
+  target.style.transformOrigin = "center center"
+}
+
+export function applyTextExportElementStyles(
+  target: HTMLDivElement,
+  element: Slide["elements"][number],
+) {
+  if (element.type !== "text") return
+  target.style.fontFamily = element.style.fontFamily || "Inter"
+  target.style.fontSize = `${ptToPx(element.style.fontSizePt ?? 18)}px`
+  target.style.fontWeight = element.style.fontWeight || (element.style.bold === true ? "700" : "normal")
+  target.style.fontStyle = element.style.fontStyle || (element.style.italic === true ? "italic" : "normal")
+  target.style.textDecoration = element.style.textDecoration || (element.style.underline === true ? "underline" : "none")
+  target.style.color = element.style.color || "#000"
+  target.style.textAlign = element.style.textAlign || element.style.align || "left"
+  target.style.lineHeight = element.style.lineHeight !== undefined ? `${element.style.lineHeight}` : "normal"
+  target.style.letterSpacing = element.style.letterSpacing !== undefined ? `${element.style.letterSpacing}px` : "0"
+  target.style.whiteSpace = element.content.includes("\n") ? "pre-wrap" : "normal"
+  target.style.overflowWrap = "break-word"
+  target.style.wordBreak = "normal"
+  target.style.hyphens = "none"
+  target.style.overflow = "visible"
+  target.innerText = element.content
+}
+
 // 导出PPT
 export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title = "Presentation") {
   try {
@@ -573,21 +612,10 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
       for (let elementIndex = 0; elementIndex < slide.elements.length; elementIndex += 1) {
         const element = slide.elements[elementIndex]
         const elementDiv = document.createElement("div")
-        elementDiv.style.position = "absolute"
-        elementDiv.style.left = `${element.position.x}px`
-        elementDiv.style.top = `${element.position.y}px`
-        elementDiv.style.width = `${element.size.width}px`
-        elementDiv.style.height = `${element.size.height}px`
+        applyBaseExportElementStyles(elementDiv, element)
 
         if (element.type === "text") {
-          elementDiv.style.fontSize = `${ptToPx(element.style.fontSizePt ?? 18)}px`
-          elementDiv.style.fontWeight = element.style.fontWeight || "normal"
-          elementDiv.style.fontStyle = element.style.fontStyle || "normal"
-          elementDiv.style.textDecoration = element.style.textDecoration || "none"
-          elementDiv.style.color = element.style.color || "#000"
-          elementDiv.style.textAlign = element.style.textAlign || "left"
-          elementDiv.style.lineHeight = element.style.lineHeight ? `${element.style.lineHeight}` : "normal"
-          elementDiv.innerText = element.content
+          applyTextExportElementStyles(elementDiv, element)
         } else if (element.type === "image") {
           const img = document.createElement("img")
           if (isSvgElement(element)) {
@@ -627,7 +655,7 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
           img.style.height = "100%"
           img.style.objectFit = element.style.objectFit || "cover"
           img.style.borderRadius = `${element.style.borderRadius || 0}px`
-          img.style.opacity = `${element.style.opacity || 1}`
+          img.style.opacity = "1"
           elementDiv.appendChild(img)
           if (isSvgDebugEnabled()) {
             logSvgDebug("image element state", {
@@ -651,9 +679,11 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
         } else if (element.type === "shape") {
           // 简单渲染形状
           elementDiv.style.backgroundColor = element.style.fill || "#ffffff"
-          elementDiv.style.border = `${element.style.strokeWidth || 1}px solid ${element.style.stroke || "#000000"}`
+          elementDiv.style.border = `${element.style.strokeWidth ?? 0}px solid ${element.style.stroke || "#000000"}`
           if (element.content === "circle") {
             elementDiv.style.borderRadius = "50%"
+          } else {
+            elementDiv.style.borderRadius = `${element.style.borderRadius || 0}px`
           }
         }
 
@@ -683,6 +713,7 @@ export async function exportToPPT(slides: Slide[], slideSize: SlideSize, title =
       }
 
       await Promise.allSettled(imageLoadPromises)
+      await document.fonts.ready
 
       if (isSvgDebugEnabled()) {
         debugSvgTargets.forEach(({ index, elementDiv }) => {

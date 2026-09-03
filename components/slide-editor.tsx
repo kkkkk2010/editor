@@ -18,6 +18,11 @@ import {
 interface SlideEditorProps {
   slide: Slide
   onUpdateSlide: (slide: Slide) => void
+  imagePreview?: {
+    elementId: string
+    url: string
+    fallbackUrl?: string
+  } | null
   onBeginTextEdit?: (elementId: string) => void
   onTextEditChange?: (elementId: string, text: string) => void
   onEndTextEdit?: (elementId: string) => void
@@ -37,6 +42,7 @@ interface SlideEditorProps {
 export default function SlideEditor({
   slide,
   onUpdateSlide,
+  imagePreview,
   onBeginTextEdit,
   onTextEditChange,
   onEndTextEdit,
@@ -510,7 +516,7 @@ export default function SlideEditor({
     input.style.width = `${element.size.width}px`
     input.style.height = `${element.size.height}px`
     input.style.fontSize = `${ptToPx(element.style.fontSizePt ?? 18)}px`
-    input.style.fontFamily = element.style.fontFamily || "Times New Roman"
+    input.style.fontFamily = element.style.fontFamily || "Inter"
     input.style.fontWeight = element.style.fontWeight || "normal"
     input.style.fontStyle = element.style.fontStyle || "normal"
     input.style.textDecoration = element.style.textDecoration || "none"
@@ -520,12 +526,13 @@ export default function SlideEditor({
     input.style.border = "none"
     input.style.padding = "0"
     input.style.margin = "0"
-    input.style.overflow = "hidden"
+    input.style.overflowX = "hidden"
+    input.style.overflowY = "auto"
     input.style.background = "transparent"
     input.style.resize = "none"
     input.style.outline = "2px solid #3b82f6"
     input.style.whiteSpace = "pre-wrap" // 保留换行和空格
-    input.style.overflowWrap = "normal"
+    input.style.overflowWrap = "break-word"
     input.style.wordBreak = "normal"
     input.style.hyphens = "none"
     input.style.boxSizing = "border-box"
@@ -753,7 +760,7 @@ export default function SlideEditor({
                 "w-full h-full",
                 !isLocked && "cursor-move",
                 isSelected && "outline outline-2 outline-primary",
-                isLocked && "select-none pointer-events-none opacity-70",
+                isLocked && "select-none pointer-events-none",
               )}
               style={{
                 width: element.size.width,
@@ -769,7 +776,7 @@ export default function SlideEditor({
               onContextMenu={handleElementContextMenu}
             >
               <img
-                src={element.content || "/placeholder.svg"}
+                src={(imagePreview?.elementId === element.id ? imagePreview.url : element.content) || "/placeholder.svg"}
                 alt="Slide element"
                 style={{
                   width: "100%",
@@ -778,6 +785,15 @@ export default function SlideEditor({
                   filter: element.style.filter || "none",
                 }}
                 draggable="false"
+                onError={(event) => {
+                  if (
+                    imagePreview?.elementId === element.id &&
+                    imagePreview.fallbackUrl &&
+                    event.currentTarget.src !== imagePreview.fallbackUrl
+                  ) {
+                    event.currentTarget.src = imagePreview.fallbackUrl
+                  }
+                }}
                 onDragStart={(e) => e.preventDefault()}
               />
             </div>
@@ -806,7 +822,7 @@ export default function SlideEditor({
                 "w-full h-full",
                 !isLocked && "cursor-move",
                 isSelected && "outline outline-2 outline-primary",
-                isLocked && "select-none pointer-events-none opacity-70",
+                isLocked && "select-none pointer-events-none",
               )}
               style={{
                 width: element.size.width,
@@ -835,7 +851,7 @@ export default function SlideEditor({
     const shapeType = element.content
     const fill = element.style.fill || "#ffffff"
     const stroke = element.style.stroke || "#000000"
-    const strokeWidth = element.style.strokeWidth || 2
+    const strokeWidth = element.style.strokeWidth ?? 0
 
     // 高级形状渲染
     const advancedShapes = ["star", "hexagon", "pentagon", "cloud"]
@@ -851,6 +867,7 @@ export default function SlideEditor({
             height: "100%",
             backgroundColor: fill,
             border: `${strokeWidth}px solid ${stroke}`,
+            borderRadius: `${element.style.borderRadius || 0}px`,
           }}
         />
       )

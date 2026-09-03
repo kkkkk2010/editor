@@ -11,6 +11,5 @@ export function normalizeFontFamily(value?: string | null): string | undefined {
     .filter(Boolean)
   if (families.length === 0) return undefined
 
-  const preferred = families.find((family) => family.toLowerCase() === "times new roman")
-  return preferred ?? families[0]
+  return families[0]
 }
